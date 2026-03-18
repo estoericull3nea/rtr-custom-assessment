@@ -465,6 +465,8 @@ body,
   position: relative;
   overflow: hidden;
   box-shadow: none !important;
+  background: var(--ca-surface) !important;
+  color: var(--ca-text) !important;
 }
 
 .ca-btn .ca-btn-icon,
@@ -499,7 +501,7 @@ body,
 }
 
 .ca-btn--ghost {
-  background: transparent;
+  background: var(--ca-surface);
   color: var(--ca-text-secondary);
   border: 2px solid var(--ca-border);
 }
