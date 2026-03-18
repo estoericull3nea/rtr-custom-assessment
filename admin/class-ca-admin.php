@@ -10,6 +10,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 class CA_Admin {
 
 	public function __construct() {
+		add_action( 'admin_init', array( $this, 'handle_delete_action' ) );
 		add_action( 'admin_menu', array( $this, 'register_menu' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_assets' ) );
 	}
@@ -48,6 +49,32 @@ class CA_Admin {
 	}
 
 	/**
+	 * Handle delete action early on admin_init before any output.
+	 */
+	public function handle_delete_action() {
+		if ( ! isset( $_GET['page'] ) || 'custom-assessment' !== $_GET['page'] ) {
+			return;
+		}
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		if ( isset( $_GET['action'] ) && 'delete' === $_GET['action'] && ! empty( $_GET['id'] ) ) {
+			if ( ! isset( $_GET['_wpnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ), 'ca_delete_submission_' . absint( $_GET['id'] ) ) ) {
+				wp_die( esc_html__( 'Security check failed.', CA_TEXT_DOMAIN ) );
+			}
+
+			CA_Database::delete_submission( absint( $_GET['id'] ) );
+			$redirect_url = remove_query_arg( array( 'action', 'id', '_wpnonce' ), wp_unslash( $_SERVER['REQUEST_URI'] ) );
+			$redirect_url = add_query_arg( 'message', 'deleted', $redirect_url );
+			wp_safe_redirect( esc_url_raw( $redirect_url ) );
+			exit;
+		}
+	}
+
+
+	/**
 	 * Render list page or detail view.
 	 */
 	public function render_list_page() {
@@ -70,6 +97,12 @@ class CA_Admin {
 				<span class="ca-admin-title-icon dashicons dashicons-chart-bar"></span>
 				<?php esc_html_e( 'Assessment Submissions', CA_TEXT_DOMAIN ); ?>
 			</h1>
+
+			<?php if ( isset( $_GET['message'] ) && 'deleted' === $_GET['message'] ) : ?>
+				<div class="notice notice-success is-dismissible">
+					<p><?php esc_html_e( 'Submission deleted successfully.', CA_TEXT_DOMAIN ); ?></p>
+				</div>
+			<?php endif; ?>
 
 			<?php if ( empty( $submissions ) ) : ?>
 				<div class="ca-admin-empty">
@@ -129,6 +162,10 @@ class CA_Admin {
 						<td>
 							<a href="<?php echo esc_url( add_query_arg( array( 'page' => 'custom-assessment', 'view' => 'detail', 'id' => $sub->id ) , admin_url( 'admin.php' ) ) ); ?>" class="button button-small">
 								<?php esc_html_e( 'View', CA_TEXT_DOMAIN ); ?>
+							</a>
+							<?php $delete_url = add_query_arg( array( 'page' => 'custom-assessment', 'action' => 'delete', 'id' => $sub->id, '_wpnonce' => wp_create_nonce( 'ca_delete_submission_' . $sub->id ) ), admin_url( 'admin.php' ) ); ?>
+							<a href="<?php echo esc_url( $delete_url ); ?>" class="button button-small" onclick="return confirm('<?php echo esc_js( __( 'Are you sure you want to delete this submission? This action cannot be undone.', CA_TEXT_DOMAIN ) ); ?>');">
+								<?php esc_html_e( 'Delete', CA_TEXT_DOMAIN ); ?>
 							</a>
 						</td>
 					</tr>

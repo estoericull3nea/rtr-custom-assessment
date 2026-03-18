@@ -302,4 +302,25 @@ class CA_Database {
 			)
 		);
 	}
+
+	/**
+	 * Delete a submission and all related answers and category scores.
+	 *
+	 * @param int $submission_id
+	 * @return bool True if deletion was successful.
+	 */
+	public static function delete_submission( $submission_id ) {
+		global $wpdb;
+		$submission_id = (int) $submission_id;
+
+		$table_submissions = $wpdb->prefix . 'ca_submissions';
+		$table_answers     = $wpdb->prefix . 'ca_answers';
+		$table_cat_scores  = $wpdb->prefix . 'ca_category_scores';
+
+		$deleted = $wpdb->delete( $table_submissions, array( 'id' => $submission_id ), array( '%d' ) );
+		$wpdb->delete( $table_answers, array( 'submission_id' => $submission_id ), array( '%d' ) );
+		$wpdb->delete( $table_cat_scores, array( 'submission_id' => $submission_id ), array( '%d' ) );
+
+		return (bool) $deleted;
+	}
 }
