@@ -15,6 +15,7 @@ class CA_Ajax {
 			'ca_save_answer',
 			'ca_get_question',
 			'ca_get_progress',
+			'ca_find_in_progress_by_email',
 			'ca_submit_assessment',
 			'ca_get_results_preview',
 		);
@@ -153,15 +154,57 @@ class CA_Ajax {
 			wp_send_json_error( array( 'message' => __( 'Invalid session.', CA_TEXT_DOMAIN ) ) );
 		}
 
+		$submission = CA_Database::get_submission( $submission_id );
+		if ( ! $submission ) {
+			wp_send_json_error( array( 'message' => __( 'Submission not found.', CA_TEXT_DOMAIN ) ) );
+		}
+
 		$answers  = CA_Database::get_answers( $submission_id );
 		$total    = CA_Questions::get_total_count();
 		$answered = count( $answers );
 		$progress = $total > 0 ? round( ( $answered / $total ) * 100 ) : 0;
 
 		wp_send_json_success( array(
-			'answered' => $answered,
-			'total'    => $total,
-			'progress' => $progress,
+			'answered'  => $answered,
+			'total'     => $total,
+			'progress'  => $progress,
+			'status'    => $submission->status,
+			'email'     => $submission->email,
+		) );
+	}
+
+	// -------------------------------------------------------------------------
+	// Action: find in-progress submission by email
+	// -------------------------------------------------------------------------
+
+	public function ca_find_in_progress_by_email() {
+		$this->verify_nonce();
+
+		$email = isset( $_POST['email'] ) ? sanitize_email( wp_unslash( $_POST['email'] ) ) : '';
+
+		if ( empty( $email ) || ! is_email( $email ) ) {
+			wp_send_json_error( array( 'message' => __( 'A valid email is required.', CA_TEXT_DOMAIN ) ) );
+		}
+
+		$submission = CA_Database::get_in_progress_submission_by_email( $email );
+
+		if ( ! $submission ) {
+			wp_send_json_success( array( 'found' => false ) );
+		}
+
+		$answers   = CA_Database::get_answers( $submission->id );
+		$total     = CA_Questions::get_total_count();
+		$answered  = count( $answers );
+		$progress  = $total > 0 ? round( ( $answered / $total ) * 100 ) : 0;
+
+		wp_send_json_success( array(
+			'found'         => true,
+			'submission_id' => $submission->id,
+			'email'         => $submission->email,
+			'answered'      => $answered,
+			'total'         => $total,
+			'progress'      => $progress,
+			'status'        => $submission->status,
 		) );
 	}
 

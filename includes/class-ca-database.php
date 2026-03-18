@@ -156,6 +156,21 @@ class CA_Database {
 	}
 
 	/**
+	 * Get the active in-progress submission for an email (latest).
+	 *
+	 * @param string $email
+	 * @return object|null
+	 */
+	public static function get_in_progress_submission_by_email( $email ) {
+		global $wpdb;
+		$table = $wpdb->prefix . 'ca_submissions';
+
+		return $wpdb->get_row(
+			$wpdb->prepare( "SELECT * FROM {$table} WHERE email = %s AND status = %s ORDER BY updated_at DESC LIMIT 1", $email, 'in_progress' )
+		);
+	}
+
+	/**
 	 * Get all submissions for admin listing.
 	 *
 	 * @return array
