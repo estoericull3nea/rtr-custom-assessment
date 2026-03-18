@@ -1,0 +1,82 @@
+<?php
+/**
+ * PDF generation class for exporting submissions.
+ */
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
+class CA_PDF {
+
+	/**
+	 * Generate PDF from HTML content.
+	 *
+	 * @param string $html
+	 */
+	public function generate( $html ) {
+		// Use TCPDF if available, otherwise use a simple approach
+		if ( class_exists( 'TCPDF' ) ) {
+			$this->generate_with_tcpdf( $html );
+		} else {
+			$this->generate_simple( $html );
+		}
+	}
+
+	/**
+	 * Generate PDF using TCPDF library.
+	 *
+	 * @param string $html
+	 */
+	private function generate_with_tcpdf( $html ) {
+		$pdf = new \TCPDF();
+		$pdf->SetDefaultMonospacedFont( PDF_FONT_MONOSPACED );
+		$pdf->SetMargins( 15, 15, 15 );
+		$pdf->SetAutoPageBreak( true, 15 );
+		$pdf->AddPage();
+		$pdf->SetFont( 'helvetica', '', 10 );
+		$pdf->writeHTML( $html, true, false, true, false, '' );
+		$pdf->Output( '', 'I' );
+	}
+
+	/**
+	 * Fallback simple PDF generation using DomPDF if available.
+	 *
+	 * @param string $html
+	 */
+	private function generate_simple( $html ) {
+		// Try to use dompdf if composer installed it
+		if ( class_exists( 'Dompdf\Dompdf' ) ) {
+			$dompdf = new \Dompdf\Dompdf();
+			$dompdf->loadHtml( $html );
+			$dompdf->setPaper( 'A4' );
+			$dompdf->render();
+			echo $dompdf->output();
+			return;
+		}
+
+		// Fallback: Output as HTML content with print styling
+		// This allows users to print as PDF from their browser
+		header( 'Content-Type: text/html; charset=utf-8' );
+		echo '<!DOCTYPE html>
+		<html lang="en">
+		<head>
+			<meta charset="UTF-8">
+			<meta name="viewport" content="width=device-width, initial-scale=1.0">
+			<title>Submission Report</title>
+			<style>
+				@media print {
+					body { margin: 0; }
+					.no-print { display: none; }
+				}
+				body { font-family: Arial, sans-serif; margin: 20px; }
+				.print-button { margin-bottom: 20px; }
+			</style>
+		</head>
+		<body>
+			<button class="print-button no-print" onclick="window.print()">Print / Save as PDF</button>
+			' . $html . '
+		</body>
+		</html>';
+	}
+}

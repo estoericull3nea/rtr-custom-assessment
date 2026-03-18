@@ -11,6 +11,7 @@ class CA_Admin {
 
 	public function __construct() {
 		add_action( 'admin_init', array( $this, 'handle_delete_action' ) );
+		add_action( 'admin_init', array( $this, 'handle_export_action' ) );
 		add_action( 'admin_menu', array( $this, 'register_menu' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_assets' ) );
 	}
@@ -46,6 +47,13 @@ class CA_Admin {
 			array(),
 			CA_VERSION
 		);
+		wp_enqueue_script(
+			'ca-admin-scripts',
+			CA_PLUGIN_URL . 'assets/js/admin.js',
+			array( 'jquery' ),
+			CA_VERSION,
+			true
+		);
 	}
 
 	/**
@@ -71,6 +79,177 @@ class CA_Admin {
 			wp_safe_redirect( esc_url_raw( $redirect_url ) );
 			exit;
 		}
+	}
+
+	/**
+	 * Handle export action early on admin_init before any output.
+	 */
+	public function handle_export_action() {
+		if ( ! isset( $_GET['page'] ) || 'custom-assessment' !== $_GET['page'] ) {
+			return;
+		}
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		if ( isset( $_GET['action'] ) && 'export' === $_GET['action'] && ! empty( $_GET['id'] ) && ! empty( $_GET['format'] ) ) {
+			if ( ! isset( $_GET['_wpnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ), 'ca_export_submission_' . absint( $_GET['id'] ) ) ) {
+				wp_die( esc_html__( 'Security check failed.', CA_TEXT_DOMAIN ) );
+			}
+
+			$submission_id = absint( $_GET['id'] );
+			$format = sanitize_text_field( wp_unslash( $_GET['format'] ) );
+			$submission = CA_Database::get_submission( $submission_id );
+
+			if ( ! $submission || 'completed' !== $submission->status ) {
+				wp_die( esc_html__( 'Only completed submissions can be exported.', CA_TEXT_DOMAIN ) );
+			}
+
+			if ( 'csv' === $format ) {
+				$this->export_as_csv( $submission_id, $submission );
+			} elseif ( 'pdf' === $format ) {
+				$this->export_as_pdf( $submission_id, $submission );
+			}
+
+			exit;
+		}
+	}
+
+	/**
+	 * Export submission as CSV.
+	 */
+	private function export_as_csv( $submission_id, $submission ) {
+		$answers = CA_Database::get_answers( $submission_id );
+		$cat_scores = CA_Database::get_category_scores( $submission_id );
+		$flat_q = CA_Questions::get_flat();
+
+		header( 'Content-Type: text/csv; charset=utf-8' );
+		header( 'Content-Disposition: attachment; filename="submission_' . $submission_id . '_' . sanitize_file_name( $submission->first_name . '_' . $submission->last_name ) . '.csv"' );
+
+		$output = fopen( 'php://output', 'w' );
+		fputcsv( $output, array( 'Respondent Information' ) );
+		fputcsv( $output, array( 'Field', 'Value' ) );
+		fputcsv( $output, array( 'Name', $submission->first_name . ' ' . $submission->last_name ) );
+		fputcsv( $output, array( 'Email', $submission->email ) );
+		fputcsv( $output, array( 'Phone', $submission->phone ) );
+		fputcsv( $output, array( 'Job Title', $submission->job_title ) );
+		fputcsv( $output, array( 'Total Score', $submission->total_score . ' / ' . ( CA_Questions::get_total_count() * 5 ) ) );
+		fputcsv( $output, array( 'Average Score', number_format( $submission->average_score, 2 ) . ' / 5.00' ) );
+		fputcsv( $output, array( 'Status', ucwords( str_replace( '_', ' ', $submission->status ) ) ) );
+		fputcsv( $output, array( 'Submitted', date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), strtotime( $submission->created_at ) ) ) );
+
+		fputcsv( $output, array() );
+		fputcsv( $output, array( 'Category Scores' ) );
+		fputcsv( $output, array( 'Category', 'Subtotal', 'Average', 'Summary' ) );
+		foreach ( $cat_scores as $cat ) {
+			fputcsv( $output, array(
+				$cat->category_name,
+				$cat->subtotal,
+				number_format( $cat->average, 2 ),
+				CA_Scoring::get_category_summary( $cat->category_name, (float) $cat->average )
+			) );
+		}
+
+		fputcsv( $output, array() );
+		fputcsv( $output, array( 'Question Responses' ) );
+		fputcsv( $output, array( 'Question', 'Response' ) );
+		foreach ( $flat_q as $idx => $q ) {
+			$answer = isset( $answers[ $idx ] ) ? $answers[ $idx ] : null;
+			fputcsv( $output, array( $q['text'], $answer ? $answer : 'No answer' ) );
+		}
+
+		fclose( $output );
+	}
+
+	/**
+	 * Export submission as PDF.
+	 */
+	private function export_as_pdf( $submission_id, $submission ) {
+		$answers = CA_Database::get_answers( $submission_id );
+		$cat_scores = CA_Database::get_category_scores( $submission_id );
+		$flat_q = CA_Questions::get_flat();
+
+		header( 'Content-Type: application/pdf' );
+		header( 'Content-Disposition: attachment; filename="submission_' . $submission_id . '_' . sanitize_file_name( $submission->first_name . '_' . $submission->last_name ) . '.pdf"' );
+
+		$html = '<html>
+			<head>
+				<meta charset="UTF-8">
+				<style>
+					body { font-family: Arial, sans-serif; margin: 20px; }
+					h1 { color: #333; border-bottom: 2px solid #0073aa; padding-bottom: 10px; }
+					h2 { color: #555; margin-top: 20px; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
+					table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+					th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+					th { background-color: #f5f5f5; font-weight: bold; }
+					.info-block { margin-bottom: 15px; }
+					.info-label { font-weight: bold; display: inline-block; width: 120px; }
+					.page-break { page-break-after: always; }
+				</style>
+			</head>
+			<body>
+				<h1>Assessment Submission Report</h1>
+				<div class="info-block">
+					<div><span class="info-label">Name:</span> ' . esc_html( $submission->first_name . ' ' . $submission->last_name ) . '</div>
+					<div><span class="info-label">Email:</span> ' . esc_html( $submission->email ) . '</div>
+					<div><span class="info-label">Phone:</span> ' . esc_html( $submission->phone ) . '</div>
+					<div><span class="info-label">Job Title:</span> ' . esc_html( $submission->job_title ) . '</div>
+					<div><span class="info-label">Total Score:</span> ' . esc_html( $submission->total_score . ' / ' . ( CA_Questions::get_total_count() * 5 ) ) . '</div>
+					<div><span class="info-label">Average Score:</span> ' . esc_html( number_format( $submission->average_score, 2 ) . ' / 5.00' ) . '</div>
+					<div><span class="info-label">Submitted:</span> ' . esc_html( date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), strtotime( $submission->created_at ) ) ) . '</div>
+				</div>
+
+				<h2>Category Scores</h2>
+				<table>
+					<thead>
+						<tr>
+							<th>Category</th>
+							<th>Subtotal</th>
+							<th>Average</th>
+							<th>Summary</th>
+						</tr>
+					</thead>
+					<tbody>';
+
+		foreach ( $cat_scores as $cat ) {
+			$html .= '<tr>
+				<td>' . esc_html( $cat->category_name ) . '</td>
+				<td>' . esc_html( $cat->subtotal ) . '</td>
+				<td>' . esc_html( number_format( $cat->average, 2 ) ) . '</td>
+				<td>' . esc_html( CA_Scoring::get_category_summary( $cat->category_name, (float) $cat->average ) ) . '</td>
+			</tr>';
+		}
+
+		$html .= '</tbody>
+				</table>
+
+				<h2>Question Responses</h2>
+				<table>
+					<thead>
+						<tr>
+							<th>Question</th>
+							<th>Response</th>
+						</tr>
+					</thead>
+					<tbody>';
+
+		foreach ( $flat_q as $idx => $q ) {
+			$answer = isset( $answers[ $idx ] ) ? $answers[ $idx ] : null;
+			$html .= '<tr>
+				<td>' . esc_html( $q['text'] ) . '</td>
+				<td>' . esc_html( $answer ? $answer : 'No answer' ) . '</td>
+			</tr>';
+		}
+
+		$html .= '</tbody>
+				</table>
+			</body>
+		</html>';
+
+		require_once CA_PLUGIN_DIR . 'includes/class-ca-pdf.php';
+		$pdf = new CA_PDF();
+		$pdf->generate( $html );
 	}
 
 
@@ -163,6 +342,23 @@ class CA_Admin {
 							<a href="<?php echo esc_url( add_query_arg( array( 'page' => 'custom-assessment', 'view' => 'detail', 'id' => $sub->id ) , admin_url( 'admin.php' ) ) ); ?>" class="button button-small">
 								<?php esc_html_e( 'View', CA_TEXT_DOMAIN ); ?>
 							</a>
+							<?php if ( 'completed' === $sub->status ) : ?>
+								<div class="ca-export-dropdown-wrapper">
+									<div class="ca-export-menu ca-export-dropdown" id="export-<?php echo esc_attr( $sub->id ); ?>">
+										<?php $csv_url = add_query_arg( array( 'page' => 'custom-assessment', 'action' => 'export', 'format' => 'csv', 'id' => $sub->id, '_wpnonce' => wp_create_nonce( 'ca_export_submission_' . $sub->id ) ), admin_url( 'admin.php' ) ); ?>
+										<a href="<?php echo esc_url( $csv_url ); ?>" class="ca-export-option">
+											CSV
+										</a>
+										<?php $pdf_url = add_query_arg( array( 'page' => 'custom-assessment', 'action' => 'export', 'format' => 'pdf', 'id' => $sub->id, '_wpnonce' => wp_create_nonce( 'ca_export_submission_' . $sub->id ) ), admin_url( 'admin.php' ) ); ?>
+										<a href="<?php echo esc_url( $pdf_url ); ?>" class="ca-export-option">
+											PDF
+										</a>
+									</div>
+									<button type="button" class="button button-small ca-export-dropdown-btn" data-id="<?php echo esc_attr( $sub->id ); ?>">
+										<?php esc_html_e( 'Export', CA_TEXT_DOMAIN ); ?> ▼
+									</button>
+								</div>
+							<?php endif; ?>
 							<?php $delete_url = add_query_arg( array( 'page' => 'custom-assessment', 'action' => 'delete', 'id' => $sub->id, '_wpnonce' => wp_create_nonce( 'ca_delete_submission_' . $sub->id ) ), admin_url( 'admin.php' ) ); ?>
 							<a href="<?php echo esc_url( $delete_url ); ?>" class="button button-small" onclick="return confirm('<?php echo esc_js( __( 'Are you sure you want to delete this submission? This action cannot be undone.', CA_TEXT_DOMAIN ) ); ?>');">
 								<?php esc_html_e( 'Delete', CA_TEXT_DOMAIN ); ?>
