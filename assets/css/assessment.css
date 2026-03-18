@@ -405,11 +405,12 @@ body,
 }
 
 .ca-btn {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   border: none;
+  border-left: none !important;
   border-radius: var(--ca-radius-sm);
   font-family: var(--ca-font-ui);
   font-size: 0.95rem;
@@ -426,6 +427,15 @@ body,
   text-decoration: none;
   position: relative;
   overflow: hidden;
+  box-shadow: none !important;
+}
+
+.ca-btn .ca-btn-icon,
+.ca-btn svg,
+.ca-btn .dashicons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .ca-btn:disabled {
@@ -436,15 +446,15 @@ body,
 }
 
 .ca-btn--primary {
-  background: var(--ca-primary);
-  color: #fff;
-  box-shadow: 0 2px 12px rgba(170, 49, 48, 0.25);
+  background: var(--ca-primary-dark) !important;
+  color: #fff !important;
+  box-shadow: none !important;
 }
 
 .ca-btn--primary:not(:disabled):hover {
   background: var(--ca-primary-dark);
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(170, 49, 48, 0.35);
+  box-shadow: none !important;
 }
 
 .ca-btn--primary:not(:disabled):active {
@@ -917,4 +927,13 @@ body,
 /* --- Body lock -------------------------------------------- */
 body.ca-modal-open {
   overflow: hidden;
+}
+
+/* --- Start Button -------------------------------------------- */
+#ca-start-btn,
+#ca-open-modal {
+  display: flex;
+}
+
+#ca-start-btn {
 }

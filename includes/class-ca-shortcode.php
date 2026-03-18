@@ -143,7 +143,7 @@ class CA_Shortcode {
 
 								<div class="ca-form-error" id="ca-info-error" role="alert" aria-live="polite"></div>
 
-								<div class="ca-form-actions">
+								<div class="ca-form-actions" style="display: flex; justify-content: flex-end;">
 									<button type="submit" class="ca-btn ca-btn--primary ca-btn--lg" id="ca-start-btn">
 										<span class="ca-btn-text">Start Assessment</span>
 										<span class="ca-btn-loading" aria-hidden="true">
