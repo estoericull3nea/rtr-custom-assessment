@@ -22,8 +22,6 @@
   --ca-radius: 12px;
   --ca-radius-sm: 8px;
   --ca-radius-lg: 16px;
-  --ca-shadow: 0 4px 24px rgba(0, 0, 0, 0.1);
-  --ca-shadow-lg: 0 12px 48px rgba(0, 0, 0, 0.18);
   --ca-transition: 0.22s cubic-bezier(0.4, 0, 0.2, 1);
   --ca-font: "Poppins", sans-serif;
   --ca-font-ui: "Poppins", sans-serif;
@@ -60,9 +58,7 @@ body,
   cursor: pointer;
   transition:
     background var(--ca-transition),
-    transform var(--ca-transition),
-    box-shadow var(--ca-transition);
-  box-shadow: 0 4px 20px rgba(170, 49, 48, 0.3);
+    transform var(--ca-transition);
   position: relative;
   overflow: hidden;
 }
@@ -81,7 +77,6 @@ body,
 .ca-trigger-btn:hover {
   background: var(--ca-primary-dark);
   transform: translateY(-2px);
-  box-shadow: 0 8px 28px rgba(170, 49, 48, 0.4);
 }
 
 .ca-trigger-btn:active {
@@ -133,7 +128,6 @@ body,
   display: flex;
   flex-direction: column;
   background: var(--ca-bg);
-  box-shadow: var(--ca-shadow-lg);
   transform: translateY(24px) scale(0.98);
   border-radius: 0;
   transition:
@@ -176,9 +170,7 @@ body,
   border-radius: var(--ca-radius-lg);
   background: var(--ca-surface);
   padding: 24px;
-  box-shadow: var(--ca-shadow-lg);
   text-align: center;
-  border-left: none;
 }
 
 .ca-resume-dialog-panel h3 {
@@ -400,9 +392,7 @@ body,
   font-family: var(--ca-font-ui);
   font-size: 0.975rem;
   color: var(--ca-text);
-  transition:
-    border-color var(--ca-transition),
-    box-shadow var(--ca-transition);
+  transition: border-color var(--ca-transition);
   box-sizing: border-box;
   -webkit-appearance: none;
 }
@@ -414,7 +404,6 @@ body,
 .ca-input:focus {
   outline: none;
   border-color: var(--ca-primary);
-  box-shadow: 0 0 0 4px rgba(170, 49, 48, 0.12);
 }
 
 .ca-input.ca-input--error {
@@ -458,13 +447,11 @@ body,
     background var(--ca-transition),
     color var(--ca-transition),
     transform var(--ca-transition),
-    box-shadow var(--ca-transition),
     opacity var(--ca-transition);
   letter-spacing: 0.01em;
   text-decoration: none;
   position: relative;
   overflow: hidden;
-  box-shadow: none !important;
   background: var(--ca-surface) !important;
   color: var(--ca-text) !important;
 }
@@ -481,19 +468,16 @@ body,
   opacity: 0.45;
   cursor: not-allowed;
   transform: none !important;
-  box-shadow: none !important;
 }
 
 .ca-btn--primary {
   background: var(--ca-primary-dark) !important;
   color: #fff !important;
-  box-shadow: none !important;
 }
 
 .ca-btn--primary:not(:disabled):hover {
   background: var(--ca-primary-dark);
   transform: translateY(-1px);
-  box-shadow: none !important;
 }
 
 .ca-btn--primary:not(:disabled):active {
@@ -593,7 +577,6 @@ body,
   padding: 10px 14px;
   margin-bottom: 24px;
   line-height: 1.5;
-  border-left: 3px solid var(--ca-primary);
 }
 
 .ca-question-text {
@@ -648,7 +631,6 @@ body,
   border-color: var(--ca-primary);
   background: var(--ca-primary-light);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(170, 49, 48, 0.15);
 }
 
 .ca-answer-radio:checked + .ca-answer-btn,
@@ -657,7 +639,6 @@ body,
   background: var(--ca-primary);
   color: #fff;
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(170, 49, 48, 0.3);
 }
 
 .ca-answer-num {
@@ -970,9 +951,7 @@ body.ca-modal-open {
 
 /* --- Start Button -------------------------------------------- */
 #ca-start-btn,
-#ca-open-modal {
+#ca-open-modal,
+#ca-back-btn {
   display: flex;
-}
-
-#ca-start-btn {
 }
