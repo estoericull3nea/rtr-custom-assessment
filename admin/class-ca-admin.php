@@ -170,9 +170,6 @@ class CA_Admin {
 		$cat_scores = CA_Database::get_category_scores( $submission_id );
 		$flat_q = CA_Questions::get_flat();
 
-		header( 'Content-Type: application/pdf' );
-		header( 'Content-Disposition: attachment; filename="submission_' . $submission_id . '_' . sanitize_file_name( $submission->first_name . '_' . $submission->last_name ) . '.pdf"' );
-
 		$html = '<html>
 			<head>
 				<meta charset="UTF-8">
@@ -247,9 +244,10 @@ class CA_Admin {
 			</body>
 		</html>';
 
+		$filename = 'submission_' . $submission_id . '_' . sanitize_file_name( $submission->first_name . '_' . $submission->last_name ) . '.pdf';
 		require_once CA_PLUGIN_DIR . 'includes/class-ca-pdf.php';
 		$pdf = new CA_PDF();
-		$pdf->generate( $html );
+		$pdf->export_pdf( $html, $filename );
 	}
 
 

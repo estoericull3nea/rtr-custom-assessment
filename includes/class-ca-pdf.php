@@ -24,6 +24,33 @@ class CA_PDF {
 	}
 
 	/**
+	 * Export PDF with proper headers and filename.
+	 *
+	 * @param string $html
+	 * @param string $filename
+	 */
+	public function export_pdf( $html, $filename ) {
+		// Set headers for PDF download
+		header( 'Content-Type: application/pdf' );
+		header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
+		header( 'Cache-Control: no-cache, no-store, must-revalidate' );
+		header( 'Pragma: no-cache' );
+		header( 'Expires: 0' );
+
+		// Try using TCPDF or DomPDF, fallback to HTML print
+		if ( class_exists( 'TCPDF' ) ) {
+			$this->generate_with_tcpdf( $html );
+		} elseif ( class_exists( 'Dompdf\Dompdf' ) ) {
+			$this->generate_with_dompdf( $html );
+		} else {
+			// Fallback: Output as HTML
+			header( 'Content-Type: text/html; charset=utf-8' );
+			header( 'Content-Disposition: inline' );
+			$this->generate_simple( $html );
+		}
+	}
+
+	/**
 	 * Generate PDF using TCPDF library.
 	 *
 	 * @param string $html
@@ -40,6 +67,19 @@ class CA_PDF {
 	}
 
 	/**
+	 * Generate PDF using DomPDF library.
+	 *
+	 * @param string $html
+	 */
+	private function generate_with_dompdf( $html ) {
+		$dompdf = new \Dompdf\Dompdf();
+		$dompdf->loadHtml( $html );
+		$dompdf->setPaper( 'A4' );
+		$dompdf->render();
+		echo $dompdf->output();
+	}
+
+	/**
 	 * Fallback simple PDF generation using DomPDF if available.
 	 *
 	 * @param string $html
@@ -47,17 +87,12 @@ class CA_PDF {
 	private function generate_simple( $html ) {
 		// Try to use dompdf if composer installed it
 		if ( class_exists( 'Dompdf\Dompdf' ) ) {
-			$dompdf = new \Dompdf\Dompdf();
-			$dompdf->loadHtml( $html );
-			$dompdf->setPaper( 'A4' );
-			$dompdf->render();
-			echo $dompdf->output();
+			$this->generate_with_dompdf( $html );
 			return;
 		}
 
 		// Fallback: Output as HTML content with print styling
 		// This allows users to print as PDF from their browser
-		header( 'Content-Type: text/html; charset=utf-8' );
 		echo '<!DOCTYPE html>
 		<html lang="en">
 		<head>
@@ -80,3 +115,4 @@ class CA_PDF {
 		</html>';
 	}
 }
+
