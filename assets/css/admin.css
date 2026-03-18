@@ -2,14 +2,23 @@
    Custom Assessment Plugin — Admin Styles
    ============================================================ */
 
+@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap");
+
 :root {
-  --ca-primary:      #aa3130;
-  --ca-primary-light:#f8e8e8;
-  --ca-border:       #e2e8f0;
-  --ca-text:         #1a202c;
-  --ca-text-muted:   #718096;
-  --ca-surface:      #fff;
-  --ca-radius:       10px;
+  --ca-primary: #aa3130;
+  --ca-primary-light: #f8e8e8;
+  --ca-border: #e2e8f0;
+  --ca-text: #1a202c;
+  --ca-text-muted: #718096;
+  --ca-surface: #fff;
+  --ca-radius: 10px;
+  --ca-font: "Poppins", sans-serif;
+}
+
+html,
+body,
+.ca-admin-wrap {
+  font-family: "Poppins", sans-serif !important;
 }
 
 /* --- Wrap ------------------------------------------------- */
@@ -261,11 +270,21 @@
   background: var(--ca-primary);
 }
 
-.ca-answer-pill--1 { background: #e53e3e; }
-.ca-answer-pill--2 { background: #dd6b20; }
-.ca-answer-pill--3 { background: #d69e2e; }
-.ca-answer-pill--4 { background: #38a169; }
-.ca-answer-pill--5 { background: #2b6cb0; }
+.ca-answer-pill--1 {
+  background: #e53e3e;
+}
+.ca-answer-pill--2 {
+  background: #dd6b20;
+}
+.ca-answer-pill--3 {
+  background: #d69e2e;
+}
+.ca-answer-pill--4 {
+  background: #38a169;
+}
+.ca-answer-pill--5 {
+  background: #2b6cb0;
+}
 
 .ca-no-answer {
   color: #cbd5e0;
