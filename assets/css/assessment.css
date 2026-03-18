@@ -178,6 +178,7 @@ body,
   padding: 24px;
   box-shadow: var(--ca-shadow-lg);
   text-align: center;
+  border-left: none;
 }
 
 .ca-resume-dialog-panel h3 {
@@ -447,7 +448,6 @@ body,
   justify-content: center;
   gap: 8px;
   border: none;
-  border-left: none !important;
   border-radius: var(--ca-radius-sm);
   font-family: var(--ca-font-ui);
   font-size: 0.95rem;
