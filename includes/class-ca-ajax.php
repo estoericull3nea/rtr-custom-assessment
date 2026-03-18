@@ -1,0 +1,251 @@
+<?php
+/**
+ * AJAX handler — registers all wp_ajax / wp_ajax_nopriv hooks.
+ */
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
+class CA_Ajax {
+
+	public function __construct() {
+		$actions = array(
+			'ca_save_user_info',
+			'ca_save_answer',
+			'ca_get_question',
+			'ca_get_progress',
+			'ca_submit_assessment',
+			'ca_get_results_preview',
+		);
+
+		foreach ( $actions as $action ) {
+			add_action( 'wp_ajax_' . $action,        array( $this, $action ) );
+			add_action( 'wp_ajax_nopriv_' . $action, array( $this, $action ) );
+		}
+	}
+
+	// -------------------------------------------------------------------------
+	// Nonce helper
+	// -------------------------------------------------------------------------
+
+	private function verify_nonce() {
+		if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['nonce'] ) ), 'ca_nonce' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Security check failed.', CA_TEXT_DOMAIN ) ) );
+		}
+	}
+
+	// -------------------------------------------------------------------------
+	// Action: save user info (Step 1)
+	// -------------------------------------------------------------------------
+
+	public function ca_save_user_info() {
+		$this->verify_nonce();
+
+		$first_name = isset( $_POST['first_name'] ) ? sanitize_text_field( wp_unslash( $_POST['first_name'] ) ) : '';
+		$last_name  = isset( $_POST['last_name'] )  ? sanitize_text_field( wp_unslash( $_POST['last_name'] ) )  : '';
+		$email      = isset( $_POST['email'] )       ? sanitize_email( wp_unslash( $_POST['email'] ) )           : '';
+		$phone      = isset( $_POST['phone'] )       ? sanitize_text_field( wp_unslash( $_POST['phone'] ) )      : '';
+		$job_title  = isset( $_POST['job_title'] )   ? sanitize_text_field( wp_unslash( $_POST['job_title'] ) )  : '';
+
+		// Validate
+		$errors = array();
+		if ( empty( $first_name ) ) $errors[] = __( 'First name is required.', CA_TEXT_DOMAIN );
+		if ( empty( $last_name ) )  $errors[] = __( 'Last name is required.', CA_TEXT_DOMAIN );
+		if ( empty( $email ) || ! is_email( $email ) ) $errors[] = __( 'A valid email is required.', CA_TEXT_DOMAIN );
+		if ( empty( $phone ) )      $errors[] = __( 'Phone number is required.', CA_TEXT_DOMAIN );
+		if ( empty( $job_title ) )  $errors[] = __( 'Job title is required.', CA_TEXT_DOMAIN );
+
+		if ( ! empty( $errors ) ) {
+			wp_send_json_error( array( 'message' => implode( ' ', $errors ) ) );
+		}
+
+		$submission_id = CA_Database::insert_submission( array(
+			'first_name' => $first_name,
+			'last_name'  => $last_name,
+			'email'      => $email,
+			'phone'      => $phone,
+			'job_title'  => $job_title,
+		) );
+
+		if ( ! $submission_id ) {
+			wp_send_json_error( array( 'message' => __( 'Could not save your information. Please try again.', CA_TEXT_DOMAIN ) ) );
+		}
+
+		wp_send_json_success( array(
+			'submission_id' => $submission_id,
+			'message'       => __( 'Information saved.', CA_TEXT_DOMAIN ),
+		) );
+	}
+
+	// -------------------------------------------------------------------------
+	// Action: get question by index
+	// -------------------------------------------------------------------------
+
+	public function ca_get_question() {
+		$this->verify_nonce();
+
+		$index         = isset( $_POST['question_index'] )  ? absint( $_POST['question_index'] )  : 0;
+		$submission_id = isset( $_POST['submission_id'] )   ? absint( $_POST['submission_id'] )   : 0;
+
+		$question = CA_Questions::get_question( $index );
+
+		if ( ! $question ) {
+			wp_send_json_error( array( 'message' => __( 'Question not found.', CA_TEXT_DOMAIN ) ) );
+		}
+
+		$saved_answer  = $submission_id ? CA_Database::get_answer( $submission_id, $index ) : null;
+		$total         = CA_Questions::get_total_count();
+		$progress      = $total > 0 ? round( ( $index / $total ) * 100 ) : 0;
+
+		wp_send_json_success( array(
+			'question'     => $question,
+			'saved_answer' => $saved_answer,
+			'total'        => $total,
+			'progress'     => $progress,
+			'is_last'      => ( $index === $total - 1 ),
+		) );
+	}
+
+	// -------------------------------------------------------------------------
+	// Action: save answer
+	// -------------------------------------------------------------------------
+
+	public function ca_save_answer() {
+		$this->verify_nonce();
+
+		$submission_id  = isset( $_POST['submission_id'] )   ? absint( $_POST['submission_id'] )   : 0;
+		$question_index = isset( $_POST['question_index'] )  ? absint( $_POST['question_index'] )  : 0;
+		$answer         = isset( $_POST['answer'] )          ? absint( $_POST['answer'] )          : 0;
+
+		// Validate
+		if ( ! $submission_id ) {
+			wp_send_json_error( array( 'message' => __( 'Invalid session. Please refresh and try again.', CA_TEXT_DOMAIN ) ) );
+		}
+		if ( $answer < 1 || $answer > 5 ) {
+			wp_send_json_error( array( 'message' => __( 'Invalid answer. Please select a value between 1 and 5.', CA_TEXT_DOMAIN ) ) );
+		}
+
+		CA_Database::save_answer( $submission_id, $question_index, $answer );
+		CA_Database::set_in_progress( $submission_id );
+
+		$total    = CA_Questions::get_total_count();
+		$next     = $question_index + 1;
+		$progress = $total > 0 ? round( ( $next / $total ) * 100 ) : 0;
+
+		wp_send_json_success( array(
+			'next_index' => $next,
+			'progress'   => $progress,
+			'is_last'    => ( $next >= $total ),
+		) );
+	}
+
+	// -------------------------------------------------------------------------
+	// Action: get progress
+	// -------------------------------------------------------------------------
+
+	public function ca_get_progress() {
+		$this->verify_nonce();
+
+		$submission_id = isset( $_POST['submission_id'] ) ? absint( $_POST['submission_id'] ) : 0;
+
+		if ( ! $submission_id ) {
+			wp_send_json_error( array( 'message' => __( 'Invalid session.', CA_TEXT_DOMAIN ) ) );
+		}
+
+		$answers  = CA_Database::get_answers( $submission_id );
+		$total    = CA_Questions::get_total_count();
+		$answered = count( $answers );
+		$progress = $total > 0 ? round( ( $answered / $total ) * 100 ) : 0;
+
+		wp_send_json_success( array(
+			'answered' => $answered,
+			'total'    => $total,
+			'progress' => $progress,
+		) );
+	}
+
+	// -------------------------------------------------------------------------
+	// Action: submit assessment (calculate scores)
+	// -------------------------------------------------------------------------
+
+	public function ca_submit_assessment() {
+		$this->verify_nonce();
+
+		$submission_id = isset( $_POST['submission_id'] ) ? absint( $_POST['submission_id'] ) : 0;
+
+		if ( ! $submission_id ) {
+			wp_send_json_error( array( 'message' => __( 'Invalid session.', CA_TEXT_DOMAIN ) ) );
+		}
+
+		$answers  = CA_Database::get_answers( $submission_id );
+		$total_q  = CA_Questions::get_total_count();
+
+		if ( count( $answers ) < $total_q ) {
+			wp_send_json_error( array( 'message' => __( 'Please answer all questions before submitting.', CA_TEXT_DOMAIN ) ) );
+		}
+
+		$scoring = CA_Scoring::calculate( $answers );
+
+		CA_Database::update_submission_scores(
+			$submission_id,
+			$scoring['total_score'],
+			$scoring['average_score']
+		);
+
+		CA_Database::save_category_scores( $submission_id, $scoring['category_scores'] );
+
+		wp_send_json_success( array(
+			'message' => __( 'Assessment submitted.', CA_TEXT_DOMAIN ),
+		) );
+	}
+
+	// -------------------------------------------------------------------------
+	// Action: get results preview
+	// -------------------------------------------------------------------------
+
+	public function ca_get_results_preview() {
+		$this->verify_nonce();
+
+		$submission_id = isset( $_POST['submission_id'] ) ? absint( $_POST['submission_id'] ) : 0;
+
+		if ( ! $submission_id ) {
+			wp_send_json_error( array( 'message' => __( 'Invalid session.', CA_TEXT_DOMAIN ) ) );
+		}
+
+		$submission     = CA_Database::get_submission( $submission_id );
+		$cat_scores_raw = CA_Database::get_category_scores( $submission_id );
+
+		if ( ! $submission ) {
+			wp_send_json_error( array( 'message' => __( 'Submission not found.', CA_TEXT_DOMAIN ) ) );
+		}
+
+		// Build category data with summaries
+		$category_scores = array();
+		foreach ( $cat_scores_raw as $cat ) {
+			$category_scores[] = array(
+				'name'     => $cat->category_name,
+				'subtotal' => (int) $cat->subtotal,
+				'average'  => (float) $cat->average,
+				'summary'  => CA_Scoring::get_category_summary( $cat->category_name, (float) $cat->average ),
+			);
+		}
+
+		$overall_profile = CA_Scoring::get_overall_profile( (float) $submission->average_score );
+
+		wp_send_json_success( array(
+			'user'            => array(
+				'first_name' => esc_html( $submission->first_name ),
+				'last_name'  => esc_html( $submission->last_name ),
+				'email'      => esc_html( $submission->email ),
+				'phone'      => esc_html( $submission->phone ),
+				'job_title'  => esc_html( $submission->job_title ),
+			),
+			'total_score'     => (int) $submission->total_score,
+			'average_score'   => (float) $submission->average_score,
+			'overall_profile' => $overall_profile,
+			'category_scores' => $category_scores,
+			'max_score'       => CA_Questions::get_total_count() * 5,
+		) );
+	}
+}

@@ -1,0 +1,272 @@
+/* ============================================================
+   Custom Assessment Plugin — Admin Styles
+   ============================================================ */
+
+:root {
+  --ca-primary:      #aa3130;
+  --ca-primary-light:#f8e8e8;
+  --ca-border:       #e2e8f0;
+  --ca-text:         #1a202c;
+  --ca-text-muted:   #718096;
+  --ca-surface:      #fff;
+  --ca-radius:       10px;
+}
+
+/* --- Wrap ------------------------------------------------- */
+.ca-admin-wrap {
+  padding: 24px 0 40px;
+}
+
+/* --- Title ------------------------------------------------ */
+.ca-admin-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.6rem !important;
+  color: var(--ca-text) !important;
+  margin-bottom: 28px !important;
+}
+
+.ca-admin-title-icon {
+  color: var(--ca-primary) !important;
+  font-size: 1.5rem !important;
+}
+
+.ca-admin-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: var(--ca-primary-light);
+  color: var(--ca-primary);
+  border-radius: 50%;
+  text-decoration: none;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.ca-admin-back:hover {
+  background: var(--ca-primary);
+  color: #fff;
+}
+
+.ca-admin-back .dashicons {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+}
+
+/* --- Empty state ------------------------------------------ */
+.ca-admin-empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--ca-text-muted);
+}
+
+.ca-admin-empty .dashicons {
+  font-size: 48px;
+  width: 48px;
+  height: 48px;
+  display: block;
+  margin: 0 auto 16px;
+  color: #cbd5e0;
+}
+
+/* --- Stats bar -------------------------------------------- */
+.ca-admin-stats-bar {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.ca-admin-stat {
+  display: flex;
+  flex-direction: column;
+  background: var(--ca-surface);
+  border: 1px solid var(--ca-border);
+  border-radius: var(--ca-radius);
+  padding: 16px 24px;
+  min-width: 120px;
+}
+
+.ca-admin-stat strong {
+  font-size: 1.8rem;
+  font-weight: 800;
+  color: var(--ca-primary);
+  line-height: 1;
+}
+
+.ca-admin-stat span {
+  font-size: 0.78rem;
+  color: var(--ca-text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 4px;
+}
+
+/* --- Admin Table ------------------------------------------ */
+.ca-admin-table {
+  border-radius: var(--ca-radius) !important;
+  overflow: hidden;
+}
+
+.ca-col-id {
+  width: 50px;
+}
+
+.ca-col-score {
+  width: 100px;
+  text-align: center !important;
+}
+
+.ca-col-status {
+  width: 120px;
+}
+
+.ca-admin-summary {
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--ca-text-muted);
+  max-width: 380px;
+}
+
+/* --- Status Badge ----------------------------------------- */
+.ca-status-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 99px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ca-status--started {
+  background: #ebf8ff;
+  color: #2b6cb0;
+}
+
+.ca-status--in_progress {
+  background: #fffbeb;
+  color: #b7791f;
+}
+
+.ca-status--completed {
+  background: #f0fff4;
+  color: #276749;
+}
+
+/* --- Admin Card ------------------------------------------- */
+.ca-admin-card {
+  background: var(--ca-surface);
+  border: 1px solid var(--ca-border);
+  border-radius: var(--ca-radius);
+  padding: 24px 28px;
+  margin-bottom: 24px;
+}
+
+.ca-admin-card-title {
+  font-size: 1.05rem !important;
+  font-weight: 700 !important;
+  color: var(--ca-text) !important;
+  margin: 0 0 20px !important;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--ca-border);
+}
+
+/* --- Info Grid -------------------------------------------- */
+.ca-admin-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 20px;
+}
+
+.ca-admin-info-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ca-admin-info-grid label {
+  font-size: 0.73rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ca-text-muted);
+}
+
+.ca-admin-info-grid span {
+  font-size: 0.95rem;
+  color: var(--ca-text);
+  font-weight: 500;
+}
+
+/* --- Score Row -------------------------------------------- */
+.ca-admin-score-row {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.ca-admin-score-box {
+  flex: 1;
+  min-width: 140px;
+  background: var(--ca-primary-light);
+  border-radius: var(--ca-radius);
+  padding: 20px;
+  text-align: center;
+}
+
+.ca-admin-score-value {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--ca-primary);
+  line-height: 1;
+}
+
+.ca-admin-score-profile {
+  font-size: 1rem !important;
+  font-weight: 700 !important;
+}
+
+.ca-admin-score-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ca-text-muted);
+  margin-top: 6px;
+}
+
+.ca-admin-score-max {
+  font-size: 0.75rem;
+  color: var(--ca-text-muted);
+  margin-top: 2px;
+}
+
+/* --- Answer Pill ------------------------------------------ */
+.ca-answer-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-weight: 800;
+  font-size: 0.9rem;
+  color: #fff;
+  background: var(--ca-primary);
+}
+
+.ca-answer-pill--1 { background: #e53e3e; }
+.ca-answer-pill--2 { background: #dd6b20; }
+.ca-answer-pill--3 { background: #d69e2e; }
+.ca-answer-pill--4 { background: #38a169; }
+.ca-answer-pill--5 { background: #2b6cb0; }
+
+.ca-no-answer {
+  color: #cbd5e0;
+}
