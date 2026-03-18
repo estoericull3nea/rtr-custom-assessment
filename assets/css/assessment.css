@@ -618,13 +618,17 @@ body,
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  padding: 14px 8px;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  padding: 0;
   border: 2px solid var(--ca-border);
   border-radius: var(--ca-radius);
   background: var(--ca-surface);
   transition: all var(--ca-transition);
   text-align: center;
+  box-sizing: border-box;
 }
 
 .ca-answer-option:hover .ca-answer-btn {
