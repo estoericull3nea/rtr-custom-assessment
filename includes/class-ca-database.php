@@ -166,7 +166,7 @@ class CA_Database {
 		$table = $wpdb->prefix . 'ca_submissions';
 
 		return $wpdb->get_row(
-			$wpdb->prepare( "SELECT * FROM {$table} WHERE email = %s AND status = %s ORDER BY updated_at DESC LIMIT 1", $email, 'in_progress' )
+			$wpdb->prepare( "SELECT * FROM {$table} WHERE email = %s AND status IN ('in_progress','started') ORDER BY updated_at DESC LIMIT 1", $email )
 		);
 	}
 

@@ -38,11 +38,12 @@
     $questionError,
     $backBtn,
     $nextBtn,
-    $resultsContent;
+    $resultsContent,
+    $resumeDialog,
+    $resumeEmailText,
+    $resumeContinueBtn,
+    $resumeNewBtn;
 
-  /* -------------------------------------------------------
-	   Init
-	------------------------------------------------------- */
   function init() {
     $modal = $("#ca-modal");
     $overlay = $("#ca-modal-overlay");
@@ -63,14 +64,11 @@
     $backBtn = $("#ca-back-btn");
     $nextBtn = $("#ca-next-btn");
     $resultsContent = $("#ca-results-content");
+    $resumeDialog = $("#ca-resume-dialog");
+    $resumeEmailText = $("#ca-resume-email-text");
+    $resumeContinueBtn = $("#ca-resume-continue");
+    $resumeNewBtn = $("#ca-resume-new");
 
-    bindEvents();
-  }
-
-  /* -------------------------------------------------------
-	   Events
-	------------------------------------------------------- */
-  function bindEvents() {
     // Open modal
     $("#ca-open-modal").on("click", openModal);
 
@@ -123,23 +121,27 @@
         .done(function (response) {
           if (
             response.success &&
-            response.data.status === "in_progress" &&
+            (response.data.status === "in_progress" ||
+              response.data.status === "started") &&
             response.data.email === stored.email
           ) {
-            var resume = window.confirm(
-              "You have an in-progress assessment for " +
-                stored.email +
-                ". Click OK to continue or Cancel to start a new assessment.",
+            showResumeDialog(
+              stored.email,
+              function () {
+                resumeAssessment(
+                  stored.submissionId,
+                  response.data.answered,
+                  response.data.total,
+                );
+              },
+              function () {
+                clearSavedSession();
+                resetState();
+                showScreen("info");
+                hideProgress();
+              },
             );
-            if (resume) {
-              resumeAssessment(
-                stored.submissionId,
-                response.data.answered,
-                response.data.total,
-              );
-              return;
-            }
-            clearSavedSession();
+            return;
           }
           resetState();
           showScreen("info");
@@ -161,6 +163,45 @@
     $modal.removeClass("ca-modal--open");
     $modal.attr("aria-hidden", "true");
     $body.removeClass("ca-modal-open");
+    hideResumeDialog();
+  }
+
+  function showResumeDialog(email, onContinue, onNew) {
+    if (!$resumeDialog.length) {
+      return;
+    }
+
+    $resumeEmailText.text(
+      "You have an in-progress assessment for " +
+        email +
+        ". Click Continue to resume or Start New to begin over.",
+    );
+
+    $resumeContinueBtn.off("click").on("click", function () {
+      hideResumeDialog();
+      if (typeof onContinue === "function") {
+        onContinue();
+      }
+    });
+
+    $resumeNewBtn.off("click").on("click", function () {
+      hideResumeDialog();
+      if (typeof onNew === "function") {
+        onNew();
+      }
+    });
+
+    $screens.removeClass("ca-screen-active");
+    $resumeDialog.removeAttr("hidden");
+    setBtnLoading($startBtn, false);
+    state.isSubmitting = false;
+  }
+
+  function hideResumeDialog() {
+    if (!$resumeDialog.length) {
+      return;
+    }
+    $resumeDialog.attr("hidden", "true");
   }
 
   function getSavedSession() {
@@ -333,21 +374,24 @@
         response.success &&
         response.data &&
         response.data.found &&
-        response.data.status === "in_progress"
+        (response.data.status === "in_progress" ||
+          response.data.status === "started")
       ) {
-        var confirmResume = window.confirm(
-          "You already have a saved, in-progress assessment for this email. Click OK to continue where you left off, or Cancel to start a new assessment.",
+        showResumeDialog(
+          email,
+          function () {
+            resumeAssessment(
+              response.data.submission_id,
+              response.data.answered,
+              response.data.total,
+            );
+          },
+          function () {
+            clearSavedSession();
+            saveUserInfo();
+          },
         );
-        if (confirmResume) {
-          resumeAssessment(
-            response.data.submission_id,
-            response.data.answered,
-            response.data.total,
-          );
-          state.isSubmitting = false;
-          setBtnLoading($startBtn, false);
-          return;
-        }
+        return;
       }
 
       // Either no in-progress entry or user chose to start new

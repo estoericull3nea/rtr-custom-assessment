@@ -217,8 +217,20 @@ class CA_Shortcode {
 						</div>
 					</div>
 
-				</div><!-- .ca-modal-body -->
 
+					<!-- Resume prompt (centered modal style) -->
+					<div id="ca-resume-dialog" class="ca-resume-dialog" hidden>
+						<div class="ca-resume-dialog-panel">
+							<h3>In-progress assessment found</h3>
+							<p id="ca-resume-email-text"></p>
+							<div class="ca-resume-actions">
+								<button type="button" id="ca-resume-continue" class="ca-btn ca-btn--primary">Continue assessment</button>
+								<button type="button" id="ca-resume-new" class="ca-btn ca-btn--ghost">Start new assessment</button>
+							</div>
+						</div>
+					</div>
+
+				</div><!-- .ca-modal-body -->
 			</div><!-- .ca-modal-panel -->
 		</div><!-- #ca-modal -->
 		<?php
