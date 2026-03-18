@@ -1,9 +1,8 @@
 <?php
 /**
  * Plugin Name: Custom Assessment
- * Plugin URI:  https://example.com/custom-assessment
  * Description: A full-screen AJAX-powered entrepreneurial mindset assessment with admin dashboard.
- * Version:     1.0.0
+ * Version:     2.0.0
  * Author:      Ericson Palisoc
  * License:     GPL-2.0+
  * Text Domain: custom-assessment
@@ -14,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Constants
-define( 'CA_VERSION',     '1.0.0' );
+define( 'CA_VERSION',     '2.0.0' );
 define( 'CA_PLUGIN_DIR',  plugin_dir_path( __FILE__ ) );
 define( 'CA_PLUGIN_URL',  plugin_dir_url( __FILE__ ) );
 define( 'CA_TEXT_DOMAIN', 'custom-assessment' );
