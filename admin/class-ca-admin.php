@@ -204,8 +204,14 @@ class CA_Admin {
 			if ( 'add_category' === $_POST['ca_action'] && ! empty( $_POST['new_category'] ) ) {
 				$new_category = sanitize_text_field( wp_unslash( $_POST['new_category'] ) );
 				if ( ! empty( $new_category ) ) {
-					$this->add_category( $new_category );
-					$message = 'added';
+					// Check if category already exists
+					$existing_categories = CA_Questions::get_categories();
+					if ( in_array( $new_category, $existing_categories ) ) {
+						$message = 'duplicate';
+					} else {
+						$this->add_category( $new_category );
+						$message = 'added';
+					}
 				}
 			} elseif ( 'delete_category' === $_POST['ca_action'] && ! empty( $_POST['category_name'] ) ) {
 				$category_name = sanitize_text_field( wp_unslash( $_POST['category_name'] ) );
@@ -953,8 +959,14 @@ class CA_Admin {
 			if ( 'add_category' === $_POST['ca_action'] && ! empty( $_POST['new_category'] ) ) {
 				$new_category = sanitize_text_field( wp_unslash( $_POST['new_category'] ) );
 				if ( ! empty( $new_category ) ) {
-					$this->add_category( $new_category );
-					$message = 'added';
+					// Check if category already exists
+					$existing_categories = CA_Questions::get_categories();
+					if ( in_array( $new_category, $existing_categories ) ) {
+						$message = 'duplicate';
+					} else {
+						$this->add_category( $new_category );
+						$message = 'added';
+					}
 				}
 			} elseif ( 'delete_category' === $_POST['ca_action'] && ! empty( $_POST['category_name'] ) ) {
 				$category_name = sanitize_text_field( wp_unslash( $_POST['category_name'] ) );
@@ -995,19 +1007,25 @@ class CA_Admin {
 			</script>
 
 			<?php if ( isset( $_GET['message'] ) ) : ?>
-				<div class="notice notice-success is-dismissible">
-					<p>
-						<?php 
-						if ( 'added' === $_GET['message'] ) {
-							esc_html_e( 'Category added successfully.', CA_TEXT_DOMAIN );
-						} elseif ( 'deleted' === $_GET['message'] ) {
-							esc_html_e( 'Category deleted successfully.', CA_TEXT_DOMAIN );
-						} elseif ( 'edited' === $_GET['message'] ) {
-							esc_html_e( 'Category updated successfully.', CA_TEXT_DOMAIN );
-						}
-						?>
-					</p>
-				</div>
+				<?php if ( 'duplicate' === $_GET['message'] ) : ?>
+					<div class="notice notice-error is-dismissible">
+						<p><?php esc_html_e( 'Error: Category already exists. Please choose a different name.', CA_TEXT_DOMAIN ); ?></p>
+					</div>
+				<?php else : ?>
+					<div class="notice notice-success is-dismissible">
+						<p>
+							<?php 
+							if ( 'added' === $_GET['message'] ) {
+								esc_html_e( 'Category added successfully.', CA_TEXT_DOMAIN );
+							} elseif ( 'deleted' === $_GET['message'] ) {
+								esc_html_e( 'Category deleted successfully.', CA_TEXT_DOMAIN );
+							} elseif ( 'edited' === $_GET['message'] ) {
+								esc_html_e( 'Category updated successfully.', CA_TEXT_DOMAIN );
+							}
+							?>
+						</p>
+					</div>
+				<?php endif; ?>
 			<?php endif; ?>
 
 			<!-- Basic Statistics -->
