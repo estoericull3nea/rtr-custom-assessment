@@ -358,7 +358,7 @@ class CA_Admin {
 											<?php echo esc_html( ucwords( str_replace( '_', ' ', $sub->status ) ) ); ?>
 										</span>
 									</td>
-									<td><?php echo esc_html( date_i18n( get_option( 'date_format' ), strtotime( $sub->created_at ) ) ); ?></td>
+									<td><?php echo esc_html( date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), strtotime( $sub->created_at ) ) ); ?></td>
 									<td>
 										<a href="<?php echo esc_url( add_query_arg( array( 'page' => 'custom-assessment-submissions', 'view' => 'detail', 'id' => $sub->id ), admin_url( 'admin.php' ) ) ); ?>" class="button button-small">
 											<?php esc_html_e( 'View', CA_TEXT_DOMAIN ); ?>
