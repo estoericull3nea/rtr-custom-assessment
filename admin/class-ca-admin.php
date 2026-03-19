@@ -45,6 +45,15 @@ class CA_Admin {
 			'custom-assessment-submissions',
 			array( $this, 'render_list_page' )
 		);
+
+		add_submenu_page(
+			'custom-assessment-dashboard',
+			__( 'Questions', CA_TEXT_DOMAIN ),
+			__( 'Questions', CA_TEXT_DOMAIN ),
+			'manage_options',
+			'custom-assessment-questions',
+			array( $this, 'render_questions_page' )
+		);
 	}
 
 	public function enqueue_admin_assets( $hook ) {
@@ -792,6 +801,73 @@ class CA_Admin {
 				<?php endif; ?>
 			</div>
 
+		</div>
+		<?php
+	}
+
+	/**
+	 * Render questions page - displays all assessment questions.
+	 */
+	public function render_questions_page() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have permission to view this page.', CA_TEXT_DOMAIN ) );
+		}
+
+		$questions = CA_Questions::get_flat();
+		$total_questions = CA_Questions::get_total_count();
+		$categories = CA_Questions::get_categories();
+		?>
+		<div class="wrap ca-admin-wrap">
+			<h1 class="ca-admin-title">
+				<span class="ca-admin-title-icon dashicons dashicons-format-chat"></span>
+				<?php esc_html_e( 'Assessment Questions', CA_TEXT_DOMAIN ); ?>
+			</h1>
+
+			<div class="ca-questions-header">
+				<div class="ca-questions-stats">
+					<span class="ca-stat-item">
+						<strong><?php echo esc_html( $total_questions ); ?></strong>
+						<?php esc_html_e( 'Total Questions', CA_TEXT_DOMAIN ); ?>
+					</span>
+					<span class="ca-stat-item">
+						<strong><?php echo esc_html( count( $categories ) ); ?></strong>
+						<?php esc_html_e( 'Categories', CA_TEXT_DOMAIN ); ?>
+					</span>
+				</div>
+			</div>
+
+			<?php if ( empty( $questions ) ) : ?>
+				<div class="ca-admin-empty">
+					<span class="dashicons dashicons-format-chat" aria-hidden="true"></span>
+					<p><?php esc_html_e( 'No questions found. Please check your assessment configuration.', CA_TEXT_DOMAIN ); ?></p>
+				</div>
+			<?php else : ?>
+				<div class="ca-questions-list">
+					<?php foreach ( $categories as $category ) : ?>
+						<div class="ca-category-section">
+							<h3 class="ca-category-title"><?php echo esc_html( $category ); ?></h3>
+							<div class="ca-category-questions">
+								<?php 
+								$category_questions = array_filter( $questions, function( $q ) use ( $category ) {
+									return $q['category'] === $category;
+								});
+								
+								foreach ( $category_questions as $q ) : ?>
+									<div class="ca-question-item">
+										<div class="ca-question-header">
+											<span class="ca-question-number"><?php echo esc_html( $q['index'] + 1 ); ?>.</span>
+											<span class="ca-question-text"><?php echo esc_html( $q['text'] ); ?></span>
+										</div>
+										<div class="ca-question-meta">
+											<span class="ca-question-category"><?php echo esc_html( $q['category'] ); ?></span>
+										</div>
+									</div>
+								<?php endforeach; ?>
+							</div>
+						</div>
+					<?php endforeach; ?>
+				</div>
+			<?php endif; ?>
 		</div>
 		<?php
 	}

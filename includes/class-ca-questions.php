@@ -133,4 +133,20 @@ class CA_Questions {
 		$flat = self::get_flat();
 		return isset( $flat[ $index ] ) ? $flat[ $index ] : null;
 	}
+
+	/**
+	 * Get all categories.
+	 *
+	 * @return array
+	 */
+	public static function get_categories() {
+		$categories = array();
+		$all = self::get_all();
+		
+		foreach ( $all as $cat ) {
+			$categories[] = $cat['category'];
+		}
+		
+		return $categories;
+	}
 }
