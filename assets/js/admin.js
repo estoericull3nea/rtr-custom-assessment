@@ -433,11 +433,16 @@ jQuery(document).ready(function ($) {
       });
 
       // Update table with matching results
+      var $table = $tableBody.closest("table");
+      var $tableHead = $table.find("thead");
+
       $tableBody.empty();
       if (matchingData.length > 0) {
         matchingData.forEach(function (item) {
           $tableBody.append(item.row);
         });
+        // Show table headers when there are results
+        $tableHead.show();
       } else {
         var noResultsMessage = "No items found matching your search.";
         if (currentPageType === "questions") {
@@ -448,11 +453,23 @@ jQuery(document).ready(function ($) {
           noResultsMessage = "No submissions found matching your search.";
         }
 
-        $tableBody.append(
-          '<tr><td colspan="99" style="text-align: center; padding: 20px; color: #666;">' +
-            noResultsMessage +
-            "</td></tr>",
-        );
+        // Create a single row with a single cell that spans all columns
+        // This ensures the message is displayed without showing empty table columns
+        var $noResultsRow = $("<tr>");
+        var $noResultsCell = $("<td>");
+        $noResultsCell.attr("colspan", "99");
+        $noResultsCell.css({
+          "text-align": "center",
+          padding: "20px",
+          color: "#666",
+          "font-style": "italic",
+        });
+        $noResultsCell.text(noResultsMessage);
+        $noResultsRow.append($noResultsCell);
+        $tableBody.append($noResultsRow);
+
+        // Hide table headers when there are no results
+        $tableHead.hide();
       }
 
       // Update search results count
