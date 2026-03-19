@@ -972,6 +972,15 @@ class CA_Admin {
 		}
 
 		$categories = CA_Questions::get_categories();
+		
+		// Pagination setup
+		$per_page = 10;
+		$current_page = max(1, isset($_GET['paged']) ? absint($_GET['paged']) : 1);
+		$total_categories = count($categories);
+		$total_pages = ceil($total_categories / $per_page);
+		$offset = ($current_page - 1) * $per_page;
+		$paged_categories = array_slice($categories, $offset, $per_page);
+		
 		?>
 		<div class="wrap ca-admin-wrap">
 			<h1 class="ca-admin-title">
@@ -993,6 +1002,8 @@ class CA_Admin {
 							esc_html_e( 'Category added successfully.', CA_TEXT_DOMAIN );
 						} elseif ( 'deleted' === $_GET['message'] ) {
 							esc_html_e( 'Category deleted successfully.', CA_TEXT_DOMAIN );
+						} elseif ( 'edited' === $_GET['message'] ) {
+							esc_html_e( 'Category updated successfully.', CA_TEXT_DOMAIN );
 						}
 						?>
 					</p>
@@ -1077,6 +1088,53 @@ class CA_Admin {
 					<p><?php esc_html_e( 'No categories found. Add your first category above.', CA_TEXT_DOMAIN ); ?></p>
 				</div>
 			<?php else : ?>
+				<div class="tablenav top">
+					<div class="tablenav-pages">
+						<span class="displaying-num">
+							<?php echo esc_html( $total_categories ); ?> <?php esc_html_e( 'items', CA_TEXT_DOMAIN ); ?>
+						</span>
+						<?php if ( $total_pages > 1 ) : ?>
+							<span class="pagination-links">
+								<?php
+								$base_url = admin_url( 'admin.php?page=custom-assessment-categories' );
+								$prev_disabled = $current_page <= 1 ? 'disabled' : '';
+								$next_disabled = $current_page >= $total_pages ? 'disabled' : '';
+								
+								// Previous button
+								echo '<a class="prev-page button ' . esc_attr( $prev_disabled ) . '" href="' . esc_url( add_query_arg( 'paged', max(1, $current_page - 1), $base_url ) ) . '">&laquo;</a>';
+								
+								// Page numbers (show up to 5 page numbers)
+								$start_page = max(1, $current_page - 2);
+								$end_page = min($total_pages, $start_page + 4);
+								
+								if ($start_page > 1) {
+									echo '<a class="page-numbers" href="' . esc_url( add_query_arg( 'paged', 1, $base_url ) ) . '">1</a>';
+									if ($start_page > 2) {
+										echo '<span class="dots">…</span>';
+									}
+								}
+								
+								for ($i = $start_page; $i <= $end_page; $i++) {
+									$active_class = ($i === $current_page) ? 'current' : '';
+									echo '<a class="page-numbers ' . esc_attr( $active_class ) . '" href="' . esc_url( add_query_arg( 'paged', $i, $base_url ) ) . '">' . esc_html( $i ) . '</a>';
+								}
+								
+								if ($end_page < $total_pages) {
+									if ($end_page < $total_pages - 1) {
+										echo '<span class="dots">…</span>';
+									}
+									echo '<a class="page-numbers" href="' . esc_url( add_query_arg( 'paged', $total_pages, $base_url ) ) . '">' . esc_html( $total_pages ) . '</a>';
+								}
+								
+								// Next button
+								echo '<a class="next-page button ' . esc_attr( $next_disabled ) . '" href="' . esc_url( add_query_arg( 'paged', min($total_pages, $current_page + 1), $base_url ) ) . '">&raquo;</a>';
+								?>
+							</span>
+						<?php endif; ?>
+					</div>
+					<br class="clear">
+				</div>
+
 				<table class="wp-list-table widefat fixed striped ca-admin-table">
 					<thead>
 						<tr>
@@ -1091,18 +1149,19 @@ class CA_Admin {
 						$questions = CA_Questions::get_flat();
 						$category_counts = array_count_values( array_column( $questions, 'category' ) );
 						
-						foreach ( $categories as $index => $category ) : 
+						foreach ( $paged_categories as $index => $category ) : 
+							$global_index = $offset + $index;
 							$count = isset( $category_counts[$category] ) ? $category_counts[$category] : 0;
 						?>
 							<tr>
-								<td class="ca-col-id"><?php echo esc_html( $index + 1 ); ?></td>
+								<td class="ca-col-id"><?php echo esc_html( $global_index + 1 ); ?></td>
 								<td>
-									<strong class="ca-category-name" id="category-name-<?php echo esc_attr( $index ); ?>">
+									<strong class="ca-category-name" id="category-name-<?php echo esc_attr( $global_index ); ?>">
 										<?php echo esc_html( $category ); ?>
 									</strong>
 									<input type="text" 
 										class="ca-category-input" 
-										id="category-input-<?php echo esc_attr( $index ); ?>" 
+										id="category-input-<?php echo esc_attr( $global_index ); ?>" 
 										value="<?php echo esc_attr( $category ); ?>" 
 										style="display: none; width: 100%;"
 										data-original="<?php echo esc_attr( $category ); ?>">
@@ -1111,14 +1170,14 @@ class CA_Admin {
 								<td>
 									<button type="button" 
 										class="button button-small ca-edit-btn" 
-										data-index="<?php echo esc_attr( $index ); ?>"
+										data-index="<?php echo esc_attr( $global_index ); ?>"
 										data-category="<?php echo esc_attr( $category ); ?>">
 										<?php esc_html_e( 'Edit', CA_TEXT_DOMAIN ); ?>
 									</button>
 									<button type="button" 
 										class="button button-small ca-save-btn" 
 										style="display: none;"
-										data-index="<?php echo esc_attr( $index ); ?>"
+										data-index="<?php echo esc_attr( $global_index ); ?>"
 										data-category="<?php echo esc_attr( $category ); ?>">
 										<?php esc_html_e( 'Save', CA_TEXT_DOMAIN ); ?>
 									</button>
@@ -1135,6 +1194,49 @@ class CA_Admin {
 						<?php endforeach; ?>
 					</tbody>
 				</table>
+
+				<div class="tablenav bottom">
+					<div class="tablenav-pages">
+						<span class="displaying-num">
+							<?php echo esc_html( $total_categories ); ?> <?php esc_html_e( 'items', CA_TEXT_DOMAIN ); ?>
+						</span>
+						<?php if ( $total_pages > 1 ) : ?>
+							<span class="pagination-links">
+								<?php
+								// Previous button
+								echo '<a class="prev-page button ' . esc_attr( $prev_disabled ) . '" href="' . esc_url( add_query_arg( 'paged', max(1, $current_page - 1), $base_url ) ) . '">&laquo;</a>';
+								
+								// Page numbers (show up to 5 page numbers)
+								$start_page = max(1, $current_page - 2);
+								$end_page = min($total_pages, $start_page + 4);
+								
+								if ($start_page > 1) {
+									echo '<a class="page-numbers" href="' . esc_url( add_query_arg( 'paged', 1, $base_url ) ) . '">1</a>';
+									if ($start_page > 2) {
+										echo '<span class="dots">…</span>';
+									}
+								}
+								
+								for ($i = $start_page; $i <= $end_page; $i++) {
+									$active_class = ($i === $current_page) ? 'current' : '';
+									echo '<a class="page-numbers ' . esc_attr( $active_class ) . '" href="' . esc_url( add_query_arg( 'paged', $i, $base_url ) ) . '">' . esc_html( $i ) . '</a>';
+								}
+								
+								if ($end_page < $total_pages) {
+									if ($end_page < $total_pages - 1) {
+										echo '<span class="dots">…</span>';
+									}
+									echo '<a class="page-numbers" href="' . esc_url( add_query_arg( 'paged', $total_pages, $base_url ) ) . '">' . esc_html( $total_pages ) . '</a>';
+								}
+								
+								// Next button
+								echo '<a class="next-page button ' . esc_attr( $next_disabled ) . '" href="' . esc_url( add_query_arg( 'paged', min($total_pages, $current_page + 1), $base_url ) ) . '">&raquo;</a>';
+								?>
+							</span>
+						<?php endif; ?>
+					</div>
+					<br class="clear">
+				</div>
 			<?php endif; ?>
 		</div>
 		<?php
