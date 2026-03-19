@@ -493,6 +493,10 @@ class CA_Admin {
 			wp_die( esc_html__( 'You do not have permission to view this page.', CA_TEXT_DOMAIN ) );
 		}
 
+		// Check SMTP configuration - show error if no SMTP detected
+		// This ensures users are aware they need SMTP for email functionality
+		$smtp_configured = $this->is_smtp_configured();
+
 		// Detail view
 		if ( isset( $_GET['view'] ) && 'detail' === $_GET['view'] && ! empty( $_GET['id'] ) ) {
 			$id = absint( $_GET['id'] );
@@ -508,6 +512,14 @@ class CA_Admin {
 				<span class="ca-admin-title-icon dashicons dashicons-chart-bar"></span>
 				<?php esc_html_e( 'Assessment Submissions', CA_TEXT_DOMAIN ); ?>
 			</h1>
+
+			<?php if ( ! $smtp_configured ) : ?>
+				<div class="notice notice-error is-dismissible">
+					<p><strong><?php esc_html_e( 'Warning: No SMTP configuration detected.', CA_TEXT_DOMAIN ); ?></strong></p>
+					<p><?php esc_html_e( 'Email notifications for completed assessments may not work properly. Please configure an SMTP plugin to ensure emails are delivered successfully.', CA_TEXT_DOMAIN ); ?></p>
+					<p><em><?php esc_html_e( 'Recommended plugins: WP Mail SMTP, Easy WP SMTP, Post SMTP Mailer, or similar.', CA_TEXT_DOMAIN ); ?></em></p>
+				</div>
+			<?php endif; ?>
 
 			<?php if ( isset( $_GET['message'] ) && 'deleted' === $_GET['message'] ) : ?>
 				<div class="notice notice-success is-dismissible">
