@@ -433,3 +433,43 @@ body,
   margin-top: 16px;
   font-family: var(--ca-font);
 }
+
+/* --- Categories Statistics Grid --------------------------- */
+.ca-categories-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.ca-stat-card {
+  background: var(--ca-surface);
+  border: 1px solid var(--ca-border);
+  border-radius: var(--ca-radius);
+  padding: 20px;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+}
+
+.ca-stat-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.ca-stat-value {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--ca-primary);
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+.ca-stat-label {
+  font-size: 0.8rem;
+  color: var(--ca-text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  line-height: 1.4;
+}

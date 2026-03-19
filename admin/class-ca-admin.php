@@ -965,6 +965,48 @@ class CA_Admin {
 				</div>
 			<?php endif; ?>
 
+			<!-- Basic Statistics -->
+			<div class="ca-categories-stats-grid">
+				<div class="ca-stat-card">
+					<div class="ca-stat-value"><?php echo esc_html( count( $categories ) ); ?></div>
+					<div class="ca-stat-label"><?php esc_html_e( 'Total Categories', CA_TEXT_DOMAIN ); ?></div>
+				</div>
+				
+				<?php 
+				// Count base categories (from hardcoded structure)
+				$base_categories = array();
+				$all_questions = CA_Questions::get_all();
+				foreach ( $all_questions as $cat ) {
+					$base_categories[] = $cat['category'];
+				}
+				$base_count = count( $base_categories );
+				
+				// Count custom categories
+				$custom_categories = get_option( 'ca_custom_categories', array() );
+				$custom_count = count( $custom_categories );
+				?>
+				
+				<div class="ca-stat-card">
+					<div class="ca-stat-value"><?php echo esc_html( $base_count ); ?></div>
+					<div class="ca-stat-label"><?php esc_html_e( 'Base Categories', CA_TEXT_DOMAIN ); ?></div>
+				</div>
+				
+				<div class="ca-stat-card">
+					<div class="ca-stat-value"><?php echo esc_html( $custom_count ); ?></div>
+					<div class="ca-stat-label"><?php esc_html_e( 'Custom Categories', CA_TEXT_DOMAIN ); ?></div>
+				</div>
+				
+				<?php 
+				// Calculate total questions across all categories
+				$total_questions = CA_Questions::get_total_count();
+				?>
+				
+				<div class="ca-stat-card">
+					<div class="ca-stat-value"><?php echo esc_html( $total_questions ); ?></div>
+					<div class="ca-stat-label"><?php esc_html_e( 'Total Questions', CA_TEXT_DOMAIN ); ?></div>
+				</div>
+			</div>
+
 			<div class="ca-categories-header">
 				<div class="ca-categories-stats">
 					<span class="ca-stat-item">
@@ -980,14 +1022,15 @@ class CA_Admin {
 					<form method="post" action="">
 						<?php wp_nonce_field( 'ca_categories_action', '_wpnonce' ); ?>
 						<input type="hidden" name="ca_action" value="add_category">
-						<div class="ca-form-field">
-							<label for="new_category"><?php esc_html_e( 'Category Name', CA_TEXT_DOMAIN ); ?></label>
+						<div style="display: flex; gap: 10px; align-items: center; margin-bottom: 20px;">
+							<div class="ca-form-field">
 							<input type="text" id="new_category" name="new_category" placeholder="<?php esc_attr_e( 'Enter category name', CA_TEXT_DOMAIN ); ?>" required>
 						</div>
 						<div class="ca-form-actions">
 							<button type="submit" class="button button-primary">
 								<?php esc_html_e( 'Add Category', CA_TEXT_DOMAIN ); ?>
 							</button>
+						</div>
 						</div>
 					</form>
 				</div>
