@@ -260,12 +260,109 @@ class CA_Admin {
 	}
 
 	/**
+	 * Check if SMTP is configured for email sending.
+	 * 
+	 * @return bool True if SMTP is configured, false otherwise
+	 */
+	private function is_smtp_configured() {
+		// Check for common SMTP plugin settings/options that indicate SMTP is configured
+		$smtp_indicators = array(
+			'wp_mail_smtp',           // WP Mail SMTP plugin
+			'swpsmtp_options',        // Easy WP SMTP plugin
+			'postman_options',        // Post SMTP plugin
+			'pepipost_options',       // Pepipost plugin
+			'sendgrid_options',       // SendGrid plugin
+			'mailgun_options',        // Mailgun plugin
+			'wp_ses_options',         // AWS SES plugin
+			'gmail_smtp_options',     // Gmail SMTP plugin
+		);
+		
+		$has_smtp_config = false;
+		
+		// Check if any SMTP plugin has active configuration
+		foreach ($smtp_indicators as $option_name) {
+			$option = get_option($option_name);
+			if ($option && is_array($option) && !empty($option)) {
+				// Check if the configuration looks valid (has host, username, etc.)
+				if (isset($option['mail']['host']) && !empty($option['mail']['host'])) {
+					$has_smtp_config = true;
+					break;
+				}
+				if (isset($option['host']) && !empty($option['host'])) {
+					$has_smtp_config = true;
+					break;
+				}
+				if (isset($option['smtp_host']) && !empty($option['smtp_host'])) {
+					$has_smtp_config = true;
+					break;
+				}
+			}
+		}
+		
+		// Check for specific plugin constants that indicate SMTP is active
+		$smtp_constants = array(
+			'WPMailSMTP',
+			'Easy_Wp_SMTP',
+			'Postman_SMTP',
+			'PEPIPOST_PLUGIN_VERSION',
+			'SENDGRID_PLUGIN_VERSION',
+		);
+		
+		foreach ($smtp_constants as $constant) {
+			if (defined($constant) || class_exists($constant)) {
+				$has_smtp_config = true;
+				break;
+			}
+		}
+		
+		// Check if wp_mail is being filtered (indicates SMTP plugin is active)
+		if (has_filter('wp_mail_from') || has_filter('wp_mail_from_name')) {
+			$has_smtp_config = true;
+		}
+		
+		// Additional check: test if we can detect SMTP settings in common locations
+		// This helps catch cases where plugins are installed but not yet configured
+		$test_configs = array(
+			'wp_mail_smtp',
+			'swpsmtp_options',
+			'postman_options'
+		);
+		
+		foreach ($test_configs as $config_key) {
+			$config = get_option($config_key);
+			if ($config) {
+				// Look for SMTP-specific settings
+				$smtp_keys = array('host', 'smtp_host', 'mail_host', 'server', 'smtp_server');
+				foreach ($smtp_keys as $key) {
+					if (isset($config[$key]) && !empty($config[$key])) {
+						$has_smtp_config = true;
+						break 2; // break both loops
+					}
+					// Check nested mail array
+					if (isset($config['mail']) && isset($config['mail'][$key]) && !empty($config['mail'][$key])) {
+						$has_smtp_config = true;
+						break 2; // break both loops
+					}
+				}
+			}
+		}
+		
+		// Return true only if we found clear evidence of SMTP configuration
+		// Otherwise return false to show the warning message
+		return $has_smtp_config;
+	}
+
+	/**
 	 * Render assessment dashboard.
 	 */
 	public function render_dashboard_page() {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_die( esc_html__( 'You do not have permission to view this page.', CA_TEXT_DOMAIN ) );
 		}
+
+		// Check SMTP configuration - show error if no SMTP detected
+		// This ensures users are aware they need SMTP for email functionality
+		$smtp_configured = $this->is_smtp_configured();
 
 		$submissions = CA_Database::get_all_submissions();
 		$completed = array_filter( $submissions, fn( $s ) => $s->status === 'completed' );
@@ -295,6 +392,14 @@ class CA_Admin {
 				<span class="ca-admin-title-icon dashicons dashicons-chart-bar"></span>
 				<?php esc_html_e( 'Assessment Dashboard', CA_TEXT_DOMAIN ); ?>
 			</h1>
+
+			<?php if ( ! $smtp_configured ) : ?>
+				<div class="notice notice-error is-dismissible">
+					<p><strong><?php esc_html_e( 'Warning: No SMTP configuration detected.', CA_TEXT_DOMAIN ); ?></strong></p>
+					<p><?php esc_html_e( 'Email notifications for completed assessments may not work properly. Please configure an SMTP plugin to ensure emails are delivered successfully.', CA_TEXT_DOMAIN ); ?></p>
+					<p><em><?php esc_html_e( 'Recommended plugins: WP Mail SMTP, Easy WP SMTP, Post SMTP Mailer, or similar.', CA_TEXT_DOMAIN ); ?></em></p>
+				</div>
+			<?php endif; ?>
 
 			<div class="ca-dashboard-grid">
 				<div class="ca-dashboard-card">
