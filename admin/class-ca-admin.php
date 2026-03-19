@@ -973,37 +973,38 @@ class CA_Admin {
 				</div>
 				
 				<?php 
-				// Count base categories (from hardcoded structure)
-				$base_categories = array();
-				$all_questions = CA_Questions::get_all();
-				foreach ( $all_questions as $cat ) {
-					$base_categories[] = $cat['category'];
+				// Calculate question counts for each category
+				$questions = CA_Questions::get_flat();
+				$category_counts = array_count_values( array_column( $questions, 'category' ) );
+				
+				// Find most used category
+				$most_used_category = '';
+				$most_used_count = 0;
+				$least_used_category = '';
+				$least_used_count = PHP_INT_MAX;
+				
+				foreach ( $category_counts as $category => $count ) {
+					if ( $count > $most_used_count ) {
+						$most_used_count = $count;
+						$most_used_category = $category;
+					}
+					if ( $count < $least_used_count ) {
+						$least_used_count = $count;
+						$least_used_category = $category;
+					}
 				}
-				$base_count = count( $base_categories );
-				
-				// Count custom categories
-				$custom_categories = get_option( 'ca_custom_categories', array() );
-				$custom_count = count( $custom_categories );
 				?>
 				
 				<div class="ca-stat-card">
-					<div class="ca-stat-value"><?php echo esc_html( $base_count ); ?></div>
-					<div class="ca-stat-label"><?php esc_html_e( 'Base Categories', CA_TEXT_DOMAIN ); ?></div>
+					<div class="ca-stat-value"><?php echo esc_html( $most_used_category ); ?></div>
+					<div class="ca-stat-label"><?php esc_html_e( 'Most Used Category', CA_TEXT_DOMAIN ); ?></div>
+					<div class="ca-stat-sublabel"><?php echo esc_html( $most_used_count . ' questions' ); ?></div>
 				</div>
 				
 				<div class="ca-stat-card">
-					<div class="ca-stat-value"><?php echo esc_html( $custom_count ); ?></div>
-					<div class="ca-stat-label"><?php esc_html_e( 'Custom Categories', CA_TEXT_DOMAIN ); ?></div>
-				</div>
-				
-				<?php 
-				// Calculate total questions across all categories
-				$total_questions = CA_Questions::get_total_count();
-				?>
-				
-				<div class="ca-stat-card">
-					<div class="ca-stat-value"><?php echo esc_html( $total_questions ); ?></div>
-					<div class="ca-stat-label"><?php esc_html_e( 'Total Questions', CA_TEXT_DOMAIN ); ?></div>
+					<div class="ca-stat-value"><?php echo esc_html( $least_used_category ); ?></div>
+					<div class="ca-stat-label"><?php esc_html_e( 'Least Used Category', CA_TEXT_DOMAIN ); ?></div>
+					<div class="ca-stat-sublabel"><?php echo esc_html( $least_used_count . ' questions' ); ?></div>
 				</div>
 			</div>
 
