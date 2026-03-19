@@ -417,17 +417,6 @@ class CA_Admin {
 				</div>
 			<?php else : ?>
 
-			<div class="ca-admin-stats-bar">
-				<div class="ca-admin-stat">
-					<strong><?php echo esc_html( count( $submissions ) ); ?></strong>
-					<span><?php esc_html_e( 'Total Submissions', CA_TEXT_DOMAIN ); ?></span>
-				</div>
-				<div class="ca-admin-stat">
-					<strong><?php echo esc_html( count( array_filter( $submissions, fn($s) => $s->status === 'completed' ) ) ); ?></strong>
-					<span><?php esc_html_e( 'Completed', CA_TEXT_DOMAIN ); ?></span>
-				</div>
-			</div>
-
 			<table class="wp-list-table widefat fixed striped ca-admin-table">
 				<thead>
 					<tr>

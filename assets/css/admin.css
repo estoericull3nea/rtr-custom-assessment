@@ -416,7 +416,6 @@ body,
 }
 
 .ca-dashboard-section .wp-list-table {
-  margin: 0 -24px -24px -24px;
   width: calc(100% + 48px);
 }
 
