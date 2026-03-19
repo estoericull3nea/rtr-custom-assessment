@@ -1587,14 +1587,38 @@ class CA_Admin {
 	 * @param int $question_index
 	 */
 	private function delete_question( $question_index ) {
-		// Get existing questions configuration
-		$questions = get_option( 'ca_custom_questions', array() );
+		// Get all questions to find which category and priority this question belongs to
+		$all_questions = CA_Questions::get_all();
+		$flat_questions = CA_Questions::get_flat();
 		
-		// Remove the question at the specified index
-		if ( isset( $questions[$question_index] ) ) {
-			unset( $questions[$question_index] );
-			$questions = array_values( $questions ); // Re-index array
-			update_option( 'ca_custom_questions', $questions );
+		// Find the question details from the flat array
+		if ( ! isset( $flat_questions[$question_index] ) ) {
+			return; // Question not found
+		}
+		
+		$question_to_delete = $flat_questions[$question_index];
+		$category_to_delete = $question_to_delete['category'];
+		$priority_to_delete = $question_to_delete['priority'];
+		
+		// Get existing custom questions
+		$custom_questions = get_option( 'ca_custom_questions', array() );
+		
+		// Find and remove the matching question from custom questions
+		$found = false;
+		foreach ( $custom_questions as $key => $custom_question ) {
+			if ( $custom_question['category'] === $category_to_delete && 
+				 $custom_question['priority'] === $priority_to_delete &&
+				 $custom_question['text'] === $question_to_delete['text'] ) {
+				unset( $custom_questions[$key] );
+				$found = true;
+				break;
+			}
+		}
+		
+		// Only update if we found and removed a custom question
+		if ( $found ) {
+			$custom_questions = array_values( $custom_questions ); // Re-index array
+			update_option( 'ca_custom_questions', $custom_questions );
 		}
 	}
 
