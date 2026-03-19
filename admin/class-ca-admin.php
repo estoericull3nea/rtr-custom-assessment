@@ -842,31 +842,24 @@ class CA_Admin {
 					<p><?php esc_html_e( 'No questions found. Please check your assessment configuration.', CA_TEXT_DOMAIN ); ?></p>
 				</div>
 			<?php else : ?>
-				<div class="ca-questions-list">
-					<?php foreach ( $categories as $category ) : ?>
-						<div class="ca-category-section">
-							<h3 class="ca-category-title"><?php echo esc_html( $category ); ?></h3>
-							<div class="ca-category-questions">
-								<?php 
-								$category_questions = array_filter( $questions, function( $q ) use ( $category ) {
-									return $q['category'] === $category;
-								});
-								
-								foreach ( $category_questions as $q ) : ?>
-									<div class="ca-question-item">
-										<div class="ca-question-header">
-											<span class="ca-question-number"><?php echo esc_html( $q['index'] + 1 ); ?>.</span>
-											<span class="ca-question-text"><?php echo esc_html( $q['text'] ); ?></span>
-										</div>
-										<div class="ca-question-meta">
-											<span class="ca-question-category"><?php echo esc_html( $q['category'] ); ?></span>
-										</div>
-									</div>
-								<?php endforeach; ?>
-							</div>
-						</div>
-					<?php endforeach; ?>
-				</div>
+				<table class="wp-list-table widefat fixed striped ca-admin-table">
+					<thead>
+						<tr>
+							<th class="ca-col-id"><?php esc_html_e( '#', CA_TEXT_DOMAIN ); ?></th>
+							<th><?php esc_html_e( 'Category', CA_TEXT_DOMAIN ); ?></th>
+							<th><?php esc_html_e( 'Question', CA_TEXT_DOMAIN ); ?></th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php foreach ( $questions as $q ) : ?>
+							<tr>
+								<td class="ca-col-id"><?php echo esc_html( $q['index'] + 1 ); ?></td>
+								<td><?php echo esc_html( $q['category'] ); ?></td>
+								<td><?php echo esc_html( $q['text'] ); ?></td>
+							</tr>
+						<?php endforeach; ?>
+					</tbody>
+				</table>
 			<?php endif; ?>
 		</div>
 		<?php
