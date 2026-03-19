@@ -20,80 +20,80 @@ class CA_Questions {
 			array(
 				'category' => 'Growth Mindset',
 				'questions' => array(
-					'I embrace challenges and view them as opportunities for growth.',
-					'I am persistent in the face of obstacles and failures.',
-					'I actively seek solutions rather than dwelling on problems.',
-					'I maintain a positive attitude even in difficult situations.',
+					array('text' => 'I embrace challenges and view them as opportunities for growth.', 'priority' => 1),
+					array('text' => 'I am persistent in the face of obstacles and failures.', 'priority' => 2),
+					array('text' => 'I actively seek solutions rather than dwelling on problems.', 'priority' => 3),
+					array('text' => 'I maintain a positive attitude even in difficult situations.', 'priority' => 4),
 				),
 			),
 			array(
 				'category' => 'Adaptability',
 				'questions' => array(
-					'I adapt quickly to changes and setbacks.',
-					'I am comfortable navigating uncertain situations.',
-					'I learn from past experiences to improve future actions.',
-					'I adjust my strategies based on feedback and results.',
+					array('text' => 'I adapt quickly to changes and setbacks.', 'priority' => 1),
+					array('text' => 'I am comfortable navigating uncertain situations.', 'priority' => 2),
+					array('text' => 'I learn from past experiences to improve future actions.', 'priority' => 3),
+					array('text' => 'I adjust my strategies based on feedback and results.', 'priority' => 4),
 				),
 			),
 			array(
 				'category' => 'Risk-Taking',
 				'questions' => array(
-					'I am comfortable taking calculated risks.',
-					'I step out of my comfort zone to achieve my goals.',
-					'I explore innovative approaches to challenges.',
-					'I weigh potential rewards and risks before making decisions.',
+					array('text' => 'I am comfortable taking calculated risks.', 'priority' => 1),
+					array('text' => 'I step out of my comfort zone to achieve my goals.', 'priority' => 2),
+					array('text' => 'I explore innovative approaches to challenges.', 'priority' => 3),
+					array('text' => 'I weigh potential rewards and risks before making decisions.', 'priority' => 4),
 				),
 			),
 			array(
 				'category' => 'Accountability',
 				'questions' => array(
-					'I take responsibility for my actions and their outcomes.',
-					'I own up to mistakes and learn from them.',
-					'I follow through on commitments and promises.',
-					'I set clear expectations for myself and others.',
+					array('text' => 'I take responsibility for my actions and their outcomes.', 'priority' => 1),
+					array('text' => 'I own up to mistakes and learn from them.', 'priority' => 2),
+					array('text' => 'I follow through on commitments and promises.', 'priority' => 3),
+					array('text' => 'I set clear expectations for myself and others.', 'priority' => 4),
 				),
 			),
 			array(
 				'category' => 'Proactivity',
 				'questions' => array(
-					'I am proactive in seeking out new opportunities.',
-					'I take initiative in situations without waiting for direction.',
-					'I prioritize tasks that align with my long-term goals.',
-					'I identify potential challenges and address them early.',
+					array('text' => 'I am proactive in seeking out new opportunities.', 'priority' => 1),
+					array('text' => 'I take initiative in situations without waiting for direction.', 'priority' => 2),
+					array('text' => 'I prioritize tasks that align with my long-term goals.', 'priority' => 3),
+					array('text' => 'I identify potential challenges and address them early.', 'priority' => 4),
 				),
 			),
 			array(
 				'category' => 'Vision and Goal-Setting',
 				'questions' => array(
-					'I have a clear vision for my business and set goals accordingly.',
-					'I align my daily actions with my long-term objectives.',
-					'I break down big goals into actionable steps.',
+					array('text' => 'I have a clear vision for my business and set goals accordingly.', 'priority' => 1),
+					array('text' => 'I align my daily actions with my long-term objectives.', 'priority' => 2),
+					array('text' => 'I break down big goals into actionable steps.', 'priority' => 3),
 				),
 			),
 			array(
 				'category' => 'Confidence and Decision-Making',
 				'questions' => array(
-					'I trust my judgment when faced with uncertainty.',
-					'I handle pressure well when making important decisions.',
-					'I seek input when necessary but remain decisive.',
+					array('text' => 'I trust my judgment when faced with uncertainty.', 'priority' => 1),
+					array('text' => 'I handle pressure well when making important decisions.', 'priority' => 2),
+					array('text' => 'I seek input when necessary but remain decisive.', 'priority' => 3),
 				),
 			),
 			array(
 				'category' => 'Learning and Mentorship',
 				'questions' => array(
-					'I am open to constructive criticism, willing to learn from others, and seek out mentorship.',
-					'I actively network to connect with people who align with my goals.',
-					'I seek feedback and use it to improve myself.',
-					'I dedicate time to developing new skills and knowledge.',
+					array('text' => 'I am open to constructive criticism, willing to learn from others, and seek out mentorship.', 'priority' => 1),
+					array('text' => 'I actively network to connect with people who align with my goals.', 'priority' => 2),
+					array('text' => 'I seek feedback and use it to improve myself.', 'priority' => 3),
+					array('text' => 'I dedicate time to developing new skills and knowledge.', 'priority' => 4),
 				),
 			),
 		);
 	}
 
 	/**
-	 * Returns a flat list of questions with their category and global index.
+	 * Returns a flat list of questions with their category, global index, and priority.
 	 *
-	 * @return array  [ [ 'index' => int, 'category' => string, 'text' => string ], ... ]
+	 * @return array  [ [ 'index' => int, 'category' => string, 'text' => string, 'priority' => int ], ... ]
 	 */
 	public static function get_flat() {
 		$flat       = array();
@@ -105,7 +105,8 @@ class CA_Questions {
 				$flat[] = array(
 					'index'    => $index,
 					'category' => $cat['category'],
-					'text'     => $q,
+					'text'     => $q['text'],
+					'priority' => $q['priority'],
 				);
 				$index++;
 			}

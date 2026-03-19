@@ -847,6 +847,7 @@ class CA_Admin {
 						<tr>
 							<th class="ca-col-id"><?php esc_html_e( '#', CA_TEXT_DOMAIN ); ?></th>
 							<th><?php esc_html_e( 'Category', CA_TEXT_DOMAIN ); ?></th>
+							<th><?php esc_html_e( 'Priority', CA_TEXT_DOMAIN ); ?></th>
 							<th><?php esc_html_e( 'Question', CA_TEXT_DOMAIN ); ?></th>
 						</tr>
 					</thead>
@@ -855,6 +856,7 @@ class CA_Admin {
 							<tr>
 								<td class="ca-col-id"><?php echo esc_html( $q['index'] + 1 ); ?></td>
 								<td><?php echo esc_html( $q['category'] ); ?></td>
+								<td class="ca-col-priority"><?php echo esc_html( $q['priority'] ); ?></td>
 								<td><?php echo esc_html( $q['text'] ); ?></td>
 							</tr>
 						<?php endforeach; ?>
