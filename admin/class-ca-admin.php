@@ -896,6 +896,44 @@ class CA_Admin {
 		$total_questions = CA_Questions::get_total_count();
 		$categories = CA_Questions::get_categories();
 		
+		// Calculate question statistics
+		$priority_counts = array_count_values( array_column( $questions, 'priority' ) );
+		$category_counts = array_count_values( array_column( $questions, 'category' ) );
+		
+		// Find most and least used categories
+		$most_used_category = '';
+		$most_used_count = 0;
+		$least_used_category = '';
+		$least_used_count = PHP_INT_MAX;
+		
+		foreach ( $category_counts as $category => $count ) {
+			if ( $count > $most_used_count ) {
+				$most_used_count = $count;
+				$most_used_category = $category;
+			}
+			if ( $count < $least_used_count ) {
+				$least_used_count = $count;
+				$least_used_category = $category;
+			}
+		}
+		
+		// Find most and least used priorities
+		$most_used_priority = '';
+		$most_used_priority_count = 0;
+		$least_used_priority = '';
+		$least_used_priority_count = PHP_INT_MAX;
+		
+		foreach ( $priority_counts as $priority => $count ) {
+			if ( $count > $most_used_priority_count ) {
+				$most_used_priority_count = $count;
+				$most_used_priority = $priority;
+			}
+			if ( $count < $least_used_priority_count ) {
+				$least_used_priority_count = $count;
+				$least_used_priority = $priority;
+			}
+		}
+		
 		// Pagination setup
 		$per_page = 10;
 		$current_page = max(1, isset($_GET['paged']) ? absint($_GET['paged']) : 1);
@@ -911,6 +949,31 @@ class CA_Admin {
 				<?php esc_html_e( 'Assessment Questions', CA_TEXT_DOMAIN ); ?>
 			</h1>
 
+			<!-- Basic Statistics -->
+			<div class="ca-questions-stats-grid">
+				<div class="ca-stat-card">
+					<div class="ca-stat-value"><?php echo esc_html( $total_questions ); ?></div>
+					<div class="ca-stat-label"><?php esc_html_e( 'Total Questions', CA_TEXT_DOMAIN ); ?></div>
+				</div>
+				
+				<div class="ca-stat-card">
+					<div class="ca-stat-value"><?php echo esc_html( count( $categories ) ); ?></div>
+					<div class="ca-stat-label"><?php esc_html_e( 'Categories', CA_TEXT_DOMAIN ); ?></div>
+				</div>
+				
+				<div class="ca-stat-card">
+					<div class="ca-stat-value"><?php echo esc_html( $most_used_category ); ?></div>
+					<div class="ca-stat-label"><?php esc_html_e( 'Most Used Category', CA_TEXT_DOMAIN ); ?></div>
+					<div class="ca-stat-sublabel"><?php echo esc_html( $most_used_count . ' questions' ); ?></div>
+				</div>
+				
+				<div class="ca-stat-card">
+					<div class="ca-stat-value"><?php echo esc_html( $most_used_priority ); ?></div>
+					<div class="ca-stat-label"><?php esc_html_e( 'Most Used Priority', CA_TEXT_DOMAIN ); ?></div>
+					<div class="ca-stat-sublabel"><?php echo esc_html( $most_used_priority_count . ' questions' ); ?></div>
+				</div>
+			</div>
+
 			<div class="ca-questions-header">
 				<div class="ca-questions-stats">
 					<span class="ca-stat-item">
@@ -920,6 +983,10 @@ class CA_Admin {
 					<span class="ca-stat-item">
 						<strong><?php echo esc_html( count( $categories ) ); ?></strong>
 						<?php esc_html_e( 'Categories', CA_TEXT_DOMAIN ); ?>
+					</span>
+					<span class="ca-stat-item">
+						<strong><?php echo esc_html( $most_used_priority ); ?></strong>
+						<?php esc_html_e( 'Most Used Priority', CA_TEXT_DOMAIN ); ?>
 					</span>
 				</div>
 			</div>

@@ -442,6 +442,14 @@ body,
   margin-bottom: 20px;
 }
 
+/* --- Questions Statistics Grid ---------------------------- */
+.ca-questions-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
 .ca-stat-card {
   background: var(--ca-surface);
   border: 1px solid var(--ca-border);
@@ -472,4 +480,12 @@ body,
   text-transform: uppercase;
   letter-spacing: 0.05em;
   line-height: 1.4;
+}
+
+.ca-stat-sublabel {
+  font-size: 0.75rem;
+  color: var(--ca-text-muted);
+  font-weight: 500;
+  margin-top: 4px;
+  opacity: 0.9;
 }
