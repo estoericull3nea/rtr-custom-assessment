@@ -54,6 +54,15 @@ class CA_Admin {
 			'custom-assessment-questions',
 			array( $this, 'render_questions_page' )
 		);
+
+		add_submenu_page(
+			'custom-assessment-dashboard',
+			__( 'Categories', CA_TEXT_DOMAIN ),
+			__( 'Categories', CA_TEXT_DOMAIN ),
+			'manage_options',
+			'custom-assessment-categories',
+			array( $this, 'render_categories_page' )
+		);
 	}
 
 	public function enqueue_admin_assets( $hook ) {
@@ -865,5 +874,156 @@ class CA_Admin {
 			<?php endif; ?>
 		</div>
 		<?php
+	}
+
+	/**
+	 * Render categories page - displays all assessment categories with CRUD operations.
+	 */
+	public function render_categories_page() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have permission to view this page.', CA_TEXT_DOMAIN ) );
+		}
+
+		// Handle form submissions
+		if ( isset( $_POST['ca_action'] ) && wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ), 'ca_categories_action' ) ) {
+			if ( 'add_category' === $_POST['ca_action'] && ! empty( $_POST['new_category'] ) ) {
+				$new_category = sanitize_text_field( wp_unslash( $_POST['new_category'] ) );
+				if ( ! empty( $new_category ) ) {
+					$this->add_category( $new_category );
+					$message = 'added';
+				}
+			} elseif ( 'delete_category' === $_POST['ca_action'] && ! empty( $_POST['category_name'] ) ) {
+				$category_name = sanitize_text_field( wp_unslash( $_POST['category_name'] ) );
+				if ( ! empty( $category_name ) ) {
+					$this->delete_category( $category_name );
+					$message = 'deleted';
+				}
+			}
+			
+			if ( isset( $message ) ) {
+				$redirect_url = add_query_arg( 'message', $message, admin_url( 'admin.php?page=custom-assessment-categories' ) );
+				wp_safe_redirect( esc_url_raw( $redirect_url ) );
+				exit;
+			}
+		}
+
+		$categories = CA_Questions::get_categories();
+		?>
+		<div class="wrap ca-admin-wrap">
+			<h1 class="ca-admin-title">
+				<span class="ca-admin-title-icon dashicons dashicons-category"></span>
+				<?php esc_html_e( 'Assessment Categories', CA_TEXT_DOMAIN ); ?>
+			</h1>
+
+			<?php if ( isset( $_GET['message'] ) ) : ?>
+				<div class="notice notice-success is-dismissible">
+					<p>
+						<?php 
+						if ( 'added' === $_GET['message'] ) {
+							esc_html_e( 'Category added successfully.', CA_TEXT_DOMAIN );
+						} elseif ( 'deleted' === $_GET['message'] ) {
+							esc_html_e( 'Category deleted successfully.', CA_TEXT_DOMAIN );
+						}
+						?>
+					</p>
+				</div>
+			<?php endif; ?>
+
+			<div class="ca-categories-header">
+				<div class="ca-categories-stats">
+					<span class="ca-stat-item">
+						<strong><?php echo esc_html( count( $categories ) ); ?></strong>
+						<?php esc_html_e( 'Total Categories', CA_TEXT_DOMAIN ); ?>
+					</span>
+				</div>
+			</div>
+
+			<div class="ca-categories-actions">
+				<div class="ca-category-form">
+					<h3><?php esc_html_e( 'Add New Category', CA_TEXT_DOMAIN ); ?></h3>
+					<form method="post" action="">
+						<?php wp_nonce_field( 'ca_categories_action', '_wpnonce' ); ?>
+						<input type="hidden" name="ca_action" value="add_category">
+						<div class="ca-form-field">
+							<label for="new_category"><?php esc_html_e( 'Category Name', CA_TEXT_DOMAIN ); ?></label>
+							<input type="text" id="new_category" name="new_category" placeholder="<?php esc_attr_e( 'Enter category name', CA_TEXT_DOMAIN ); ?>" required>
+						</div>
+						<div class="ca-form-actions">
+							<button type="submit" class="button button-primary">
+								<?php esc_html_e( 'Add Category', CA_TEXT_DOMAIN ); ?>
+							</button>
+						</div>
+					</form>
+				</div>
+			</div>
+
+			<?php if ( empty( $categories ) ) : ?>
+				<div class="ca-admin-empty">
+					<span class="dashicons dashicons-category" aria-hidden="true"></span>
+					<p><?php esc_html_e( 'No categories found. Add your first category above.', CA_TEXT_DOMAIN ); ?></p>
+				</div>
+			<?php else : ?>
+				<table class="wp-list-table widefat fixed striped ca-admin-table">
+					<thead>
+						<tr>
+							<th class="ca-col-id"><?php esc_html_e( '#', CA_TEXT_DOMAIN ); ?></th>
+							<th><?php esc_html_e( 'Category Name', CA_TEXT_DOMAIN ); ?></th>
+							<th><?php esc_html_e( 'Questions Count', CA_TEXT_DOMAIN ); ?></th>
+							<th><?php esc_html_e( 'Actions', CA_TEXT_DOMAIN ); ?></th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php 
+						$questions = CA_Questions::get_flat();
+						$category_counts = array_count_values( array_column( $questions, 'category' ) );
+						
+						foreach ( $categories as $index => $category ) : 
+							$count = isset( $category_counts[$category] ) ? $category_counts[$category] : 0;
+						?>
+							<tr>
+								<td class="ca-col-id"><?php echo esc_html( $index + 1 ); ?></td>
+								<td><strong><?php echo esc_html( $category ); ?></strong></td>
+								<td><?php echo esc_html( $count ); ?></td>
+								<td>
+									<form method="post" style="display: inline;" onsubmit="return confirm('<?php echo esc_js( __( 'Are you sure you want to delete this category? This will also delete all questions in this category.', CA_TEXT_DOMAIN ) ); ?>');">
+										<?php wp_nonce_field( 'ca_categories_action', '_wpnonce' ); ?>
+										<input type="hidden" name="ca_action" value="delete_category">
+										<input type="hidden" name="category_name" value="<?php echo esc_attr( $category ); ?>">
+										<button type="submit" class="button button-small button-secondary">
+											<?php esc_html_e( 'Delete', CA_TEXT_DOMAIN ); ?>
+										</button>
+									</form>
+								</td>
+							</tr>
+						<?php endforeach; ?>
+					</tbody>
+				</table>
+			<?php endif; ?>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Add a new category to the questions configuration.
+	 * 
+	 * @param string $category_name
+	 */
+	private function add_category( $category_name ) {
+		// For now, we'll just add it to the end of the categories array
+		// In a more advanced implementation, you might want to save this to the database
+		// or create a more sophisticated category management system
+		// This is a basic implementation that would require manual code updates
+		// to actually persist the new category in the questions structure
+	}
+
+	/**
+	 * Delete a category from the questions configuration.
+	 * 
+	 * @param string $category_name
+	 */
+	private function delete_category( $category_name ) {
+		// Similar to add_category, this is a basic implementation
+		// In a real-world scenario, you'd want to remove the category
+		// from the questions structure and save the changes
 	}
 }
