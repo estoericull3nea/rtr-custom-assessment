@@ -257,6 +257,31 @@ class CA_Admin {
 	}
 
 	/**
+	 * Handle questions form submissions early on admin_init before any output.
+	 */
+	public function handle_questions_action() {
+		if ( ! isset( $_GET['page'] ) || 'custom-assessment-questions' !== $_GET['page'] ) {
+			return;
+		}
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		if ( isset( $_POST['ca_action'] ) && 'delete_question' === $_POST['ca_action'] && wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ), 'ca_delete_question_action' ) ) {
+			$question_index = absint( $_POST['question_index'] );
+			if ( $question_index >= 0 ) {
+				$this->delete_question( $question_index );
+				$message = 'question_deleted';
+				
+				$redirect_url = add_query_arg( 'message', $message, admin_url( 'admin.php?page=custom-assessment-questions' ) );
+				wp_safe_redirect( esc_url_raw( $redirect_url ) );
+				exit;
+			}
+		}
+	}
+
+	/**
 	 * Export submission as CSV.
 	 */
 	private function export_as_csv( $submission_id, $submission ) {
@@ -974,23 +999,6 @@ class CA_Admin {
 				</div>
 			</div>
 
-			<div class="ca-questions-header">
-				<div class="ca-questions-stats">
-					<span class="ca-stat-item">
-						<strong><?php echo esc_html( $total_questions ); ?></strong>
-						<?php esc_html_e( 'Total Questions', CA_TEXT_DOMAIN ); ?>
-					</span>
-					<span class="ca-stat-item">
-						<strong><?php echo esc_html( count( $categories ) ); ?></strong>
-						<?php esc_html_e( 'Categories', CA_TEXT_DOMAIN ); ?>
-					</span>
-					<span class="ca-stat-item">
-						<strong><?php echo esc_html( $most_used_priority ); ?></strong>
-						<?php esc_html_e( 'Most Used Priority', CA_TEXT_DOMAIN ); ?>
-					</span>
-				</div>
-			</div>
-
 			<div class="ca-questions-search">
 				<div class="ca-search-field">
 					<label for="ca-search-questions"><?php esc_html_e( 'Search Questions', CA_TEXT_DOMAIN ); ?></label>
@@ -1003,6 +1011,12 @@ class CA_Admin {
 					</div>
 				</div>
 			</div>
+
+			<?php if ( isset( $_GET['message'] ) && 'question_deleted' === $_GET['message'] ) : ?>
+				<div class="notice notice-success is-dismissible">
+					<p><?php esc_html_e( 'Question deleted successfully.', CA_TEXT_DOMAIN ); ?></p>
+				</div>
+			<?php endif; ?>
 
 			<?php if ( empty( $questions ) ) : ?>
 				<div class="ca-admin-empty">
@@ -1064,6 +1078,7 @@ class CA_Admin {
 							<th><?php esc_html_e( 'Category', CA_TEXT_DOMAIN ); ?></th>
 							<th><?php esc_html_e( 'Priority', CA_TEXT_DOMAIN ); ?></th>
 							<th><?php esc_html_e( 'Question', CA_TEXT_DOMAIN ); ?></th>
+							<th><?php esc_html_e( 'Actions', CA_TEXT_DOMAIN ); ?></th>
 						</tr>
 					</thead>
 					<tbody>
@@ -1073,6 +1088,16 @@ class CA_Admin {
 								<td><?php echo esc_html( $q['category'] ); ?></td>
 								<td class="ca-col-priority"><?php echo esc_html( $q['priority'] ); ?></td>
 								<td><?php echo esc_html( $q['text'] ); ?></td>
+								<td>
+									<form method="post" style="display: inline;" onsubmit="return confirm('<?php echo esc_js( __( 'Are you sure you want to delete this question? This action cannot be undone.', CA_TEXT_DOMAIN ) ); ?>');">
+										<?php wp_nonce_field( 'ca_delete_question_action', '_wpnonce' ); ?>
+										<input type="hidden" name="ca_action" value="delete_question">
+										<input type="hidden" name="question_index" value="<?php echo esc_attr( $q['index'] ); ?>">
+										<button type="submit" class="button button-small button-secondary">
+											<?php esc_html_e( 'Delete', CA_TEXT_DOMAIN ); ?>
+										</button>
+									</form>
+								</td>
 							</tr>
 						<?php endforeach; ?>
 					</tbody>
@@ -1488,6 +1513,23 @@ class CA_Admin {
 		if ( $key !== false ) {
 			$custom_categories[$key] = $new_category;
 			update_option( 'ca_custom_categories', $custom_categories );
+		}
+	}
+
+	/**
+	 * Delete a question from the questions configuration.
+	 * 
+	 * @param int $question_index
+	 */
+	private function delete_question( $question_index ) {
+		// Get existing questions configuration
+		$questions = get_option( 'ca_custom_questions', array() );
+		
+		// Remove the question at the specified index
+		if ( isset( $questions[$question_index] ) ) {
+			unset( $questions[$question_index] );
+			$questions = array_values( $questions ); // Re-index array
+			update_option( 'ca_custom_questions', $questions );
 		}
 	}
 }
