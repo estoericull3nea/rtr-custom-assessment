@@ -169,4 +169,105 @@ jQuery(document).ready(function ($) {
     $saveBtn.hide();
     $inputElement.val($inputElement.data("original"));
   }
+
+  // Questions search functionality with debounce
+  if ($("#ca-search-questions").length) {
+    var searchTimeout;
+    var originalQuestions = [];
+    var $tableBody = $(".ca-admin-table tbody");
+    var $searchCount = $(".ca-search-count");
+    var $searchResultsCount = $("#ca-search-results-count");
+
+    // Store original questions data
+    $tableBody.find("tr").each(function () {
+      var $row = $(this);
+      var questionData = {
+        row: $row,
+        number: $row.find(".ca-col-id").text().trim(),
+        category: $row.find("td:nth-child(2)").text().trim(),
+        priority: $row.find(".ca-col-priority").text().trim(),
+        question: $row.find("td:nth-child(4)").text().trim(),
+      };
+      originalQuestions.push(questionData);
+    });
+
+    $("#ca-search-questions").on("input", function () {
+      var searchTerm = $(this).val().toLowerCase().trim();
+
+      // Clear previous timeout
+      clearTimeout(searchTimeout);
+
+      // Show search count container
+      $searchCount.show();
+
+      // Debounce: wait 300ms after user stops typing
+      searchTimeout = setTimeout(function () {
+        performSearch(searchTerm);
+      }, 300);
+    });
+
+    function performSearch(searchTerm) {
+      if (searchTerm.length < 3) {
+        // Show all questions if search term is too short
+        $tableBody.empty();
+        originalQuestions.forEach(function (question) {
+          $tableBody.append(question.row);
+        });
+        $searchCount.hide();
+        return;
+      }
+
+      var matchingQuestions = [];
+      var totalMatches = 0;
+
+      // Search through all questions
+      originalQuestions.forEach(function (question) {
+        var matches = false;
+
+        // Search in question number (convert to string for search)
+        if (question.number.toLowerCase().includes(searchTerm)) {
+          matches = true;
+        }
+
+        // Search in category
+        if (question.category.toLowerCase().includes(searchTerm)) {
+          matches = true;
+        }
+
+        // Search in priority
+        if (question.priority.toLowerCase().includes(searchTerm)) {
+          matches = true;
+        }
+
+        // Search in question text
+        if (question.question.toLowerCase().includes(searchTerm)) {
+          matches = true;
+        }
+
+        if (matches) {
+          matchingQuestions.push(question);
+          totalMatches++;
+        }
+      });
+
+      // Update table with matching results
+      $tableBody.empty();
+      if (matchingQuestions.length > 0) {
+        matchingQuestions.forEach(function (question) {
+          $tableBody.append(question.row);
+        });
+      } else {
+        $tableBody.append(
+          '<tr><td colspan="4" style="text-align: center; padding: 20px; color: #666;">No questions found matching your search.</td></tr>',
+        );
+      }
+
+      // Update search results count
+      var resultText =
+        totalMatches === 1 ? "1 result" : totalMatches + " results";
+      $searchResultsCount.text(
+        "Found " + resultText + ' for "' + searchTerm + '"',
+      );
+    }
+  }
 });

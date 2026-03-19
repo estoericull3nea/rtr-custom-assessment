@@ -924,6 +924,19 @@ class CA_Admin {
 				</div>
 			</div>
 
+			<div class="ca-questions-search">
+				<div class="ca-search-field">
+					<label for="ca-search-questions"><?php esc_html_e( 'Search Questions', CA_TEXT_DOMAIN ); ?></label>
+					<input type="text" 
+						id="ca-search-questions" 
+						placeholder="<?php esc_attr_e( 'Search by number, category, or question text (minimum 3 characters)...', CA_TEXT_DOMAIN ); ?>"
+						autocomplete="off">
+					<div class="ca-search-count" style="display: none;">
+						<span id="ca-search-results-count"></span>
+					</div>
+				</div>
+			</div>
+
 			<?php if ( empty( $questions ) ) : ?>
 				<div class="ca-admin-empty">
 					<span class="dashicons dashicons-format-chat" aria-hidden="true"></span>
