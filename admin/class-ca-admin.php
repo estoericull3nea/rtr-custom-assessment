@@ -18,21 +18,30 @@ class CA_Admin {
 
 	public function register_menu() {
 		add_menu_page(
-			__( 'Assessment Results', CA_TEXT_DOMAIN ),
+			__( 'Assessment Dashboard', CA_TEXT_DOMAIN ),
 			__( 'Assessment', CA_TEXT_DOMAIN ),
 			'manage_options',
-			'custom-assessment',
-			array( $this, 'render_list_page' ),
+			'custom-assessment-dashboard',
+			array( $this, 'render_dashboard_page' ),
 			'dashicons-chart-bar',
 			56
 		);
 
 		add_submenu_page(
-			'custom-assessment',
-			__( 'All Submissions', CA_TEXT_DOMAIN ),
-			__( 'All Submissions', CA_TEXT_DOMAIN ),
+			'custom-assessment-dashboard',
+			__( 'Dashboard', CA_TEXT_DOMAIN ),
+			__( 'Dashboard', CA_TEXT_DOMAIN ),
 			'manage_options',
-			'custom-assessment',
+			'custom-assessment-dashboard',
+			array( $this, 'render_dashboard_page' )
+		);
+
+		add_submenu_page(
+			'custom-assessment-dashboard',
+			__( 'Submissions', CA_TEXT_DOMAIN ),
+			__( 'Submissions', CA_TEXT_DOMAIN ),
+			'manage_options',
+			'custom-assessment-submissions',
 			array( $this, 'render_list_page' )
 		);
 	}
@@ -60,7 +69,7 @@ class CA_Admin {
 	 * Handle delete action early on admin_init before any output.
 	 */
 	public function handle_delete_action() {
-		if ( ! isset( $_GET['page'] ) || 'custom-assessment' !== $_GET['page'] ) {
+		if ( ! isset( $_GET['page'] ) || ! in_array( $_GET['page'], array( 'custom-assessment-dashboard', 'custom-assessment-submissions' ), true ) ) {
 			return;
 		}
 
@@ -85,7 +94,7 @@ class CA_Admin {
 	 * Handle export action early on admin_init before any output.
 	 */
 	public function handle_export_action() {
-		if ( ! isset( $_GET['page'] ) || 'custom-assessment' !== $_GET['page'] ) {
+		if ( ! isset( $_GET['page'] ) || ! in_array( $_GET['page'], array( 'custom-assessment-dashboard', 'custom-assessment-submissions' ), true ) ) {
 			return;
 		}
 
@@ -250,6 +259,126 @@ class CA_Admin {
 		$pdf->export_pdf( $html, $filename );
 	}
 
+	/**
+	 * Render assessment dashboard.
+	 */
+	public function render_dashboard_page() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have permission to view this page.', CA_TEXT_DOMAIN ) );
+		}
+
+		$submissions = CA_Database::get_all_submissions();
+		$completed = array_filter( $submissions, fn( $s ) => $s->status === 'completed' );
+		$in_progress = array_filter( $submissions, fn( $s ) => $s->status === 'in_progress' );
+
+		// Calculate statistics
+		$total_submissions = count( $submissions );
+		$completed_count = count( $completed );
+		$in_progress_count = count( $in_progress );
+		$completion_rate = $total_submissions > 0 ? round( ( $completed_count / $total_submissions ) * 100 ) : 0;
+
+		// Calculate average scores from completed submissions
+		$avg_total_score = 0;
+		$avg_average_score = 0;
+		if ( $completed_count > 0 ) {
+			$sum_total = array_sum( array_map( fn( $s ) => (float) $s->total_score, $completed ) );
+			$sum_avg = array_sum( array_map( fn( $s ) => (float) $s->average_score, $completed ) );
+			$avg_total_score = $sum_total / $completed_count;
+			$avg_average_score = $sum_avg / $completed_count;
+		}
+
+		// Get recent submissions
+		$recent_submissions = array_slice( $submissions, 0, 5 );
+		?>
+		<div class="wrap ca-admin-wrap">
+			<h1 class="ca-admin-title">
+				<span class="ca-admin-title-icon dashicons dashicons-chart-bar"></span>
+				<?php esc_html_e( 'Assessment Dashboard', CA_TEXT_DOMAIN ); ?>
+			</h1>
+
+			<div class="ca-dashboard-grid">
+				<div class="ca-dashboard-card">
+					<div class="ca-dashboard-card-value"><?php echo esc_html( $total_submissions ); ?></div>
+					<div class="ca-dashboard-card-label"><?php esc_html_e( 'Total Submissions', CA_TEXT_DOMAIN ); ?></div>
+				</div>
+
+				<div class="ca-dashboard-card">
+					<div class="ca-dashboard-card-value"><?php echo esc_html( $completed_count ); ?></div>
+					<div class="ca-dashboard-card-label"><?php esc_html_e( 'Completed', CA_TEXT_DOMAIN ); ?></div>
+				</div>
+
+				<div class="ca-dashboard-card">
+					<div class="ca-dashboard-card-value"><?php echo esc_html( $in_progress_count ); ?></div>
+					<div class="ca-dashboard-card-label"><?php esc_html_e( 'In Progress', CA_TEXT_DOMAIN ); ?></div>
+				</div>
+
+				<div class="ca-dashboard-card">
+					<div class="ca-dashboard-card-value"><?php echo esc_html( $completion_rate ); ?>%</div>
+					<div class="ca-dashboard-card-label"><?php esc_html_e( 'Completion Rate', CA_TEXT_DOMAIN ); ?></div>
+				</div>
+
+				<div class="ca-dashboard-card">
+					<div class="ca-dashboard-card-value"><?php echo esc_html( number_format( $avg_total_score, 1 ) ); ?></div>
+					<div class="ca-dashboard-card-label"><?php esc_html_e( 'Avg Total Score', CA_TEXT_DOMAIN ); ?></div>
+				</div>
+
+				<div class="ca-dashboard-card">
+					<div class="ca-dashboard-card-value"><?php echo esc_html( number_format( $avg_average_score, 2 ) ); ?>/5</div>
+					<div class="ca-dashboard-card-label"><?php esc_html_e( 'Avg Score Per Q', CA_TEXT_DOMAIN ); ?></div>
+				</div>
+			</div>
+
+			<div class="ca-dashboard-section">
+				<h2><?php esc_html_e( 'Recent Submissions', CA_TEXT_DOMAIN ); ?></h2>
+
+				<?php if ( empty( $recent_submissions ) ) : ?>
+					<p><?php esc_html_e( 'No submissions yet.', CA_TEXT_DOMAIN ); ?></p>
+				<?php else : ?>
+					<table class="wp-list-table widefat fixed striped ca-admin-table">
+						<thead>
+							<tr>
+								<th scope="col"><?php esc_html_e( 'Name', CA_TEXT_DOMAIN ); ?></th>
+								<th scope="col"><?php esc_html_e( 'Email', CA_TEXT_DOMAIN ); ?></th>
+								<th scope="col" class="ca-col-score"><?php esc_html_e( 'Score', CA_TEXT_DOMAIN ); ?></th>
+								<th scope="col" class="ca-col-status"><?php esc_html_e( 'Status', CA_TEXT_DOMAIN ); ?></th>
+								<th scope="col"><?php esc_html_e( 'Date', CA_TEXT_DOMAIN ); ?></th>
+								<th scope="col"><?php esc_html_e( 'Action', CA_TEXT_DOMAIN ); ?></th>
+							</tr>
+						</thead>
+						<tbody>
+							<?php foreach ( $recent_submissions as $sub ) : ?>
+								<tr>
+									<td><strong><?php echo esc_html( $sub->first_name . ' ' . $sub->last_name ); ?></strong></td>
+									<td><?php echo esc_html( $sub->email ); ?></td>
+									<td class="ca-col-score">
+										<?php echo 'completed' === $sub->status ? esc_html( number_format( $sub->average_score, 2 ) ) : '—'; ?>
+									</td>
+									<td class="ca-col-status">
+										<span class="ca-status-badge ca-status--<?php echo esc_attr( $sub->status ); ?>">
+											<?php echo esc_html( ucwords( str_replace( '_', ' ', $sub->status ) ) ); ?>
+										</span>
+									</td>
+									<td><?php echo esc_html( date_i18n( get_option( 'date_format' ), strtotime( $sub->created_at ) ) ); ?></td>
+									<td>
+										<a href="<?php echo esc_url( add_query_arg( array( 'page' => 'custom-assessment-submissions', 'view' => 'detail', 'id' => $sub->id ), admin_url( 'admin.php' ) ) ); ?>" class="button button-small">
+											<?php esc_html_e( 'View', CA_TEXT_DOMAIN ); ?>
+										</a>
+									</td>
+								</tr>
+							<?php endforeach; ?>
+						</tbody>
+					</table>
+					<p>
+						<a href="<?php echo esc_url( add_query_arg( array( 'page' => 'custom-assessment-submissions' ), admin_url( 'admin.php' ) ) ); ?>" class="button button-primary">
+							<?php esc_html_e( 'View All Submissions', CA_TEXT_DOMAIN ); ?>
+						</a>
+					</p>
+				<?php endif; ?>
+			</div>
+		</div>
+		<?php
+	}
+
 
 	/**
 	 * Render list page or detail view.
@@ -337,17 +466,17 @@ class CA_Admin {
 						</td>
 						<td><?php echo esc_html( date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), strtotime( $sub->created_at ) ) ); ?></td>
 						<td>
-							<a href="<?php echo esc_url( add_query_arg( array( 'page' => 'custom-assessment', 'view' => 'detail', 'id' => $sub->id ) , admin_url( 'admin.php' ) ) ); ?>" class="button button-small">
+						<a href="<?php echo esc_url( add_query_arg( array( 'page' => 'custom-assessment-submissions', 'view' => 'detail', 'id' => $sub->id ) , admin_url( 'admin.php' ) ) ); ?>" class="button button-small">
 								<?php esc_html_e( 'View', CA_TEXT_DOMAIN ); ?>
 							</a>
 							<?php if ( 'completed' === $sub->status ) : ?>
 								<div class="ca-export-dropdown-wrapper">
 									<div class="ca-export-menu ca-export-dropdown" id="export-<?php echo esc_attr( $sub->id ); ?>">
-										<?php $csv_url = add_query_arg( array( 'page' => 'custom-assessment', 'action' => 'export', 'format' => 'csv', 'id' => $sub->id, '_wpnonce' => wp_create_nonce( 'ca_export_submission_' . $sub->id ) ), admin_url( 'admin.php' ) ); ?>
+										<?php $csv_url = add_query_arg( array( 'page' => 'custom-assessment-submissions', 'action' => 'export', 'format' => 'csv', 'id' => $sub->id, '_wpnonce' => wp_create_nonce( 'ca_export_submission_' . $sub->id ) ), admin_url( 'admin.php' ) ); ?>
 										<a href="<?php echo esc_url( $csv_url ); ?>" class="ca-export-option">
 											CSV
 										</a>
-										<?php $pdf_url = add_query_arg( array( 'page' => 'custom-assessment', 'action' => 'export', 'format' => 'pdf', 'id' => $sub->id, '_wpnonce' => wp_create_nonce( 'ca_export_submission_' . $sub->id ) ), admin_url( 'admin.php' ) ); ?>
+										<?php $pdf_url = add_query_arg( array( 'page' => 'custom-assessment-submissions', 'action' => 'export', 'format' => 'pdf', 'id' => $sub->id, '_wpnonce' => wp_create_nonce( 'ca_export_submission_' . $sub->id ) ), admin_url( 'admin.php' ) ); ?>
 										<a href="<?php echo esc_url( $pdf_url ); ?>" class="ca-export-option">
 											PDF
 										</a>
@@ -357,7 +486,7 @@ class CA_Admin {
 									</button>
 								</div>
 							<?php endif; ?>
-							<?php $delete_url = add_query_arg( array( 'page' => 'custom-assessment', 'action' => 'delete', 'id' => $sub->id, '_wpnonce' => wp_create_nonce( 'ca_delete_submission_' . $sub->id ) ), admin_url( 'admin.php' ) ); ?>
+							<?php $delete_url = add_query_arg( array( 'page' => 'custom-assessment-submissions', 'action' => 'delete', 'id' => $sub->id, '_wpnonce' => wp_create_nonce( 'ca_delete_submission_' . $sub->id ) ), admin_url( 'admin.php' ) ); ?>
 							<a href="<?php echo esc_url( $delete_url ); ?>" class="button button-small" onclick="return confirm('<?php echo esc_js( __( 'Are you sure you want to delete this submission? This action cannot be undone.', CA_TEXT_DOMAIN ) ); ?>');">
 								<?php esc_html_e( 'Delete', CA_TEXT_DOMAIN ); ?>
 							</a>
