@@ -14,6 +14,7 @@ class CA_Admin {
 		add_action( 'admin_init', array( $this, 'handle_export_action' ) );
 		add_action( 'admin_init', array( $this, 'handle_send_email_action' ) );
 		add_action( 'admin_init', array( $this, 'handle_categories_action' ) );
+		add_action( 'admin_init', array( $this, 'handle_edit_category_action' ) );
 		add_action( 'admin_menu', array( $this, 'register_menu' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_assets' ) );
 	}
@@ -215,6 +216,33 @@ class CA_Admin {
 			}
 			
 			if ( isset( $message ) ) {
+				$redirect_url = add_query_arg( 'message', $message, admin_url( 'admin.php?page=custom-assessment-categories' ) );
+				wp_safe_redirect( esc_url_raw( $redirect_url ) );
+				exit;
+			}
+		}
+	}
+
+	/**
+	 * Handle edit category action early on admin_init before any output.
+	 */
+	public function handle_edit_category_action() {
+		if ( ! isset( $_GET['page'] ) || 'custom-assessment-categories' !== $_GET['page'] ) {
+			return;
+		}
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		if ( isset( $_POST['ca_action'] ) && 'edit_category' === $_POST['ca_action'] && wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ), 'ca_edit_category_action' ) ) {
+			$old_category = sanitize_text_field( wp_unslash( $_POST['old_category_name'] ) );
+			$new_category = sanitize_text_field( wp_unslash( $_POST['new_category_name'] ) );
+			
+			if ( ! empty( $old_category ) && ! empty( $new_category ) && $old_category !== $new_category ) {
+				$this->edit_category( $old_category, $new_category );
+				$message = 'edited';
+				
 				$redirect_url = add_query_arg( 'message', $message, admin_url( 'admin.php?page=custom-assessment-categories' ) );
 				wp_safe_redirect( esc_url_raw( $redirect_url ) );
 				exit;
@@ -951,6 +979,12 @@ class CA_Admin {
 				<?php esc_html_e( 'Assessment Categories', CA_TEXT_DOMAIN ); ?>
 			</h1>
 
+			<script type="text/javascript">
+				var ca_admin_data = {
+					nonce: '<?php echo esc_js( wp_create_nonce( "ca_edit_category_action" ) ); ?>'
+				};
+			</script>
+
 			<?php if ( isset( $_GET['message'] ) ) : ?>
 				<div class="notice notice-success is-dismissible">
 					<p>
@@ -1062,9 +1096,32 @@ class CA_Admin {
 						?>
 							<tr>
 								<td class="ca-col-id"><?php echo esc_html( $index + 1 ); ?></td>
-								<td><strong><?php echo esc_html( $category ); ?></strong></td>
+								<td>
+									<strong class="ca-category-name" id="category-name-<?php echo esc_attr( $index ); ?>">
+										<?php echo esc_html( $category ); ?>
+									</strong>
+									<input type="text" 
+										class="ca-category-input" 
+										id="category-input-<?php echo esc_attr( $index ); ?>" 
+										value="<?php echo esc_attr( $category ); ?>" 
+										style="display: none; width: 100%;"
+										data-original="<?php echo esc_attr( $category ); ?>">
+								</td>
 								<td><?php echo esc_html( $count ); ?></td>
 								<td>
+									<button type="button" 
+										class="button button-small ca-edit-btn" 
+										data-index="<?php echo esc_attr( $index ); ?>"
+										data-category="<?php echo esc_attr( $category ); ?>">
+										<?php esc_html_e( 'Edit', CA_TEXT_DOMAIN ); ?>
+									</button>
+									<button type="button" 
+										class="button button-small ca-save-btn" 
+										style="display: none;"
+										data-index="<?php echo esc_attr( $index ); ?>"
+										data-category="<?php echo esc_attr( $category ); ?>">
+										<?php esc_html_e( 'Save', CA_TEXT_DOMAIN ); ?>
+									</button>
 									<form method="post" style="display: inline;" onsubmit="return confirm('<?php echo esc_js( __( 'Are you sure you want to delete this category? This will also delete all questions in this category.', CA_TEXT_DOMAIN ) ); ?>');">
 										<?php wp_nonce_field( 'ca_categories_action', '_wpnonce' ); ?>
 										<input type="hidden" name="ca_action" value="delete_category">
@@ -1113,6 +1170,24 @@ class CA_Admin {
 		if ( $key !== false ) {
 			unset( $custom_categories[$key] );
 			$custom_categories = array_values( $custom_categories ); // Re-index array
+			update_option( 'ca_custom_categories', $custom_categories );
+		}
+	}
+
+	/**
+	 * Edit a category name in the questions configuration.
+	 * 
+	 * @param string $old_category
+	 * @param string $new_category
+	 */
+	private function edit_category( $old_category, $new_category ) {
+		// Get existing custom categories
+		$custom_categories = get_option( 'ca_custom_categories', array() );
+		
+		// Find and replace the category name
+		$key = array_search( $old_category, $custom_categories );
+		if ( $key !== false ) {
+			$custom_categories[$key] = $new_category;
 			update_option( 'ca_custom_categories', $custom_categories );
 		}
 	}
