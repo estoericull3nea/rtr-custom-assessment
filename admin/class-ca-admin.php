@@ -12,6 +12,7 @@ class CA_Admin {
 	public function __construct() {
 		add_action( 'admin_init', array( $this, 'handle_delete_action' ) );
 		add_action( 'admin_init', array( $this, 'handle_export_action' ) );
+		add_action( 'admin_init', array( $this, 'handle_send_email_action' ) );
 		add_action( 'admin_menu', array( $this, 'register_menu' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_assets' ) );
 	}
@@ -121,6 +122,48 @@ class CA_Admin {
 				$this->export_as_pdf( $submission_id, $submission );
 			}
 
+			exit;
+		}
+	}
+
+	/**
+	 * Handle send email action early on admin_init before any output.
+	 */
+	public function handle_send_email_action() {
+		if ( ! isset( $_GET['page'] ) || ! in_array( $_GET['page'], array( 'custom-assessment-dashboard', 'custom-assessment-submissions' ), true ) ) {
+			return;
+		}
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		if ( isset( $_GET['action'] ) && 'send_email' === $_GET['action'] && ! empty( $_GET['id'] ) ) {
+			if ( ! isset( $_GET['_wpnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ), 'ca_send_email_' . absint( $_GET['id'] ) ) ) {
+				wp_die( esc_html__( 'Security check failed.', CA_TEXT_DOMAIN ) );
+			}
+
+			$submission_id = absint( $_GET['id'] );
+			$submission = CA_Database::get_submission( $submission_id );
+
+			if ( ! $submission ) {
+				wp_die( esc_html__( 'Submission not found.', CA_TEXT_DOMAIN ) );
+			}
+
+			if ( 'completed' !== $submission->status ) {
+				wp_die( esc_html__( 'Only completed submissions can have emails sent.', CA_TEXT_DOMAIN ) );
+			}
+
+			// Send the email using the existing mailer
+			$sent = CA_Mailer::send_results_email( $submission_id );
+
+			$redirect_url = remove_query_arg( array( 'action', 'id', '_wpnonce' ), wp_unslash( $_SERVER['REQUEST_URI'] ) );
+			if ( $sent ) {
+				$redirect_url = add_query_arg( 'message', 'email_sent', $redirect_url );
+			} else {
+				$redirect_url = add_query_arg( 'message', 'email_failed', $redirect_url );
+			}
+			wp_safe_redirect( esc_url_raw( $redirect_url ) );
 			exit;
 		}
 	}
@@ -527,6 +570,18 @@ class CA_Admin {
 				</div>
 			<?php endif; ?>
 
+			<?php if ( isset( $_GET['message'] ) && 'email_sent' === $_GET['message'] ) : ?>
+				<div class="notice notice-success is-dismissible">
+					<p><?php esc_html_e( 'Assessment results email sent successfully to the customer.', CA_TEXT_DOMAIN ); ?></p>
+				</div>
+			<?php endif; ?>
+
+			<?php if ( isset( $_GET['message'] ) && 'email_failed' === $_GET['message'] ) : ?>
+				<div class="notice notice-error is-dismissible">
+					<p><?php esc_html_e( 'Failed to send assessment results email. Please check your SMTP configuration.', CA_TEXT_DOMAIN ); ?></p>
+				</div>
+			<?php endif; ?>
+
 			<?php if ( empty( $submissions ) ) : ?>
 				<div class="ca-admin-empty">
 					<span class="dashicons dashicons-clipboard" aria-hidden="true"></span>
@@ -591,6 +646,11 @@ class CA_Admin {
 										<?php esc_html_e( 'Export', CA_TEXT_DOMAIN ); ?> ▼
 									</button>
 								</div>
+								
+								<?php $email_url = add_query_arg( array( 'page' => 'custom-assessment-submissions', 'action' => 'send_email', 'id' => $sub->id, '_wpnonce' => wp_create_nonce( 'ca_send_email_' . $sub->id ) ), admin_url( 'admin.php' ) ); ?>
+								<a href="<?php echo esc_url( $email_url ); ?>" class="button button-small" onclick="return confirm('<?php echo esc_js( __( 'Are you sure you want to resend the assessment results email to this customer?', CA_TEXT_DOMAIN ) ); ?>');">
+									<?php esc_html_e( 'Resend Email', CA_TEXT_DOMAIN ); ?>
+								</a>
 							<?php endif; ?>
 							<?php $delete_url = add_query_arg( array( 'page' => 'custom-assessment-submissions', 'action' => 'delete', 'id' => $sub->id, '_wpnonce' => wp_create_nonce( 'ca_delete_submission_' . $sub->id ) ), admin_url( 'admin.php' ) ); ?>
 							<a href="<?php echo esc_url( $delete_url ); ?>" class="button button-small" onclick="return confirm('<?php echo esc_js( __( 'Are you sure you want to delete this submission? This action cannot be undone.', CA_TEXT_DOMAIN ) ); ?>');">

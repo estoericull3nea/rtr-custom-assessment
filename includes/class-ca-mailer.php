@@ -109,7 +109,6 @@ class CA_Mailer {
 				}
 				.section {
 					margin-bottom: 30px;
-					border-left: 4px solid #aa3130;
 					padding-left: 20px;
 				}
 				.section-title {
@@ -293,7 +292,7 @@ class CA_Mailer {
 					</div>
 
 					<!-- Submission Details -->
-					<div class="section" style="border-left-color: #999;">
+					<div class="section">
 						<div class="section-title" style="color: #666;">Submission Details</div>
 						<table style="width: 100%; font-size: 14px;">
 							<tr>
