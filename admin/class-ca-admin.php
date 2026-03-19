@@ -15,6 +15,7 @@ class CA_Admin {
 		add_action( 'admin_init', array( $this, 'handle_send_email_action' ) );
 		add_action( 'admin_init', array( $this, 'handle_categories_action' ) );
 		add_action( 'admin_init', array( $this, 'handle_edit_category_action' ) );
+		add_action( 'admin_init', array( $this, 'handle_questions_action' ) );
 		add_action( 'admin_menu', array( $this, 'register_menu' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_assets' ) );
 	}
@@ -273,6 +274,24 @@ class CA_Admin {
 			if ( $question_index >= 0 ) {
 				$this->delete_question( $question_index );
 				$message = 'question_deleted';
+				
+				$redirect_url = add_query_arg( 'message', $message, admin_url( 'admin.php?page=custom-assessment-questions' ) );
+				wp_safe_redirect( esc_url_raw( $redirect_url ) );
+				exit;
+			}
+		}
+
+		if ( isset( $_POST['ca_action'] ) && 'add_question' === $_POST['ca_action'] && wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ), 'ca_add_question_action' ) ) {
+			$question_text = sanitize_text_field( wp_unslash( $_POST['question_text'] ) );
+			$question_category = sanitize_text_field( wp_unslash( $_POST['question_category'] ) );
+			$question_priority = absint( $_POST['question_priority'] );
+			
+			if ( ! empty( $question_text ) && ! empty( $question_category ) && $question_priority > 0 ) {
+				// Debug: Log the question being added
+				error_log("Adding question: $question_text | Category: $question_category | Priority: $question_priority");
+				
+				$this->add_question( $question_text, $question_category, $question_priority );
+				$message = 'question_added';
 				
 				$redirect_url = add_query_arg( 'message', $message, admin_url( 'admin.php?page=custom-assessment-questions' ) );
 				wp_safe_redirect( esc_url_raw( $redirect_url ) );
@@ -999,6 +1018,46 @@ class CA_Admin {
 				</div>
 			</div>
 
+			<!-- Add Question Form -->
+			<div class="ca-questions-actions">
+				<div class="ca-question-form">
+					<h3><?php esc_html_e( 'Add New Question', CA_TEXT_DOMAIN ); ?></h3>
+					<form method="post" action="">
+						<?php wp_nonce_field( 'ca_add_question_action', '_wpnonce' ); ?>
+						<input type="hidden" name="ca_action" value="add_question">
+						<div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+							<div class="ca-form-field">
+								<label for="question_category"><?php esc_html_e( 'Category', CA_TEXT_DOMAIN ); ?></label>
+								<select id="question_category" name="question_category" required>
+									<option value=""><?php esc_html_e( 'Select a category', CA_TEXT_DOMAIN ); ?></option>
+									<?php foreach ( $categories as $category ) : ?>
+										<option value="<?php echo esc_attr( $category ); ?>"><?php echo esc_html( $category ); ?></option>
+									<?php endforeach; ?>
+								</select>
+							</div>
+							<div class="ca-form-field">
+								<label for="question_priority"><?php esc_html_e( 'Priority', CA_TEXT_DOMAIN ); ?></label>
+								<select id="question_priority" name="question_priority" required>
+									<option value=""><?php esc_html_e( 'Select priority', CA_TEXT_DOMAIN ); ?></option>
+									<?php for ( $i = 1; $i <= 5; $i++ ) : ?>
+										<option value="<?php echo esc_attr( $i ); ?>"><?php echo esc_html( $i ); ?></option>
+									<?php endfor; ?>
+								</select>
+							</div>
+							<div class="ca-form-field">
+								<label for="question_text"><?php esc_html_e( 'Question Text', CA_TEXT_DOMAIN ); ?></label>
+								<input type="text" id="question_text" name="question_text" placeholder="<?php esc_attr_e( 'Enter the question text', CA_TEXT_DOMAIN ); ?>" required>
+							</div>
+						</div>
+						<div class="ca-form-actions">
+							<button type="submit" class="button button-primary">
+								<?php esc_html_e( 'Add Question', CA_TEXT_DOMAIN ); ?>
+							</button>
+						</div>
+					</form>
+				</div>
+			</div>
+
 			<div class="ca-questions-search">
 				<div class="ca-search-field">
 					<label for="ca-search-questions"><?php esc_html_e( 'Search Questions', CA_TEXT_DOMAIN ); ?></label>
@@ -1015,6 +1074,12 @@ class CA_Admin {
 			<?php if ( isset( $_GET['message'] ) && 'question_deleted' === $_GET['message'] ) : ?>
 				<div class="notice notice-success is-dismissible">
 					<p><?php esc_html_e( 'Question deleted successfully.', CA_TEXT_DOMAIN ); ?></p>
+				</div>
+			<?php endif; ?>
+
+			<?php if ( isset( $_GET['message'] ) && 'question_added' === $_GET['message'] ) : ?>
+				<div class="notice notice-success is-dismissible">
+					<p><?php esc_html_e( 'Question added successfully.', CA_TEXT_DOMAIN ); ?></p>
 				</div>
 			<?php endif; ?>
 
@@ -1531,5 +1596,27 @@ class CA_Admin {
 			$questions = array_values( $questions ); // Re-index array
 			update_option( 'ca_custom_questions', $questions );
 		}
+	}
+
+	/**
+	 * Add a new question to the questions configuration.
+	 * 
+	 * @param string $question_text
+	 * @param string $question_category
+	 * @param int $question_priority
+	 */
+	private function add_question( $question_text, $question_category, $question_priority ) {
+		// Get existing questions configuration
+		$questions = get_option( 'ca_custom_questions', array() );
+		
+		// Add the new question
+		$new_question = array(
+			'text' => $question_text,
+			'category' => $question_category,
+			'priority' => $question_priority
+		);
+		
+		$questions[] = $new_question;
+		update_option( 'ca_custom_questions', $questions );
 	}
 }

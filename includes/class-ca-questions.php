@@ -16,7 +16,7 @@ class CA_Questions {
 	 * @return array
 	 */
 	public static function get_all() {
-		return array(
+		$base_questions = array(
 			array(
 				'category' => 'Growth Mindset',
 				'questions' => array(
@@ -88,6 +88,32 @@ class CA_Questions {
 				),
 			),
 		);
+
+		// Add custom questions
+		$custom_questions = get_option( 'ca_custom_questions', array() );
+		
+		// Group custom questions by category
+		$custom_categories = array();
+		foreach ( $custom_questions as $custom_question ) {
+			$category = $custom_question['category'];
+			if ( ! isset( $custom_categories[$category] ) ) {
+				$custom_categories[$category] = array();
+			}
+			$custom_categories[$category][] = array(
+				'text' => $custom_question['text'],
+				'priority' => $custom_question['priority']
+			);
+		}
+
+		// Add custom categories to the base questions
+		foreach ( $custom_categories as $category_name => $questions ) {
+			$base_questions[] = array(
+				'category' => $category_name,
+				'questions' => $questions
+			);
+		}
+
+		return $base_questions;
 	}
 
 	/**
