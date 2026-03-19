@@ -111,52 +111,11 @@
       $modal.addClass("ca-modal--open");
     });
 
-    var stored = getSavedSession();
-    if (stored && stored.submissionId) {
-      $.post(CA_Config.ajax_url, {
-        action: "ca_get_progress",
-        nonce: CA_Config.nonce,
-        submission_id: stored.submissionId,
-      })
-        .done(function (response) {
-          if (
-            response.success &&
-            (response.data.status === "in_progress" ||
-              response.data.status === "started") &&
-            response.data.email === stored.email
-          ) {
-            showResumeDialog(
-              stored.email,
-              function () {
-                resumeAssessment(
-                  stored.submissionId,
-                  response.data.answered,
-                  response.data.total,
-                );
-              },
-              function () {
-                clearSavedSession();
-                resetState();
-                showScreen("info");
-                hideProgress();
-              },
-            );
-            return;
-          }
-          resetState();
-          showScreen("info");
-          hideProgress();
-        })
-        .fail(function () {
-          resetState();
-          showScreen("info");
-          hideProgress();
-        });
-    } else {
-      resetState();
-      showScreen("info");
-      hideProgress();
-    }
+    // Don't check for saved session on page reload
+    // Only check when user manually enters email and submits
+    resetState();
+    showScreen("info");
+    hideProgress();
   }
 
   function closeModal() {
