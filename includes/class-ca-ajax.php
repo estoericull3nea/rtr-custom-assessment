@@ -238,6 +238,9 @@ class CA_Ajax {
 
 		CA_Database::save_category_scores( $submission_id, $scoring['category_scores'] );
 
+		// Send completion email to user
+		CA_Mailer::send_results_email( $submission_id );
+
 		wp_send_json_success( array(
 			'message' => __( 'Assessment submitted.', CA_TEXT_DOMAIN ),
 		) );
