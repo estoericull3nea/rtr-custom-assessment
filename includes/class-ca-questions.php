@@ -144,8 +144,17 @@ class CA_Questions {
 		$categories = array();
 		$all = self::get_all();
 		
+		// Get base categories from the hardcoded structure
 		foreach ( $all as $cat ) {
 			$categories[] = $cat['category'];
+		}
+		
+		// Add custom categories from WordPress options
+		$custom_categories = get_option( 'ca_custom_categories', array() );
+		foreach ( $custom_categories as $custom_category ) {
+			if ( ! in_array( $custom_category, $categories ) ) {
+				$categories[] = $custom_category;
+			}
 		}
 		
 		return $categories;

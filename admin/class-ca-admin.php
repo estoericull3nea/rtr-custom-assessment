@@ -13,6 +13,7 @@ class CA_Admin {
 		add_action( 'admin_init', array( $this, 'handle_delete_action' ) );
 		add_action( 'admin_init', array( $this, 'handle_export_action' ) );
 		add_action( 'admin_init', array( $this, 'handle_send_email_action' ) );
+		add_action( 'admin_init', array( $this, 'handle_categories_action' ) );
 		add_action( 'admin_menu', array( $this, 'register_menu' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_assets' ) );
 	}
@@ -183,6 +184,41 @@ class CA_Admin {
 			}
 			wp_safe_redirect( esc_url_raw( $redirect_url ) );
 			exit;
+		}
+	}
+
+	/**
+	 * Handle categories form submissions early on admin_init before any output.
+	 */
+	public function handle_categories_action() {
+		if ( ! isset( $_GET['page'] ) || 'custom-assessment-categories' !== $_GET['page'] ) {
+			return;
+		}
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		if ( isset( $_POST['ca_action'] ) && wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ), 'ca_categories_action' ) ) {
+			if ( 'add_category' === $_POST['ca_action'] && ! empty( $_POST['new_category'] ) ) {
+				$new_category = sanitize_text_field( wp_unslash( $_POST['new_category'] ) );
+				if ( ! empty( $new_category ) ) {
+					$this->add_category( $new_category );
+					$message = 'added';
+				}
+			} elseif ( 'delete_category' === $_POST['ca_action'] && ! empty( $_POST['category_name'] ) ) {
+				$category_name = sanitize_text_field( wp_unslash( $_POST['category_name'] ) );
+				if ( ! empty( $category_name ) ) {
+					$this->delete_category( $category_name );
+					$message = 'deleted';
+				}
+			}
+			
+			if ( isset( $message ) ) {
+				$redirect_url = add_query_arg( 'message', $message, admin_url( 'admin.php?page=custom-assessment-categories' ) );
+				wp_safe_redirect( esc_url_raw( $redirect_url ) );
+				exit;
+			}
 		}
 	}
 
@@ -1009,11 +1045,14 @@ class CA_Admin {
 	 * @param string $category_name
 	 */
 	private function add_category( $category_name ) {
-		// For now, we'll just add it to the end of the categories array
-		// In a more advanced implementation, you might want to save this to the database
-		// or create a more sophisticated category management system
-		// This is a basic implementation that would require manual code updates
-		// to actually persist the new category in the questions structure
+		// Get existing custom categories
+		$custom_categories = get_option( 'ca_custom_categories', array() );
+		
+		// Add the new category if it doesn't already exist
+		if ( ! in_array( $category_name, $custom_categories ) ) {
+			$custom_categories[] = $category_name;
+			update_option( 'ca_custom_categories', $custom_categories );
+		}
 	}
 
 	/**
@@ -1022,8 +1061,15 @@ class CA_Admin {
 	 * @param string $category_name
 	 */
 	private function delete_category( $category_name ) {
-		// Similar to add_category, this is a basic implementation
-		// In a real-world scenario, you'd want to remove the category
-		// from the questions structure and save the changes
+		// Get existing custom categories
+		$custom_categories = get_option( 'ca_custom_categories', array() );
+		
+		// Remove the category if it exists
+		$key = array_search( $category_name, $custom_categories );
+		if ( $key !== false ) {
+			unset( $custom_categories[$key] );
+			$custom_categories = array_values( $custom_categories ); // Re-index array
+			update_option( 'ca_custom_categories', $custom_categories );
+		}
 	}
 }
