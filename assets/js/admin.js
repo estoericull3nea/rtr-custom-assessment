@@ -367,10 +367,22 @@ jQuery(document).ready(function ($) {
 
     function performSearch(searchTerm) {
       if (searchTerm.length < 3) {
-        // Show all data if search term is too short
+        // Show all data from current page if search term is too short
+        // This preserves pagination by only showing the original page data
         if (originalData.length > 0) {
           $tableBody.empty();
-          originalData.forEach(function (item) {
+          // Only show data from the current page
+          // We assume the originalData array contains the current page's data first
+          // followed by other pages' data, so we show only the first page's worth
+          var currentPageData = originalData.slice(0, 10); // Default to 10 items per page
+
+          // Try to determine the actual page size from the DOM
+          var visibleRows = $tableBody.find("tr").length;
+          if (visibleRows > 0 && visibleRows < originalData.length) {
+            currentPageData = originalData.slice(0, visibleRows);
+          }
+
+          currentPageData.forEach(function (item) {
             $tableBody.append(item.row);
           });
         }
