@@ -1248,15 +1248,11 @@ class CA_Admin
 									<span class="ca-question-priority-text" data-original="<?php echo esc_attr($q['priority']); ?>">
 										<?php echo esc_html($q['priority']); ?>
 									</span>
-									<select class="ca-question-priority-select" style="display: none;"
+									<input type="number" class="ca-question-priority-input" style="display: none;"
 										form="ca-edit-question-form-<?php echo esc_attr($q['index']); ?>" name="new_priority"
+										value="<?php echo esc_attr($q['priority']); ?>" min="1"
+										max="<?php echo esc_attr($priority_end); ?>" step="1" autocomplete="off"
 										data-original="<?php echo esc_attr($q['priority']); ?>">
-										<?php for ($p = 1; $p <= (int) $priority_end; $p++): ?>
-											<option value="<?php echo esc_attr($p); ?>" <?php echo ((int) $q['priority'] === $p) ? 'selected' : ''; ?>>
-												<?php echo esc_html($p); ?>
-											</option>
-										<?php endfor; ?>
-									</select>
 								</td>
 								<td class="ca-col-question">
 									<span class="ca-question-text-display" data-original="<?php echo esc_attr($q['text']); ?>">

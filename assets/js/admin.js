@@ -232,22 +232,20 @@ jQuery(document).ready(function ($) {
         .attr("data-original", priorityVal)
         .text(priorityVal || "");
 
-      var $prioritySelect = $("<select>")
-        .addClass("ca-question-priority-select")
+      var $priorityInput = $("<input>")
+        .addClass("ca-question-priority-input")
         .css("display", "none")
+        .attr("type", "number")
         .attr("form", editFormId)
         .attr("name", "new_priority")
-        .attr("data-original", priorityVal);
+        .attr("data-original", priorityVal)
+        .attr("min", 1)
+        .attr("max", priorityMax)
+        .attr("step", 1)
+        .attr("autocomplete", "off")
+        .val(priorityVal);
 
-      for (var p = 1; p <= priorityMax; p++) {
-        var $pOpt = $("<option>").attr("value", p).text(p);
-        if (p === priorityVal) {
-          $pOpt.prop("selected", true);
-        }
-        $prioritySelect.append($pOpt);
-      }
-
-      $priorityTd.append($prioritySpan, $prioritySelect);
+      $priorityTd.append($prioritySpan, $priorityInput);
       $tr.append($priorityTd);
 
       // Question cell (span + hidden input)
@@ -806,7 +804,7 @@ jQuery(document).ready(function ($) {
     var $questionText = $row.find(".ca-question-text-display");
     var $questionInput = $row.find(".ca-question-text-input");
     var $priorityText = $row.find(".ca-question-priority-text");
-    var $prioritySelect = $row.find(".ca-question-priority-select");
+    var $priorityInput = $row.find(".ca-question-priority-input");
     var $editBtn = $row.find(".ca-question-edit-btn");
     var $cancelBtn = $row.find(".ca-question-cancel-btn");
     var $saveBtn = $row.find(".ca-question-save-btn");
@@ -816,7 +814,7 @@ jQuery(document).ready(function ($) {
     $questionText.hide();
     $questionInput.show().focus();
     $priorityText.hide();
-    $prioritySelect.show();
+    $priorityInput.show();
 
     $editBtn.hide();
     $cancelBtn.show();
@@ -826,12 +824,12 @@ jQuery(document).ready(function ($) {
   function cancelQuestionEditMode($row) {
     var $categorySelect = $row.find(".ca-question-category-select");
     var $questionInput = $row.find(".ca-question-text-input");
-    var $prioritySelect = $row.find(".ca-question-priority-select");
+    var $priorityInput = $row.find(".ca-question-priority-input");
     var $cancelBtn = $row.find(".ca-question-cancel-btn");
 
     var origCat = $categorySelect.data("original");
     var origText = $questionInput.data("original");
-    var origPriority = $prioritySelect.data("original");
+    var origPriority = $priorityInput.data("original");
 
     if (origCat != null) {
       $categorySelect.val(origCat);
@@ -840,7 +838,7 @@ jQuery(document).ready(function ($) {
       $questionInput.val(origText);
     }
     if (origPriority != null) {
-      $prioritySelect.val(origPriority);
+      $priorityInput.val(origPriority);
     }
 
     // Update visible spans back to the original values.
@@ -849,14 +847,16 @@ jQuery(document).ready(function ($) {
     var $prioritySpan = $row.find(".ca-question-priority-text");
     $categorySpan.text($categorySelect.val() != null ? $categorySelect.val() : "");
     $questionSpan.text($questionInput.val() != null ? $questionInput.val() : "");
-    $prioritySpan.text($prioritySelect.val() != null ? $prioritySelect.val() : "");
+    $prioritySpan.text(
+      $priorityInput.val() != null ? $priorityInput.val() : ""
+    );
 
     $categorySpan.show();
     $categorySelect.hide();
     $questionSpan.show();
     $questionInput.hide();
     $prioritySpan.show();
-    $prioritySelect.hide();
+    $priorityInput.hide();
 
     $row.find(".ca-question-edit-btn").show();
     $cancelBtn.hide();

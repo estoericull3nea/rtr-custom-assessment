@@ -632,7 +632,7 @@ body,
 /* Inline question edit (table row) */
 .ca-col-category .ca-question-category-select,
 .ca-col-question .ca-question-text-input,
-.ca-col-priority .ca-question-priority-select {
+.ca-col-priority .ca-question-priority-input {
   width: 100%;
   box-sizing: border-box;
   padding: 8px 10px;
@@ -643,7 +643,8 @@ body,
 }
 
 .ca-col-category .ca-question-category-select:focus,
-.ca-col-question .ca-question-text-input:focus {
+.ca-col-question .ca-question-text-input:focus,
+.ca-col-priority .ca-question-priority-input:focus {
   border-color: var(--ca-primary);
   box-shadow: 0 0 0 3px rgba(170, 49, 48, 0.15);
 }
