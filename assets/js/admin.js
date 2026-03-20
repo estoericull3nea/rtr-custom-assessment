@@ -1100,9 +1100,38 @@ jQuery(document).ready(function ($) {
         var prioVal = ($priority.val() || "").toString().trim();
         var qText = ($questionText.val() || "").trim();
 
-        var isValid = catVal !== "" && prioVal !== "" && qText.length > 0;
+        var prioNum = parseInt(prioVal, 10);
+        var isValid =
+          catVal !== "" &&
+          !isNaN(prioNum) &&
+          prioNum > 0 &&
+          qText.length > 0;
         $submitBtn.prop("disabled", !isValid);
         $submitBtn.attr("aria-disabled", (!isValid).toString());
+      }
+
+      function getNextPriorityForCategory(categoryVal) {
+        var max = 0;
+        if (Array.isArray(window.CA_ADMIN_QUESTIONS_ALL)) {
+          window.CA_ADMIN_QUESTIONS_ALL.forEach(function (item) {
+            if (!item) return;
+            if (categoryVal && String(item.category) !== String(categoryVal)) return;
+            var p = parseInt(item.priority, 10);
+            if (!isNaN(p) && p > max) max = p;
+          });
+        }
+
+        return String(max + 1);
+      }
+
+      function autoFillPriority() {
+        // Only fill when the user hasn't entered a priority yet.
+        var currentVal = ($priority.val() || "").toString().trim();
+        if (currentVal !== "") return;
+
+        var catVal = ($category.val() || "").trim();
+        $priority.val(getNextPriorityForCategory(catVal));
+        updateSubmitState();
       }
 
       updateCounter();
@@ -1114,6 +1143,11 @@ jQuery(document).ready(function ($) {
       });
       $category.on("change", updateSubmitState);
       $priority.on("change", updateSubmitState);
+
+      // Auto-fill only when category is NOT selected yet.
+      if (($category.val() || "").trim() === "") {
+        autoFillPriority();
+      }
     })();
   }
 

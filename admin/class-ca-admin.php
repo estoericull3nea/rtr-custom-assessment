@@ -441,6 +441,27 @@ class CA_Admin
 			$question_priority = absint($_POST['question_priority']);
 
 			if (!empty($question_text) && !empty($question_category) && $question_priority > 0) {
+				// Enforce unique priority within the same category.
+				$flat_questions = CA_Questions::get_flat();
+				$priority_exists = false;
+				foreach ($flat_questions as $q) {
+					if (
+						isset($q['category'], $q['priority']) &&
+						(string) $q['category'] === (string) $question_category &&
+						(int) $q['priority'] === (int) $question_priority
+					) {
+						$priority_exists = true;
+						break;
+					}
+				}
+
+				if ($priority_exists) {
+					$message = 'priority_exists';
+					$redirect_url = add_query_arg('message', $message, admin_url('admin.php?page=custom-assessment-questions'));
+					wp_safe_redirect(esc_url_raw($redirect_url));
+					exit;
+				}
+
 				// Debug: Log the question being added
 				error_log("Adding question: $question_text | Category: $question_category | Priority: $question_priority");
 
@@ -1332,12 +1353,8 @@ class CA_Admin
 							</div>
 							<div class="ca-form-field">
 								<label for="question_priority"><?php esc_html_e('Priority', CA_TEXT_DOMAIN); ?></label>
-								<select id="question_priority" name="question_priority" required>
-									<option value=""><?php esc_html_e('Select priority', CA_TEXT_DOMAIN); ?></option>
-									<?php for ($i = 1; $i <= (int) $priority_end; $i++): ?>
-										<option value="<?php echo esc_attr($i); ?>"><?php echo esc_html($i); ?></option>
-									<?php endfor; ?>
-								</select>
+								<input type="number" id="question_priority" name="question_priority" required min="1" step="1"
+									autocomplete="off" placeholder="" />
 							</div>
 							<div class="ca-form-field">
 								<label for="question_text"><?php esc_html_e('Question Text', CA_TEXT_DOMAIN); ?></label>
