@@ -1081,6 +1081,7 @@ jQuery(document).ready(function ($) {
       var $category = $("#question_category");
       var $priority = $("#question_priority");
       var $submitBtn = $(".ca-question-submit").first();
+      var $addForm = $submitBtn.closest("form");
       var $counter = $("#ca-question-text-counter");
 
       var maxLen = parseInt($questionText.attr("maxlength"), 10);
@@ -1143,6 +1144,48 @@ jQuery(document).ready(function ($) {
       });
       $category.on("change", updateSubmitState);
       $priority.on("change", updateSubmitState);
+
+      // Before submit: block if the priority already exists in the selected category.
+      if ($addForm && $addForm.length) {
+        $addForm.on("submit", function (e) {
+          var catVal = ($category.val() || "").trim();
+          var prioVal = ($priority.val() || "").toString().trim();
+          var qText = ($questionText.val() || "").trim();
+
+          // Let backend handle validation if category/priority/text are missing.
+          if (!catVal || !prioVal || !qText) {
+            return true;
+          }
+
+          var prioNum = parseInt(prioVal, 10);
+          if (isNaN(prioNum) || prioNum <= 0) {
+            return true;
+          }
+
+          var conflict = false;
+          if (Array.isArray(window.CA_ADMIN_QUESTIONS_ALL)) {
+            window.CA_ADMIN_QUESTIONS_ALL.forEach(function (item) {
+              if (conflict) return;
+              if (!item) return;
+              if (String(item.category) !== String(catVal)) return;
+              var p = parseInt(item.priority, 10);
+              if (!isNaN(p) && p === prioNum) {
+                conflict = true;
+              }
+            });
+          }
+
+          if (conflict) {
+            alert(
+              "Priority already exists in this category. Please choose another number."
+            );
+            e.preventDefault();
+            return false;
+          }
+
+          return true;
+        });
+      }
 
       // Auto-fill only when category is NOT selected yet.
       if (($category.val() || "").trim() === "") {
