@@ -175,11 +175,77 @@ jQuery(document).ready(function ($) {
     var searchTimeout;
     var originalData = [];
     var allDataLoaded = false;
+    var latestSearchTerm = "";
     var $tableBody = $(".ca-admin-table tbody");
+    // Cache the initial (server-rendered) paginated rows so clearing search restores pagination.
+    var $defaultPageRows = $tableBody.find("tr").clone();
     var $searchCount = $(".ca-search-count");
     var $searchResultsCount = $("#ca-search-results-count");
     var $paginationControls = $(".tablenav.top, .tablenav.bottom");
     var currentPageType = getCurrentPageType();
+
+    function buildQuestionRow(item) {
+      // Build a <tr> that matches the PHP-rendered layout for the Questions page.
+      // Used when the data source doesn't provide a cloned DOM row.
+      var questionIndex = item.question_index != null ? parseInt(item.question_index, 10) : 0;
+
+      var $tr = $("<tr>");
+      $tr.append($("<td>").addClass("ca-col-id").text((questionIndex || 0) + 1));
+      $tr.append($("<td>").text(item.category != null ? item.category : ""));
+      $tr.append($("<td>").addClass("ca-col-priority").text(item.priority != null ? item.priority : ""));
+      $tr.append($("<td>").text(item.question != null ? item.question : ""));
+
+      var confirmText =
+        window.CA_ADMIN_QUESTIONS_DELETE_CONFIRM || "Are you sure you want to delete this question?";
+
+      var nonceVal = window.CA_ADMIN_QUESTIONS_DELETE_NONCE || "";
+
+      var $actionsTd = $("<td>");
+      var $form = $("<form>")
+        .attr("method", "post")
+        .attr("style", "display: inline;")
+        .attr(
+          "onsubmit",
+          "return confirm(" + JSON.stringify(confirmText) + ");"
+        );
+
+      var $nonceField = $("<input>")
+        .attr("type", "hidden")
+        .attr("name", "_wpnonce")
+        .val(nonceVal);
+
+      var $actionField = $("<input>")
+        .attr("type", "hidden")
+        .attr("name", "ca_action")
+        .val("delete_question");
+
+      var $indexField = $("<input>")
+        .attr("type", "hidden")
+        .attr("name", "question_index")
+        .val(questionIndex);
+
+      var $btn = $("<button>")
+        .attr("type", "submit")
+        .addClass("button button-small button-secondary")
+        .text("Delete");
+
+      $form.append($nonceField, $actionField, $indexField, $btn);
+      $actionsTd.append($form);
+      $tr.append($actionsTd);
+
+      return $tr;
+    }
+
+    function appendItemRow(item) {
+      if (item && item.row) {
+        $tableBody.append(item.row);
+        return;
+      }
+
+      if (currentPageType === "questions") {
+        $tableBody.append(buildQuestionRow(item));
+      }
+    }
 
     // Determine what type of page we're on
     function getCurrentPageType() {
@@ -200,6 +266,17 @@ jQuery(document).ready(function ($) {
     // Store original data from all pages based on page type
     function loadAllData() {
       if (allDataLoaded || !currentPageType) {
+        return;
+      }
+
+      // Questions page: use the full list provided by PHP so search is truly global.
+      if (
+        currentPageType === "questions" &&
+        Array.isArray(window.CA_ADMIN_QUESTIONS_ALL) &&
+        window.CA_ADMIN_QUESTIONS_ALL.length > 0
+      ) {
+        originalData = window.CA_ADMIN_QUESTIONS_ALL;
+        allDataLoaded = true;
         return;
       }
 
@@ -282,10 +359,31 @@ jQuery(document).ready(function ($) {
           var deferred = $.Deferred();
           requests.push(deferred.promise());
 
+          // Build a deterministic URL so the fetched page number is always `i`.
+          // (Some browsers/edge cases can keep the original `paged` query param.)
+          var ajaxUrl = window.location.href;
+          try {
+            var urlObj = new URL(window.location.href);
+            urlObj.searchParams.set("paged", i);
+            ajaxUrl = urlObj.toString();
+          } catch (e) {
+            // Fallback for older environments.
+            if (ajaxUrl.match(/([?&])paged=\d+/i)) {
+              ajaxUrl = ajaxUrl.replace(
+                /([?&])paged=\d+/i,
+                "$1paged=" + encodeURIComponent(i)
+              );
+            } else {
+              ajaxUrl +=
+                (ajaxUrl.indexOf("?") > -1 ? "&" : "?") +
+                "paged=" +
+                encodeURIComponent(i);
+            }
+          }
+
           $.ajax({
-            url: window.location.href,
+            url: ajaxUrl,
             method: "GET",
-            data: { paged: i },
             success: function (response) {
               // Parse the response to extract data from other pages
               var tempDiv = document.createElement("div");
@@ -405,6 +503,11 @@ jQuery(document).ready(function ($) {
         });
 
         allDataLoaded = true;
+
+        // If user is currently searching, refresh results now that we have the full dataset.
+        if (latestSearchTerm && latestSearchTerm.length >= 3) {
+          performSearch(latestSearchTerm);
+        }
       });
     }
 
@@ -431,35 +534,30 @@ jQuery(document).ready(function ($) {
     );
 
     function performSearch(searchTerm) {
+      // Always search using the latest term if multiple keystrokes happen while data is loading.
+      latestSearchTerm = searchTerm;
+
       if (searchTerm.length < 3) {
-        // Show all data from current page if search term is too short
-        // This preserves pagination by only showing the original page data
-        if (originalData.length > 0) {
-          $tableBody.empty();
-          // Only show data from the current page
-          // We assume the originalData array contains the current page's data first
-          // followed by other pages' data, so we show only the first page's worth
-          var currentPageData = originalData.slice(0, 10); // Default to 10 items per page
-
-          // Try to determine the actual page size from the DOM
-          var visibleRows = $tableBody.find("tr").length;
-          if (visibleRows > 0 && visibleRows < originalData.length) {
-            currentPageData = originalData.slice(0, visibleRows);
-          }
-
-          currentPageData.forEach(function (item) {
-            $tableBody.append(item.row);
-          });
+        // Restore the original server-rendered paginated rows.
+        $tableBody.empty();
+        if ($defaultPageRows && $defaultPageRows.length > 0) {
+          $tableBody.append($defaultPageRows.clone());
         }
+
+        var $table = $tableBody.closest("table");
+        var $tableHead = $table.find("thead");
+        $tableHead.show();
+
         $searchCount.hide();
         return;
       }
 
-      // If data are still loading, wait a bit and try again
+      // If data are still loading, run the search with whatever is loaded so far.
+      // It will be refreshed automatically once all pages are fetched.
       if (!allDataLoaded && originalData.length === 0) {
         setTimeout(function () {
-          performSearch(searchTerm);
-        }, 100);
+          performSearch(latestSearchTerm);
+        }, 150);
         return;
       }
 
@@ -472,32 +570,36 @@ jQuery(document).ready(function ($) {
 
         if (currentPageType === "questions") {
           // Search in question number, category, priority, and question text
+          var numberStr = (item.number || "").toString().toLowerCase();
+          var categoryStr = (item.category || "").toString().toLowerCase();
+          var priorityStr = (item.priority || "").toString().toLowerCase();
+          var questionStr = (item.question || "").toString().toLowerCase();
           if (
-            item.number.toLowerCase().includes(searchTerm) ||
-            item.category.toLowerCase().includes(searchTerm) ||
-            item.priority.toLowerCase().includes(searchTerm) ||
-            item.question.toLowerCase().includes(searchTerm)
+            numberStr.includes(searchTerm) ||
+            categoryStr.includes(searchTerm) ||
+            priorityStr.includes(searchTerm) ||
+            questionStr.includes(searchTerm)
           ) {
             matches = true;
           }
         } else if (currentPageType === "categories") {
           // Search in category number and category name
           if (
-            item.number.toLowerCase().includes(searchTerm) ||
-            item.category.toLowerCase().includes(searchTerm)
+            (item.number || "").toString().toLowerCase().includes(searchTerm) ||
+            (item.category || "").toString().toLowerCase().includes(searchTerm)
           ) {
             matches = true;
           }
         } else if (currentPageType === "submissions") {
           // Search in ID, name, email, phone, job title, score, and status
           if (
-            item.id.toLowerCase().includes(searchTerm) ||
-            item.name.toLowerCase().includes(searchTerm) ||
-            item.email.toLowerCase().includes(searchTerm) ||
-            item.phone.toLowerCase().includes(searchTerm) ||
-            item.jobTitle.toLowerCase().includes(searchTerm) ||
-            item.score.toLowerCase().includes(searchTerm) ||
-            item.status.toLowerCase().includes(searchTerm)
+            (item.id || "").toString().toLowerCase().includes(searchTerm) ||
+            (item.name || "").toString().toLowerCase().includes(searchTerm) ||
+            (item.email || "").toString().toLowerCase().includes(searchTerm) ||
+            (item.phone || "").toString().toLowerCase().includes(searchTerm) ||
+            (item.jobTitle || "").toString().toLowerCase().includes(searchTerm) ||
+            (item.score || "").toString().toLowerCase().includes(searchTerm) ||
+            (item.status || "").toString().toLowerCase().includes(searchTerm)
           ) {
             matches = true;
           }
@@ -516,7 +618,7 @@ jQuery(document).ready(function ($) {
       $tableBody.empty();
       if (matchingData.length > 0) {
         matchingData.forEach(function (item) {
-          $tableBody.append(item.row);
+          appendItemRow(item);
         });
         // Show table headers when there are results
         $tableHead.show();
