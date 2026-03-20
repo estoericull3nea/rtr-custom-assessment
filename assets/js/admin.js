@@ -675,7 +675,11 @@ jQuery(document).ready(function ($) {
       // Always search using the latest term if multiple keystrokes happen while data is loading.
       latestSearchTerm = searchTerm;
 
-      if (searchTerm.length < 3) {
+      var isNumericSearch = /^[0-9]+$/.test(searchTerm);
+
+      // Keep the "min 3 chars" UX for text searches,
+      // but allow numeric searches on the Questions page (Priority is 1..N, often 1-2 digits).
+      if (searchTerm.length < 3 && !(currentPageType === "questions" && isNumericSearch)) {
         // Restore the original server-rendered paginated rows.
         $tableBody.empty();
         if ($defaultPageRows && $defaultPageRows.length > 0) {
