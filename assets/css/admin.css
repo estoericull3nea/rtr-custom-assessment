@@ -489,3 +489,79 @@ body,
   margin-top: 4px;
   opacity: 0.9;
 }
+
+/* --- Questions Pagination -------------------------------- */
+.ca-admin-wrap .tablenav.top,
+.ca-admin-wrap .tablenav.bottom {
+  margin: 18px 0 10px;
+}
+
+.ca-admin-wrap .tablenav-pages .pagination-links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ca-admin-wrap .tablenav-pages .dots {
+  color: var(--ca-text-muted);
+  padding: 0 4px;
+  user-select: none;
+}
+
+.ca-admin-wrap
+  .tablenav-pages
+  a.page-numbers {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--ca-border);
+  border-radius: 8px;
+  background: #fff;
+  color: #1f6fa8;
+  text-decoration: none;
+  font-weight: 700;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.ca-admin-wrap .tablenav-pages a.page-numbers:hover {
+  border-color: var(--ca-primary);
+  color: var(--ca-primary);
+  background: var(--ca-primary-light);
+}
+
+.ca-admin-wrap .tablenav-pages a.page-numbers.current {
+  border-color: var(--ca-primary);
+  background: var(--ca-primary);
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(170, 49, 48, 0.25);
+}
+
+.ca-admin-wrap .tablenav-pages a.prev-page,
+.ca-admin-wrap .tablenav-pages a.next-page {
+  border-radius: 8px;
+  border: 1px solid var(--ca-border) !important;
+  background: #fff;
+  color: #1f6fa8 !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.ca-admin-wrap .tablenav-pages a.prev-page:hover,
+.ca-admin-wrap .tablenav-pages a.next-page:hover {
+  border-color: var(--ca-primary) !important;
+  color: var(--ca-primary) !important;
+  background: var(--ca-primary-light) !important;
+}
+
+.ca-admin-wrap .tablenav-pages a.disabled {
+  pointer-events: none;
+  opacity: 0.5;
+  background: #f3f4f6 !important;
+  border-color: #cbd5e0 !important;
+  color: #6b7280 !important;
+  box-shadow: none;
+}
