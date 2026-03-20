@@ -42,12 +42,14 @@ jQuery(document).ready(function ($) {
     var $inputElement = $row.find(".ca-category-input");
     var $editBtn = $row.find(".ca-edit-btn");
     var $saveBtn = $row.find(".ca-save-btn");
+    var $cancelBtn = $row.find(".ca-category-cancel-btn");
 
     // Switch to edit mode
     $nameElement.hide();
     $inputElement.show().focus();
     $editBtn.hide();
     $saveBtn.show();
+    $cancelBtn.show();
   });
 
   $(".ca-save-btn").on("click", function () {
@@ -58,6 +60,7 @@ jQuery(document).ready(function ($) {
     var $inputElement = $row.find(".ca-category-input");
     var $editBtn = $row.find(".ca-edit-btn");
     var $saveBtn = $row.find(".ca-save-btn");
+    var $cancelBtn = $row.find(".ca-category-cancel-btn");
     var newCategory = $inputElement.val().trim();
 
     // Validation
@@ -136,12 +139,24 @@ jQuery(document).ready(function ($) {
     }
   });
 
+  // Cancel button in edit mode
+  $(document).on("click", ".ca-category-cancel-btn", function (e) {
+    e.preventDefault();
+    var $row = $(this).closest("tr");
+    var $nameElement = $row.find(".ca-category-name");
+    var $inputElement = $row.find(".ca-category-input");
+    var $editBtn = $row.find(".ca-edit-btn");
+    var $saveBtn = $row.find(".ca-save-btn");
+    cancelEditMode($row, $nameElement, $inputElement, $editBtn, $saveBtn);
+  });
+
   // Cancel edit when clicking outside the input (optional)
   $(document).on("click", function (e) {
     if (
       !$(e.target).closest(".ca-category-input").length &&
       !$(e.target).closest(".ca-edit-btn").length &&
-      !$(e.target).closest(".ca-save-btn").length
+      !$(e.target).closest(".ca-save-btn").length &&
+      !$(e.target).closest(".ca-category-cancel-btn").length
     ) {
       $(".ca-category-input").each(function () {
         var $input = $(this);
@@ -163,10 +178,12 @@ jQuery(document).ready(function ($) {
     $editBtn,
     $saveBtn,
   ) {
+    var $cancelBtn = $row.find(".ca-category-cancel-btn");
     $inputElement.hide();
     $nameElement.show();
     $editBtn.show();
     $saveBtn.hide();
+    $cancelBtn.hide();
     $inputElement.val($inputElement.data("original"));
   }
 

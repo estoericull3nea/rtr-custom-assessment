@@ -1031,7 +1031,9 @@ class CA_Admin
 					<div class="ca-stat-card">
 						<div class="ca-stat-value"><?php echo esc_html(number_format($completed_avg, 2)); ?></div>
 						<div class="ca-stat-label"><?php esc_html_e('Avg Score (Completed)', CA_TEXT_DOMAIN); ?></div>
-						<div class="ca-stat-sublabel"><?php esc_html_e('Latest submission: ', CA_TEXT_DOMAIN); ?><?php echo esc_html($latest_created_display); ?></div>
+						<div class="ca-stat-sublabel">
+							<?php esc_html_e('Latest submission: ', CA_TEXT_DOMAIN); ?>			<?php echo esc_html($latest_created_display); ?>
+						</div>
 					</div>
 				</div>
 
@@ -1116,7 +1118,7 @@ class CA_Admin
 				<div class="tablenav bottom">
 					<div class="tablenav-pages">
 						<span class="displaying-num">
-							<?php echo esc_html($total_submissions_count); ?> <?php esc_html_e('submissions', CA_TEXT_DOMAIN); ?>
+							<?php echo esc_html($total_submissions_count); ?> 			<?php esc_html_e('submissions', CA_TEXT_DOMAIN); ?>
 						</span>
 
 						<?php if ($total_pages > 1): ?>
@@ -1404,333 +1406,333 @@ class CA_Admin
 		?>
 		<div class="wrap ca-admin-wrap">
 			<script type="text/javascript">
-				window.CA_ADMIN_QUESTIONS_ALL = <?php echo wp_json_encode($all_questions_js); ?>;
-				window.CA_ADMIN_AJAX_URL = <?php echo wp_json_encode(admin_url('admin-ajax.php')); ?>;
-				window.CA_ADMIN_QUESTIONS_DELETE_NONCE = <?php echo wp_json_encode($delete_question_nonce); ?>;
-				window.CA_ADMIN_QUESTIONS_DELETE_CONFIRM = <?php echo wp_json_encode($delete_question_confirm); ?>;
-				window.CA_ADMIN_QUESTIONS_EDIT_NONCE = <?php echo wp_json_encode($edit_question_nonce); ?>;
-				window.CA_ADMIN_QUESTIONS_CATEGORIES = <?php echo wp_json_encode($categories); ?>;
-				window.CA_ADMIN_QUESTIONS_PRIORITY_MAX = <?php echo (int) $priority_end; ?>;
-			</script>
-			<h1 class="ca-admin-title">
-				<span class="ca-admin-title-icon dashicons dashicons-format-chat"></span>
-				<?php esc_html_e('Assessment Questions', CA_TEXT_DOMAIN); ?>
-			</h1>
+						window.CA_ADMIN_QUESTIONS_ALL = <?php echo wp_json_encode($all_questions_js); ?>;
+						window.CA_ADMIN_AJAX_URL = <?php echo wp_json_encode(admin_url('admin-ajax.php')); ?>;
+						window.CA_ADMIN_QUESTIONS_DELETE_NONCE = <?php echo wp_json_encode($delete_question_nonce); ?>;
+						window.CA_ADMIN_QUESTIONS_DELETE_CONFIRM = <?php echo wp_json_encode($delete_question_confirm); ?>;
+						window.CA_ADMIN_QUESTIONS_EDIT_NONCE = <?php echo wp_json_encode($edit_question_nonce); ?>;
+						window.CA_ADMIN_QUESTIONS_CATEGORIES = <?php echo wp_json_encode($categories); ?>;
+						window.CA_ADMIN_QUESTIONS_PRIORITY_MAX = <?php echo (int) $priority_end; ?>;
+					</script>
+					<h1 class="ca-admin-title">
+						<span class="ca-admin-title-icon dashicons dashicons-format-chat"></span>
+						<?php esc_html_e('Assessment Questions', CA_TEXT_DOMAIN); ?>
+					</h1>
 
-			<!-- Basic Statistics -->
-			<div class="ca-questions-stats-grid">
-				<div class="ca-stat-card">
-					<div class="ca-stat-value"><?php echo esc_html($total_questions); ?></div>
-					<div class="ca-stat-label"><?php esc_html_e('Total Questions', CA_TEXT_DOMAIN); ?></div>
-				</div>
+					<!-- Basic Statistics -->
+					<div class="ca-questions-stats-grid">
+						<div class="ca-stat-card">
+							<div class="ca-stat-value"><?php echo esc_html($total_questions); ?></div>
+							<div class="ca-stat-label"><?php esc_html_e('Total Questions', CA_TEXT_DOMAIN); ?></div>
+						</div>
+				
+						<div class="ca-stat-card">
+							<div class="ca-stat-value"><?php echo esc_html(count($categories)); ?></div>
+							<div class="ca-stat-label"><?php esc_html_e('Categories', CA_TEXT_DOMAIN); ?></div>
+						</div>
+				
+						<div class="ca-stat-card">
+							<div class="ca-stat-value"><?php echo esc_html($most_used_category); ?></div>
+							<div class="ca-stat-label"><?php esc_html_e('Most Used Category', CA_TEXT_DOMAIN); ?></div>
+							<div class="ca-stat-sublabel"><?php echo esc_html($most_used_count . ' questions'); ?></div>
+						</div>
+					</div>
 
-				<div class="ca-stat-card">
-					<div class="ca-stat-value"><?php echo esc_html(count($categories)); ?></div>
-					<div class="ca-stat-label"><?php esc_html_e('Categories', CA_TEXT_DOMAIN); ?></div>
-				</div>
-
-				<div class="ca-stat-card">
-					<div class="ca-stat-value"><?php echo esc_html($most_used_category); ?></div>
-					<div class="ca-stat-label"><?php esc_html_e('Most Used Category', CA_TEXT_DOMAIN); ?></div>
-					<div class="ca-stat-sublabel"><?php echo esc_html($most_used_count . ' questions'); ?></div>
-				</div>
-			</div>
-
-			<!-- Add Question Form -->
-			<div class="ca-questions-actions">
-				<div class="ca-question-form">
-					<h3><?php esc_html_e('Add New Question', CA_TEXT_DOMAIN); ?></h3>
-					<form method="post" action="">
-						<?php wp_nonce_field('ca_add_question_action', '_wpnonce'); ?>
-						<input type="hidden" name="ca_action" value="add_question">
-						<div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 20px;">
-							<div class="ca-form-field">
-								<label for="question_category"><?php esc_html_e('Category', CA_TEXT_DOMAIN); ?></label>
-								<select id="question_category" name="question_category" required>
-									<option value=""><?php esc_html_e('Select a category', CA_TEXT_DOMAIN); ?></option>
-									<?php foreach ($categories as $category): ?>
-										<option value="<?php echo esc_attr($category); ?>"><?php echo esc_html($category); ?>
-										</option>
-									<?php endforeach; ?>
-								</select>
-							</div>
-							<div class="ca-form-field">
-								<label for="question_priority"><?php esc_html_e('Priority', CA_TEXT_DOMAIN); ?></label>
-								<input type="number" id="question_priority" name="question_priority" required min="1" step="1"
-									autocomplete="off" placeholder="" />
-							</div>
-							<div class="ca-form-field">
-								<label for="question_text"><?php esc_html_e('Question Text', CA_TEXT_DOMAIN); ?></label>
-								<input type="text" id="question_text" name="question_text" class="ca-question-text-input"
-									placeholder="<?php esc_attr_e('Enter the question text', CA_TEXT_DOMAIN); ?>" required
-									maxlength="500" autocomplete="off">
-								<div class="ca-question-text-counter" aria-live="polite">
-									<span id="ca-question-text-counter">0</span> / 500
+					<!-- Add Question Form -->
+					<div class="ca-questions-actions">
+						<div class="ca-question-form">
+							<h3><?php esc_html_e('Add New Question', CA_TEXT_DOMAIN); ?></h3>
+							<form method="post" action="">
+								<?php wp_nonce_field('ca_add_question_action', '_wpnonce'); ?>
+								<input type="hidden" name="ca_action" value="add_question">
+								<div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+									<div class="ca-form-field">
+										<label for="question_category"><?php esc_html_e('Category', CA_TEXT_DOMAIN); ?></label>
+										<select id="question_category" name="question_category" required>
+											<option value=""><?php esc_html_e('Select a category', CA_TEXT_DOMAIN); ?></option>
+											<?php foreach ($categories as $category): ?>
+													<option value="<?php echo esc_attr($category); ?>"><?php echo esc_html($category); ?>
+													</option>
+											<?php endforeach; ?>
+										</select>
+									</div>
+									<div class="ca-form-field">
+										<label for="question_priority"><?php esc_html_e('Priority', CA_TEXT_DOMAIN); ?></label>
+										<input type="number" id="question_priority" name="question_priority" required min="1" step="1"
+											autocomplete="off" placeholder="" />
+									</div>
+									<div class="ca-form-field">
+										<label for="question_text"><?php esc_html_e('Question Text', CA_TEXT_DOMAIN); ?></label>
+										<input type="text" id="question_text" name="question_text" class="ca-question-text-input"
+											placeholder="<?php esc_attr_e('Enter the question text', CA_TEXT_DOMAIN); ?>" required
+											maxlength="500" autocomplete="off">
+										<div class="ca-question-text-counter" aria-live="polite">
+											<span id="ca-question-text-counter">0</span> / 500
+										</div>
+									</div>
 								</div>
+								<div class="ca-form-actions">
+									<button type="submit" class="button button-primary ca-question-submit">
+										<?php esc_html_e('Add Question', CA_TEXT_DOMAIN); ?>
+									</button>
+								</div>
+							</form>
+						</div>
+					</div>
+
+					<br />
+
+					<div class="ca-questions-search" style="text-align: end;">
+						<div class="ca-search-field">
+							<label for="ca-search-questions"><?php esc_html_e('Search Questions', CA_TEXT_DOMAIN); ?></label>
+							<input type="text" id="ca-search-questions"
+								placeholder="<?php esc_attr_e('Search by number, category, or question text (minimum 3 characters)...', CA_TEXT_DOMAIN); ?>"
+								autocomplete="off">
+							<div class="ca-search-count" style="display: none;">
+								<span id="ca-search-results-count"></span>
 							</div>
 						</div>
-						<div class="ca-form-actions">
-							<button type="submit" class="button button-primary ca-question-submit">
-								<?php esc_html_e('Add Question', CA_TEXT_DOMAIN); ?>
-							</button>
-						</div>
-					</form>
-				</div>
-			</div>
-
-			<br />
-
-			<div class="ca-questions-search" style="text-align: end;">
-				<div class="ca-search-field">
-					<label for="ca-search-questions"><?php esc_html_e('Search Questions', CA_TEXT_DOMAIN); ?></label>
-					<input type="text" id="ca-search-questions"
-						placeholder="<?php esc_attr_e('Search by number, category, or question text (minimum 3 characters)...', CA_TEXT_DOMAIN); ?>"
-						autocomplete="off">
-					<div class="ca-search-count" style="display: none;">
-						<span id="ca-search-results-count"></span>
 					</div>
-				</div>
-			</div>
 
-			<div class="ca-bulk-actions-bar" style="margin-top: 10px;">
-				<button type="button" class="button button-secondary ca-bulk-edit-open" disabled>
-					<?php esc_html_e('Bulk Edit', CA_TEXT_DOMAIN); ?>
-				</button>
-				<span class="ca-bulk-selected-count">0 selected</span>
-			</div>
+					<div class="ca-bulk-actions-bar" style="margin-top: 10px;">
+						<button type="button" class="button button-secondary ca-bulk-edit-open" disabled>
+							<?php esc_html_e('Bulk Edit', CA_TEXT_DOMAIN); ?>
+						</button>
+						<span class="ca-bulk-selected-count">0 selected</span>
+						</div>
 
-			<div class="ca-bulk-edit-modal-overlay" id="ca-bulk-edit-modal-overlay" style="display:none;">
-				<div class="ca-bulk-edit-modal">
-					<h3><?php esc_html_e('Bulk Edit Questions', CA_TEXT_DOMAIN); ?></h3>
-					<form method="post" action="" id="ca-bulk-edit-form">
-						<?php wp_nonce_field('ca_bulk_edit_question_action', '_wpnonce'); ?>
-						<input type="hidden" name="ca_action" value="bulk_edit_questions">
-						<input type="hidden" name="question_indexes_count" id="ca-bulk-question-indexes-count" value="0">
+					<div class="ca-bulk-edit-modal-overlay" id="ca-bulk-edit-modal-overlay" style="display:none;">
+						<div class="ca-bulk-edit-modal">
+							<h3><?php esc_html_e('Bulk Edit Questions', CA_TEXT_DOMAIN); ?></h3>
+							<form method="post" action="" id="ca-bulk-edit-form">
+								<?php wp_nonce_field('ca_bulk_edit_question_action', '_wpnonce'); ?>
+								<input type="hidden" name="ca_action" value="bulk_edit_questions">
+								<input type="hidden" name="question_indexes_count" id="ca-bulk-question-indexes-count" value="0">
 
-						<div class="ca-bulk-edit-fields">
-							<div class="ca-bulk-field">
-								<label for="ca-bulk-category"><?php esc_html_e('Category', CA_TEXT_DOMAIN); ?></label>
-								<select id="ca-bulk-category" name="bulk_category">
-									<option value=""><?php esc_html_e('Keep current', CA_TEXT_DOMAIN); ?></option>
-									<?php foreach ($categories as $cat): ?>
-										<option value="<?php echo esc_attr($cat); ?>"><?php echo esc_html($cat); ?></option>
+								<div class="ca-bulk-edit-fields">
+									<div class="ca-bulk-field">
+										<label for="ca-bulk-category"><?php esc_html_e('Category', CA_TEXT_DOMAIN); ?></label>
+										<select id="ca-bulk-category" name="bulk_category">
+											<option value=""><?php esc_html_e('Keep current', CA_TEXT_DOMAIN); ?></option>
+											<?php foreach ($categories as $cat): ?>
+													<option value="<?php echo esc_attr($cat); ?>"><?php echo esc_html($cat); ?></option>
+											<?php endforeach; ?>
+										</select>
+						</div>
+
+									<div class="ca-bulk-field">
+										<label for="ca-bulk-priority"><?php esc_html_e('Priority', CA_TEXT_DOMAIN); ?></label>
+										<input type="number" id="ca-bulk-priority" name="bulk_priority" min="1" step="1" placeholder="">
+						</div>
+
+									<div class="ca-bulk-field">
+										<label for="ca-bulk-question-text"><?php esc_html_e('Question Text', CA_TEXT_DOMAIN); ?></label>
+										<textarea id="ca-bulk-question-text" name="bulk_question_text" rows="3" maxlength="500"
+											placeholder="<?php esc_attr_e('Leave empty to keep current', CA_TEXT_DOMAIN); ?>"></textarea>
+									</div>
+								</div>
+
+								<div id="ca-bulk-selected-indexes"></div>
+
+								<div class="ca-bulk-edit-actions">
+									<button type="button" class="button ca-bulk-edit-cancel">
+										<?php esc_html_e('Cancel', CA_TEXT_DOMAIN); ?>
+									</button>
+									<button type="submit" class="button button-primary">
+										<?php esc_html_e('Save Bulk Changes', CA_TEXT_DOMAIN); ?>
+									</button>
+								</div>
+							</form>
+						</div>
+					</div>
+
+					<br />
+
+					<?php if (isset($_GET['message']) && 'question_deleted' === $_GET['message']): ?>
+							<div class="notice notice-success is-dismissible">
+								<p><?php esc_html_e('Question deleted successfully.', CA_TEXT_DOMAIN); ?></p>
+							</div>
+					<?php endif; ?>
+
+					<?php if (isset($_GET['message']) && 'question_added' === $_GET['message']): ?>
+							<div class="notice notice-success is-dismissible">
+								<p><?php esc_html_e('Question added successfully.', CA_TEXT_DOMAIN); ?></p>
+							</div>
+								<?php endif; ?>
+
+					<?php if (isset($_GET['message']) && 'question_edited' === $_GET['message']): ?>
+							<div class="notice notice-success is-dismissible">
+								<p><?php esc_html_e('Question updated successfully.', CA_TEXT_DOMAIN); ?></p>
+								</div>
+					<?php endif; ?>
+
+					<?php if (isset($_GET['message']) && 'question_edit_failed' === $_GET['message']): ?>
+							<div class="notice notice-error is-dismissible">
+								<p><?php esc_html_e('Unable to update this question.', CA_TEXT_DOMAIN); ?>
+								</p>
+							</div>
+					<?php endif; ?>
+
+					<?php if (isset($_GET['message']) && 'priority_exists' === $_GET['message']): ?>
+							<div class="notice notice-error is-dismissible">
+								<p><?php esc_html_e('Priority already exists in this category. Please choose another number.', CA_TEXT_DOMAIN); ?>
+								</p>
+							</div>
+					<?php endif; ?>
+
+					<?php if (isset($_GET['message']) && 'bulk_edit_success' === $_GET['message']): ?>
+							<div class="notice notice-success is-dismissible">
+								<p><?php esc_html_e('Bulk edit applied successfully.', CA_TEXT_DOMAIN); ?></p>
+							</div>
+					<?php endif; ?>
+
+					<?php if (isset($_GET['message']) && 'bulk_edit_failed' === $_GET['message']): ?>
+							<div class="notice notice-error is-dismissible">
+								<p><?php esc_html_e('Bulk edit failed. Please select questions and try again.', CA_TEXT_DOMAIN); ?></p>
+							</div>
+					<?php endif; ?>
+
+					<?php if (empty($questions)): ?>
+							<div class="ca-admin-empty">
+								<span class="dashicons dashicons-format-chat" aria-hidden="true"></span>
+								<p><?php esc_html_e('No questions found. Please check your assessment configuration.', CA_TEXT_DOMAIN); ?></p>
+							</div>
+					<?php else: ?>
+							<table class="wp-list-table widefat fixed striped ca-admin-table">
+								<thead>
+									<tr>
+										<th class="ca-col-id">
+											<input type="checkbox" id="ca-bulk-select-all" class="ca-bulk-select-all">
+											<?php esc_html_e('#', CA_TEXT_DOMAIN); ?>
+										</th>
+										<th><?php esc_html_e('Category', CA_TEXT_DOMAIN); ?></th>
+										<th><?php esc_html_e('Priority', CA_TEXT_DOMAIN); ?></th>
+										<th><?php esc_html_e('Question', CA_TEXT_DOMAIN); ?></th>
+										<th><?php esc_html_e('Actions', CA_TEXT_DOMAIN); ?></th>
+									</tr>
+								</thead>
+								<tbody>
+									<?php foreach ($paged_questions as $q): ?>
+											<tr>
+												<td class="ca-col-id">
+													<input type="checkbox" class="ca-question-select" value="<?php echo esc_attr($q['index']); ?>">
+													<?php echo esc_html($q['index'] + 1); ?>
+												</td>
+												<td class="ca-col-category">
+													<span class="ca-question-category-text" data-original="<?php echo esc_attr($q['category']); ?>">
+														<?php echo esc_html($q['category']); ?>
+													</span>
+													<select class="ca-question-category-select" style="display: none;"
+														form="ca-edit-question-form-<?php echo esc_attr($q['index']); ?>" name="new_category"
+														data-original="<?php echo esc_attr($q['category']); ?>">
+														<?php foreach ($categories as $cat): ?>
+																<option value="<?php echo esc_attr($cat); ?>" <?php echo $cat === $q['category'] ? 'selected' : ''; ?>>
+																	<?php echo esc_html($cat); ?>
+																</option>
+														<?php endforeach; ?>
+													</select>
+												</td>
+												<td class="ca-col-priority">
+													<span class="ca-question-priority-text" data-original="<?php echo esc_attr($q['priority']); ?>">
+														<?php echo esc_html($q['priority']); ?>
+													</span>
+													<input type="number" class="ca-question-priority-input" style="display: none;"
+														form="ca-edit-question-form-<?php echo esc_attr($q['index']); ?>" name="new_priority"
+														value="<?php echo esc_attr($q['priority']); ?>" min="1" step="1" autocomplete="off"
+														data-original="<?php echo esc_attr($q['priority']); ?>">
+												</td>
+												<td class="ca-col-question">
+													<span class="ca-question-text-display" data-original="<?php echo esc_attr($q['text']); ?>">
+														<?php echo esc_html($q['text']); ?>
+													</span>
+													<input type="text" class="ca-question-text-input" style="display: none;"
+														form="ca-edit-question-form-<?php echo esc_attr($q['index']); ?>" name="new_question_text"
+														value="<?php echo esc_attr($q['text']); ?>" maxlength="500" autocomplete="off"
+														data-original="<?php echo esc_attr($q['text']); ?>">
+												</td>
+												<td class="ca-col-actions">
+													<form method="post" action="" id="ca-edit-question-form-<?php echo esc_attr($q['index']); ?>"
+														class="ca-question-edit-form" style="display: inline;">
+														<?php wp_nonce_field('ca_edit_question_action', '_wpnonce'); ?>
+														<input type="hidden" name="ca_action" value="edit_question">
+														<input type="hidden" name="question_index" value="<?php echo esc_attr($q['index']); ?>">
+														<button type="button" class="button button-small button-secondary ca-question-edit-btn"
+															data-index="<?php echo esc_attr($q['index']); ?>">
+															<?php esc_html_e('Edit', CA_TEXT_DOMAIN); ?>
+														</button>
+														<button type="button" class="button button-small button-secondary ca-question-cancel-btn"
+															style="display: none;">
+															<?php esc_html_e('Cancel', CA_TEXT_DOMAIN); ?>
+														</button>
+														<button type="submit" class="button button-small button-primary ca-question-save-btn"
+															style="display: none;">
+															<?php esc_html_e('Save', CA_TEXT_DOMAIN); ?>
+														</button>
+													</form>
+													<form method="post" style="display: inline;"
+														onsubmit="return confirm('<?php echo esc_js(__('Are you sure you want to delete this question? This action cannot be undone.', CA_TEXT_DOMAIN)); ?>');">
+														<?php wp_nonce_field('ca_delete_question_action', '_wpnonce'); ?>
+														<input type="hidden" name="ca_action" value="delete_question">
+														<input type="hidden" name="question_index" value="<?php echo esc_attr($q['index']); ?>">
+														<button type="submit" class="button button-small button-secondary">
+															<?php esc_html_e('Delete', CA_TEXT_DOMAIN); ?>
+														</button>
+													</form>
+												</td>
+											</tr>
 									<?php endforeach; ?>
-								</select>
-							</div>
+								</tbody>
+							</table>
 
-							<div class="ca-bulk-field">
-								<label for="ca-bulk-priority"><?php esc_html_e('Priority', CA_TEXT_DOMAIN); ?></label>
-								<input type="number" id="ca-bulk-priority" name="bulk_priority" min="1" step="1" placeholder="">
-							</div>
-
-							<div class="ca-bulk-field">
-								<label for="ca-bulk-question-text"><?php esc_html_e('Question Text', CA_TEXT_DOMAIN); ?></label>
-								<textarea id="ca-bulk-question-text" name="bulk_question_text" rows="3" maxlength="500"
-									placeholder="<?php esc_attr_e('Leave empty to keep current', CA_TEXT_DOMAIN); ?>"></textarea>
-							</div>
-						</div>
-
-						<div id="ca-bulk-selected-indexes"></div>
-
-						<div class="ca-bulk-edit-actions">
-							<button type="button" class="button ca-bulk-edit-cancel">
-								<?php esc_html_e('Cancel', CA_TEXT_DOMAIN); ?>
-							</button>
-							<button type="submit" class="button button-primary">
-								<?php esc_html_e('Save Bulk Changes', CA_TEXT_DOMAIN); ?>
-							</button>
-						</div>
-					</form>
-				</div>
-			</div>
-
-			<br />
-
-			<?php if (isset($_GET['message']) && 'question_deleted' === $_GET['message']): ?>
-				<div class="notice notice-success is-dismissible">
-					<p><?php esc_html_e('Question deleted successfully.', CA_TEXT_DOMAIN); ?></p>
-				</div>
-			<?php endif; ?>
-
-			<?php if (isset($_GET['message']) && 'question_added' === $_GET['message']): ?>
-				<div class="notice notice-success is-dismissible">
-					<p><?php esc_html_e('Question added successfully.', CA_TEXT_DOMAIN); ?></p>
-				</div>
-			<?php endif; ?>
-
-			<?php if (isset($_GET['message']) && 'question_edited' === $_GET['message']): ?>
-				<div class="notice notice-success is-dismissible">
-					<p><?php esc_html_e('Question updated successfully.', CA_TEXT_DOMAIN); ?></p>
-				</div>
-			<?php endif; ?>
-
-			<?php if (isset($_GET['message']) && 'question_edit_failed' === $_GET['message']): ?>
-				<div class="notice notice-error is-dismissible">
-					<p><?php esc_html_e('Unable to update this question.', CA_TEXT_DOMAIN); ?>
-					</p>
-				</div>
-			<?php endif; ?>
-
-			<?php if (isset($_GET['message']) && 'priority_exists' === $_GET['message']): ?>
-				<div class="notice notice-error is-dismissible">
-					<p><?php esc_html_e('Priority already exists in this category. Please choose another number.', CA_TEXT_DOMAIN); ?>
-					</p>
-				</div>
-			<?php endif; ?>
-
-			<?php if (isset($_GET['message']) && 'bulk_edit_success' === $_GET['message']): ?>
-				<div class="notice notice-success is-dismissible">
-					<p><?php esc_html_e('Bulk edit applied successfully.', CA_TEXT_DOMAIN); ?></p>
-				</div>
-			<?php endif; ?>
-
-			<?php if (isset($_GET['message']) && 'bulk_edit_failed' === $_GET['message']): ?>
-				<div class="notice notice-error is-dismissible">
-					<p><?php esc_html_e('Bulk edit failed. Please select questions and try again.', CA_TEXT_DOMAIN); ?></p>
-				</div>
-			<?php endif; ?>
-
-			<?php if (empty($questions)): ?>
-				<div class="ca-admin-empty">
-					<span class="dashicons dashicons-format-chat" aria-hidden="true"></span>
-					<p><?php esc_html_e('No questions found. Please check your assessment configuration.', CA_TEXT_DOMAIN); ?></p>
-				</div>
-			<?php else: ?>
-				<table class="wp-list-table widefat fixed striped ca-admin-table">
-					<thead>
-						<tr>
-							<th class="ca-col-id">
-								<input type="checkbox" id="ca-bulk-select-all" class="ca-bulk-select-all">
-								<?php esc_html_e('#', CA_TEXT_DOMAIN); ?>
-							</th>
-							<th><?php esc_html_e('Category', CA_TEXT_DOMAIN); ?></th>
-							<th><?php esc_html_e('Priority', CA_TEXT_DOMAIN); ?></th>
-							<th><?php esc_html_e('Question', CA_TEXT_DOMAIN); ?></th>
-							<th><?php esc_html_e('Actions', CA_TEXT_DOMAIN); ?></th>
-						</tr>
-					</thead>
-					<tbody>
-						<?php foreach ($paged_questions as $q): ?>
-							<tr>
-								<td class="ca-col-id">
-									<input type="checkbox" class="ca-question-select" value="<?php echo esc_attr($q['index']); ?>">
-									<?php echo esc_html($q['index'] + 1); ?>
-								</td>
-								<td class="ca-col-category">
-									<span class="ca-question-category-text" data-original="<?php echo esc_attr($q['category']); ?>">
-										<?php echo esc_html($q['category']); ?>
+							<div class="tablenav bottom">
+								<div class="tablenav-pages">
+									<span class="displaying-num">
+										<?php echo esc_html($total_questions_count); ?>			 			<?php esc_html_e('items', CA_TEXT_DOMAIN); ?>
 									</span>
-									<select class="ca-question-category-select" style="display: none;"
-										form="ca-edit-question-form-<?php echo esc_attr($q['index']); ?>" name="new_category"
-										data-original="<?php echo esc_attr($q['category']); ?>">
-										<?php foreach ($categories as $cat): ?>
-											<option value="<?php echo esc_attr($cat); ?>" <?php echo $cat === $q['category'] ? 'selected' : ''; ?>>
-												<?php echo esc_html($cat); ?>
-											</option>
-										<?php endforeach; ?>
-									</select>
-								</td>
-								<td class="ca-col-priority">
-									<span class="ca-question-priority-text" data-original="<?php echo esc_attr($q['priority']); ?>">
-										<?php echo esc_html($q['priority']); ?>
-									</span>
-									<input type="number" class="ca-question-priority-input" style="display: none;"
-										form="ca-edit-question-form-<?php echo esc_attr($q['index']); ?>" name="new_priority"
-										value="<?php echo esc_attr($q['priority']); ?>" min="1" step="1" autocomplete="off"
-										data-original="<?php echo esc_attr($q['priority']); ?>">
-								</td>
-								<td class="ca-col-question">
-									<span class="ca-question-text-display" data-original="<?php echo esc_attr($q['text']); ?>">
-										<?php echo esc_html($q['text']); ?>
-									</span>
-									<input type="text" class="ca-question-text-input" style="display: none;"
-										form="ca-edit-question-form-<?php echo esc_attr($q['index']); ?>" name="new_question_text"
-										value="<?php echo esc_attr($q['text']); ?>" maxlength="500" autocomplete="off"
-										data-original="<?php echo esc_attr($q['text']); ?>">
-								</td>
-								<td class="ca-col-actions">
-									<form method="post" action="" id="ca-edit-question-form-<?php echo esc_attr($q['index']); ?>"
-										class="ca-question-edit-form" style="display: inline;">
-										<?php wp_nonce_field('ca_edit_question_action', '_wpnonce'); ?>
-										<input type="hidden" name="ca_action" value="edit_question">
-										<input type="hidden" name="question_index" value="<?php echo esc_attr($q['index']); ?>">
-										<button type="button" class="button button-small button-secondary ca-question-edit-btn"
-											data-index="<?php echo esc_attr($q['index']); ?>">
-											<?php esc_html_e('Edit', CA_TEXT_DOMAIN); ?>
-										</button>
-										<button type="button" class="button button-small button-secondary ca-question-cancel-btn"
-											style="display: none;">
-											<?php esc_html_e('Cancel', CA_TEXT_DOMAIN); ?>
-										</button>
-										<button type="submit" class="button button-small button-primary ca-question-save-btn"
-											style="display: none;">
-											<?php esc_html_e('Save', CA_TEXT_DOMAIN); ?>
-										</button>
-									</form>
-									<form method="post" style="display: inline;"
-										onsubmit="return confirm('<?php echo esc_js(__('Are you sure you want to delete this question? This action cannot be undone.', CA_TEXT_DOMAIN)); ?>');">
-										<?php wp_nonce_field('ca_delete_question_action', '_wpnonce'); ?>
-										<input type="hidden" name="ca_action" value="delete_question">
-										<input type="hidden" name="question_index" value="<?php echo esc_attr($q['index']); ?>">
-										<button type="submit" class="button button-small button-secondary">
-											<?php esc_html_e('Delete', CA_TEXT_DOMAIN); ?>
-										</button>
-									</form>
-								</td>
-							</tr>
-						<?php endforeach; ?>
-					</tbody>
-				</table>
+									<?php if ($total_pages > 1): ?>
+											<span class="pagination-links">
+												<?php
+												$base_url = admin_url('admin.php?page=custom-assessment-questions');
+												$prev_disabled = $current_page <= 1 ? 'disabled' : '';
+												$next_disabled = $current_page >= $total_pages ? 'disabled' : '';
 
-				<div class="tablenav bottom">
-					<div class="tablenav-pages">
-						<span class="displaying-num">
-							<?php echo esc_html($total_questions_count); ?> 			<?php esc_html_e('items', CA_TEXT_DOMAIN); ?>
-						</span>
-						<?php if ($total_pages > 1): ?>
-							<span class="pagination-links">
-								<?php
-								$base_url = admin_url('admin.php?page=custom-assessment-questions');
-								$prev_disabled = $current_page <= 1 ? 'disabled' : '';
-								$next_disabled = $current_page >= $total_pages ? 'disabled' : '';
+												// Previous button
+												echo '<a class="prev-page button ' . esc_attr($prev_disabled) . '" href="' . esc_url(add_query_arg('paged', max(1, $current_page - 1), $base_url)) . '">&laquo;</a>';
 
-								// Previous button
-								echo '<a class="prev-page button ' . esc_attr($prev_disabled) . '" href="' . esc_url(add_query_arg('paged', max(1, $current_page - 1), $base_url)) . '">&laquo;</a>';
+												// Page numbers (show up to 5 page numbers)
+												$start_page = max(1, $current_page - 2);
+												$end_page = min($total_pages, $start_page + 4);
 
-								// Page numbers (show up to 5 page numbers)
-								$start_page = max(1, $current_page - 2);
-								$end_page = min($total_pages, $start_page + 4);
+												if ($start_page > 1) {
+													echo '<a class="page-numbers" href="' . esc_url(add_query_arg('paged', 1, $base_url)) . '">1</a>';
+													if ($start_page > 2) {
+														echo '<span class="dots">…</span>';
+													}
+												}
 
-								if ($start_page > 1) {
-									echo '<a class="page-numbers" href="' . esc_url(add_query_arg('paged', 1, $base_url)) . '">1</a>';
-									if ($start_page > 2) {
-										echo '<span class="dots">…</span>';
-									}
-								}
+												for ($i = $start_page; $i <= $end_page; $i++) {
+													$active_class = ($i === $current_page) ? 'current' : '';
+													echo '<a class="page-numbers ' . esc_attr($active_class) . '" href="' . esc_url(add_query_arg('paged', $i, $base_url)) . '">' . esc_html($i) . '</a>';
+												}
 
-								for ($i = $start_page; $i <= $end_page; $i++) {
-									$active_class = ($i === $current_page) ? 'current' : '';
-									echo '<a class="page-numbers ' . esc_attr($active_class) . '" href="' . esc_url(add_query_arg('paged', $i, $base_url)) . '">' . esc_html($i) . '</a>';
-								}
+												if ($end_page < $total_pages) {
+													if ($end_page < $total_pages - 1) {
+														echo '<span class="dots">…</span>';
+													}
+													echo '<a class="page-numbers" href="' . esc_url(add_query_arg('paged', $total_pages, $base_url)) . '">' . esc_html($total_pages) . '</a>';
+												}
 
-								if ($end_page < $total_pages) {
-									if ($end_page < $total_pages - 1) {
-										echo '<span class="dots">…</span>';
-									}
-									echo '<a class="page-numbers" href="' . esc_url(add_query_arg('paged', $total_pages, $base_url)) . '">' . esc_html($total_pages) . '</a>';
-								}
-
-								// Next button
-								echo '<a class="next-page button ' . esc_attr($next_disabled) . '" href="' . esc_url(add_query_arg('paged', min($total_pages, $current_page + 1), $base_url)) . '">&raquo;</a>';
-								?>
-							</span>
-						<?php endif; ?>
-					</div>
-					<br class="clear">
+												// Next button
+												echo '<a class="next-page button ' . esc_attr($next_disabled) . '" href="' . esc_url(add_query_arg('paged', min($total_pages, $current_page + 1), $base_url)) . '">&raquo;</a>';
+												?>
+											</span>
+									<?php endif; ?>
+								</div>
+								<br class="clear">
+							</div>
+					<?php endif; ?>
 				</div>
-			<?php endif; ?>
-		</div>
-		<?php
+				<?php
 	}
 
 	/**
@@ -1782,267 +1784,272 @@ class CA_Admin
 		$paged_categories = array_slice($categories, $offset, $per_page);
 
 		?>
-		<div class="wrap ca-admin-wrap">
-			<h1 class="ca-admin-title">
-				<span class="ca-admin-title-icon dashicons dashicons-category"></span>
-				<?php esc_html_e('Assessment Categories', CA_TEXT_DOMAIN); ?>
-			</h1>
+				<div class="wrap ca-admin-wrap">
+					<h1 class="ca-admin-title">
+						<span class="ca-admin-title-icon dashicons dashicons-category"></span>
+						<?php esc_html_e('Assessment Categories', CA_TEXT_DOMAIN); ?>
+					</h1>
 
-			<script type="text/javascript">
-				var ca_admin_data = {
-					nonce: '<?php echo esc_js(wp_create_nonce("ca_edit_category_action")); ?>'
-				};
-			</script>
+					<script type="text/javascript">
+						var ca_admin_data = {
+							nonce: '<?php echo esc_js(wp_create_nonce("ca_edit_category_action")); ?>'
+						};
+					</script>
 
-			<?php if (isset($_GET['message'])): ?>
-				<?php if ('duplicate' === $_GET['message']): ?>
-					<div class="notice notice-error is-dismissible">
-						<p><?php esc_html_e('Error: Category already exists. Please choose a different name.', CA_TEXT_DOMAIN); ?></p>
-					</div>
-				<?php else: ?>
-					<div class="notice notice-success is-dismissible">
-						<p>
-							<?php
-							if ('added' === $_GET['message']) {
-								esc_html_e('Category added successfully.', CA_TEXT_DOMAIN);
-							} elseif ('deleted' === $_GET['message']) {
-								esc_html_e('Category deleted successfully.', CA_TEXT_DOMAIN);
-							} elseif ('edited' === $_GET['message']) {
-								esc_html_e('Category updated successfully.', CA_TEXT_DOMAIN);
-							}
-							?>
-						</p>
-					</div>
-				<?php endif; ?>
-			<?php endif; ?>
+					<?php if (isset($_GET['message'])): ?>
+							<?php if ('duplicate' === $_GET['message']): ?>
+									<div class="notice notice-error is-dismissible">
+										<p><?php esc_html_e('Error: Category already exists. Please choose a different name.', CA_TEXT_DOMAIN); ?></p>
+									</div>
+							<?php else: ?>
+									<div class="notice notice-success is-dismissible">
+										<p>
+											<?php
+											if ('added' === $_GET['message']) {
+												esc_html_e('Category added successfully.', CA_TEXT_DOMAIN);
+											} elseif ('deleted' === $_GET['message']) {
+												esc_html_e('Category deleted successfully.', CA_TEXT_DOMAIN);
+											} elseif ('edited' === $_GET['message']) {
+												esc_html_e('Category updated successfully.', CA_TEXT_DOMAIN);
+											}
+											?>
+										</p>
+									</div>
+							<?php endif; ?>
+					<?php endif; ?>
 
-			<!-- Basic Statistics -->
-			<div class="ca-categories-stats-grid">
-				<div class="ca-stat-card">
-					<div class="ca-stat-value"><?php echo esc_html(count($categories)); ?></div>
-					<div class="ca-stat-label"><?php esc_html_e('Total Categories', CA_TEXT_DOMAIN); ?></div>
-				</div>
-
-				<?php
-				// Calculate question counts for each category
-				$questions = CA_Questions::get_flat();
-				$category_counts = array_count_values(array_column($questions, 'category'));
-
-				// Find most used category
-				$most_used_category = '';
-				$most_used_count = 0;
-				$least_used_category = '';
-				$least_used_count = PHP_INT_MAX;
-
-				foreach ($category_counts as $category => $count) {
-					if ($count > $most_used_count) {
-						$most_used_count = $count;
-						$most_used_category = $category;
-					}
-					if ($count < $least_used_count) {
-						$least_used_count = $count;
-						$least_used_category = $category;
-					}
-				}
-				?>
-
-				<div class="ca-stat-card">
-					<div class="ca-stat-value"><?php echo esc_html($most_used_category); ?></div>
-					<div class="ca-stat-label"><?php esc_html_e('Most Used Category', CA_TEXT_DOMAIN); ?></div>
-					<div class="ca-stat-sublabel"><?php echo esc_html($most_used_count . ' questions'); ?></div>
-				</div>
-
-				<div class="ca-stat-card">
-					<div class="ca-stat-value"><?php echo esc_html($least_used_category); ?></div>
-					<div class="ca-stat-label"><?php esc_html_e('Least Used Category', CA_TEXT_DOMAIN); ?></div>
-					<div class="ca-stat-sublabel"><?php echo esc_html($least_used_count . ' questions'); ?></div>
-				</div>
-			</div>
-
-			<div class="ca-categories-header">
-				<div class="ca-categories-stats">
-					<span class="ca-stat-item">
-						<strong><?php echo esc_html(count($categories)); ?></strong>
-						<?php esc_html_e('Total Categories', CA_TEXT_DOMAIN); ?>
-					</span>
-				</div>
-			</div>
-
-			<div class="ca-categories-actions">
-				<div class="ca-category-form">
-					<h3><?php esc_html_e('Add New Category', CA_TEXT_DOMAIN); ?></h3>
-					<form method="post" action="">
-						<?php wp_nonce_field('ca_categories_action', '_wpnonce'); ?>
-						<input type="hidden" name="ca_action" value="add_category">
-						<div style="display: flex; gap: 10px; align-items: center; margin-bottom: 20px;">
-							<div class="ca-form-field">
-								<input type="text" id="new_category" name="new_category"
-									placeholder="<?php esc_attr_e('Enter category name', CA_TEXT_DOMAIN); ?>" required>
-							</div>
-							<div class="ca-form-actions">
-								<button type="submit" class="button button-primary">
-									<?php esc_html_e('Add Category', CA_TEXT_DOMAIN); ?>
-								</button>
-							</div>
+					<!-- Basic Statistics -->
+					<div class="ca-categories-stats-grid">
+						<div class="ca-stat-card">
+							<div class="ca-stat-value"><?php echo esc_html(count($categories)); ?></div>
+							<div class="ca-stat-label"><?php esc_html_e('Total Categories', CA_TEXT_DOMAIN); ?></div>
 						</div>
-					</form>
-				</div>
-			</div>
-
-			<?php if (empty($categories)): ?>
-				<div class="ca-admin-empty">
-					<span class="dashicons dashicons-category" aria-hidden="true"></span>
-					<p><?php esc_html_e('No categories found. Add your first category above.', CA_TEXT_DOMAIN); ?></p>
-				</div>
-			<?php else: ?>
-				<div class="tablenav top">
-					<div class="tablenav-pages">
-						<span class="displaying-num">
-							<?php echo esc_html($total_categories); ?> 			<?php esc_html_e('items', CA_TEXT_DOMAIN); ?>
-						</span>
-						<?php if ($total_pages > 1): ?>
-							<span class="pagination-links">
-								<?php
-								$base_url = admin_url('admin.php?page=custom-assessment-categories');
-								$prev_disabled = $current_page <= 1 ? 'disabled' : '';
-								$next_disabled = $current_page >= $total_pages ? 'disabled' : '';
-
-								// Previous button
-								echo '<a class="prev-page button ' . esc_attr($prev_disabled) . '" href="' . esc_url(add_query_arg('paged', max(1, $current_page - 1), $base_url)) . '">&laquo;</a>';
-
-								// Page numbers (show up to 5 page numbers)
-								$start_page = max(1, $current_page - 2);
-								$end_page = min($total_pages, $start_page + 4);
-
-								if ($start_page > 1) {
-									echo '<a class="page-numbers" href="' . esc_url(add_query_arg('paged', 1, $base_url)) . '">1</a>';
-									if ($start_page > 2) {
-										echo '<span class="dots">…</span>';
-									}
-								}
-
-								for ($i = $start_page; $i <= $end_page; $i++) {
-									$active_class = ($i === $current_page) ? 'current' : '';
-									echo '<a class="page-numbers ' . esc_attr($active_class) . '" href="' . esc_url(add_query_arg('paged', $i, $base_url)) . '">' . esc_html($i) . '</a>';
-								}
-
-								if ($end_page < $total_pages) {
-									if ($end_page < $total_pages - 1) {
-										echo '<span class="dots">…</span>';
-									}
-									echo '<a class="page-numbers" href="' . esc_url(add_query_arg('paged', $total_pages, $base_url)) . '">' . esc_html($total_pages) . '</a>';
-								}
-
-								// Next button
-								echo '<a class="next-page button ' . esc_attr($next_disabled) . '" href="' . esc_url(add_query_arg('paged', min($total_pages, $current_page + 1), $base_url)) . '">&raquo;</a>';
-								?>
-							</span>
-						<?php endif; ?>
-					</div>
-					<br class="clear">
-				</div>
-
-				<table class="wp-list-table widefat fixed striped ca-admin-table">
-					<thead>
-						<tr>
-							<th class="ca-col-id"><?php esc_html_e('#', CA_TEXT_DOMAIN); ?></th>
-							<th><?php esc_html_e('Category Name', CA_TEXT_DOMAIN); ?></th>
-							<th><?php esc_html_e('Questions Count', CA_TEXT_DOMAIN); ?></th>
-							<th><?php esc_html_e('Actions', CA_TEXT_DOMAIN); ?></th>
-						</tr>
-					</thead>
-					<tbody>
+				
 						<?php
+						// Calculate question counts for each category
 						$questions = CA_Questions::get_flat();
 						$category_counts = array_count_values(array_column($questions, 'category'));
 
-						foreach ($paged_categories as $index => $category):
-							$global_index = $offset + $index;
-							$count = isset($category_counts[$category]) ? $category_counts[$category] : 0;
-							?>
-							<tr>
-								<td class="ca-col-id"><?php echo esc_html($global_index + 1); ?></td>
-								<td>
-									<strong class="ca-category-name" id="category-name-<?php echo esc_attr($global_index); ?>">
-										<?php echo esc_html($category); ?>
-									</strong>
-									<input type="text" class="ca-category-input"
-										id="category-input-<?php echo esc_attr($global_index); ?>"
-										value="<?php echo esc_attr($category); ?>" style="display: none; width: 100%;"
-										data-original="<?php echo esc_attr($category); ?>">
-								</td>
-								<td><?php echo esc_html($count); ?></td>
-								<td>
-									<button type="button" class="button button-small ca-edit-btn"
-										data-index="<?php echo esc_attr($global_index); ?>"
-										data-category="<?php echo esc_attr($category); ?>">
-										<?php esc_html_e('Edit', CA_TEXT_DOMAIN); ?>
-									</button>
-									<button type="button" class="button button-small ca-save-btn" style="display: none;"
-										data-index="<?php echo esc_attr($global_index); ?>"
-										data-category="<?php echo esc_attr($category); ?>">
-										<?php esc_html_e('Save', CA_TEXT_DOMAIN); ?>
-									</button>
-									<form method="post" style="display: inline;"
-										onsubmit="return confirm('<?php echo esc_js(__('Are you sure you want to delete this category? This will also delete all questions in this category.', CA_TEXT_DOMAIN)); ?>');">
-										<?php wp_nonce_field('ca_categories_action', '_wpnonce'); ?>
-										<input type="hidden" name="ca_action" value="delete_category">
-										<input type="hidden" name="category_name" value="<?php echo esc_attr($category); ?>">
-										<button type="submit" class="button button-small button-secondary">
-											<?php esc_html_e('Delete', CA_TEXT_DOMAIN); ?>
-										</button>
-									</form>
-								</td>
-							</tr>
-						<?php endforeach; ?>
-					</tbody>
-				</table>
+						// Find most used category
+						$most_used_category = '';
+						$most_used_count = 0;
+						$least_used_category = '';
+						$least_used_count = PHP_INT_MAX;
 
-				<div class="tablenav bottom">
-					<div class="tablenav-pages">
-						<span class="displaying-num">
-							<?php echo esc_html($total_categories); ?> 			<?php esc_html_e('items', CA_TEXT_DOMAIN); ?>
-						</span>
-						<?php if ($total_pages > 1): ?>
-							<span class="pagination-links">
-								<?php
-								// Previous button
-								echo '<a class="prev-page button ' . esc_attr($prev_disabled) . '" href="' . esc_url(add_query_arg('paged', max(1, $current_page - 1), $base_url)) . '">&laquo;</a>';
-
-								// Page numbers (show up to 5 page numbers)
-								$start_page = max(1, $current_page - 2);
-								$end_page = min($total_pages, $start_page + 4);
-
-								if ($start_page > 1) {
-									echo '<a class="page-numbers" href="' . esc_url(add_query_arg('paged', 1, $base_url)) . '">1</a>';
-									if ($start_page > 2) {
-										echo '<span class="dots">…</span>';
-									}
-								}
-
-								for ($i = $start_page; $i <= $end_page; $i++) {
-									$active_class = ($i === $current_page) ? 'current' : '';
-									echo '<a class="page-numbers ' . esc_attr($active_class) . '" href="' . esc_url(add_query_arg('paged', $i, $base_url)) . '">' . esc_html($i) . '</a>';
-								}
-
-								if ($end_page < $total_pages) {
-									if ($end_page < $total_pages - 1) {
-										echo '<span class="dots">…</span>';
-									}
-									echo '<a class="page-numbers" href="' . esc_url(add_query_arg('paged', $total_pages, $base_url)) . '">' . esc_html($total_pages) . '</a>';
-								}
-
-								// Next button
-								echo '<a class="next-page button ' . esc_attr($next_disabled) . '" href="' . esc_url(add_query_arg('paged', min($total_pages, $current_page + 1), $base_url)) . '">&raquo;</a>';
-								?>
-							</span>
-						<?php endif; ?>
+						foreach ($category_counts as $category => $count) {
+							if ($count > $most_used_count) {
+								$most_used_count = $count;
+								$most_used_category = $category;
+							}
+							if ($count < $least_used_count) {
+								$least_used_count = $count;
+								$least_used_category = $category;
+							}
+						}
+						?>
+				
+						<div class="ca-stat-card">
+							<div class="ca-stat-value"><?php echo esc_html($most_used_category); ?></div>
+							<div class="ca-stat-label"><?php esc_html_e('Most Used Category', CA_TEXT_DOMAIN); ?></div>
+							<div class="ca-stat-sublabel"><?php echo esc_html($most_used_count . ' questions'); ?></div>
+						</div>
+				
+						<div class="ca-stat-card">
+							<div class="ca-stat-value"><?php echo esc_html($least_used_category); ?></div>
+							<div class="ca-stat-label"><?php esc_html_e('Least Used Category', CA_TEXT_DOMAIN); ?></div>
+							<div class="ca-stat-sublabel"><?php echo esc_html($least_used_count . ' questions'); ?></div>
+						</div>
 					</div>
-					<br class="clear">
+
+					<div class="ca-categories-header">
+						<div class="ca-categories-stats">
+							<span class="ca-stat-item">
+								<strong><?php echo esc_html(count($categories)); ?></strong>
+								<?php esc_html_e('Total Categories', CA_TEXT_DOMAIN); ?>
+							</span>
+						</div>
+					</div>
+
+					<div class="ca-categories-actions">
+						<div class="ca-category-form">
+							<h3><?php esc_html_e('Add New Category', CA_TEXT_DOMAIN); ?></h3>
+							<form method="post" action="">
+								<?php wp_nonce_field('ca_categories_action', '_wpnonce'); ?>
+								<input type="hidden" name="ca_action" value="add_category">
+								<div style="display: flex; gap: 10px; align-items: center; margin-bottom: 20px;">
+									<div class="ca-form-field">
+										<input type="text" id="new_category" name="new_category"
+											placeholder="<?php esc_attr_e('Enter category name', CA_TEXT_DOMAIN); ?>" required>
+								</div>
+								<div class="ca-form-actions">
+									<button type="submit" class="button button-primary">
+											<?php esc_html_e('Add Category', CA_TEXT_DOMAIN); ?>
+									</button>
+								</div>
+								</div>
+							</form>
+						</div>
+					</div>
+
+					<?php if (empty($categories)): ?>
+							<div class="ca-admin-empty">
+								<span class="dashicons dashicons-category" aria-hidden="true"></span>
+								<p><?php esc_html_e('No categories found. Add your first category above.', CA_TEXT_DOMAIN); ?></p>
+							</div>
+					<?php else: ?>
+							<div class="tablenav top">
+								<div class="tablenav-pages">
+									<span class="displaying-num">
+										<?php echo esc_html($total_categories); ?>			 			<?php esc_html_e('items', CA_TEXT_DOMAIN); ?>
+									</span>
+									<?php if ($total_pages > 1): ?>
+											<span class="pagination-links">
+												<?php
+												$base_url = admin_url('admin.php?page=custom-assessment-categories');
+												$prev_disabled = $current_page <= 1 ? 'disabled' : '';
+												$next_disabled = $current_page >= $total_pages ? 'disabled' : '';
+
+												// Previous button
+												echo '<a class="prev-page button ' . esc_attr($prev_disabled) . '" href="' . esc_url(add_query_arg('paged', max(1, $current_page - 1), $base_url)) . '">&laquo;</a>';
+
+												// Page numbers (show up to 5 page numbers)
+												$start_page = max(1, $current_page - 2);
+												$end_page = min($total_pages, $start_page + 4);
+
+												if ($start_page > 1) {
+													echo '<a class="page-numbers" href="' . esc_url(add_query_arg('paged', 1, $base_url)) . '">1</a>';
+													if ($start_page > 2) {
+														echo '<span class="dots">…</span>';
+													}
+												}
+
+												for ($i = $start_page; $i <= $end_page; $i++) {
+													$active_class = ($i === $current_page) ? 'current' : '';
+													echo '<a class="page-numbers ' . esc_attr($active_class) . '" href="' . esc_url(add_query_arg('paged', $i, $base_url)) . '">' . esc_html($i) . '</a>';
+												}
+
+												if ($end_page < $total_pages) {
+													if ($end_page < $total_pages - 1) {
+														echo '<span class="dots">…</span>';
+													}
+													echo '<a class="page-numbers" href="' . esc_url(add_query_arg('paged', $total_pages, $base_url)) . '">' . esc_html($total_pages) . '</a>';
+												}
+
+												// Next button
+												echo '<a class="next-page button ' . esc_attr($next_disabled) . '" href="' . esc_url(add_query_arg('paged', min($total_pages, $current_page + 1), $base_url)) . '">&raquo;</a>';
+												?>
+											</span>
+									<?php endif; ?>
+								</div>
+								<br class="clear">
+							</div>
+
+							<table class="wp-list-table widefat fixed striped ca-admin-table">
+								<thead>
+									<tr>
+										<th class="ca-col-id"><?php esc_html_e('#', CA_TEXT_DOMAIN); ?></th>
+										<th><?php esc_html_e('Category Name', CA_TEXT_DOMAIN); ?></th>
+										<th><?php esc_html_e('Questions Count', CA_TEXT_DOMAIN); ?></th>
+										<th><?php esc_html_e('Actions', CA_TEXT_DOMAIN); ?></th>
+									</tr>
+								</thead>
+								<tbody>
+									<?php
+									$questions = CA_Questions::get_flat();
+									$category_counts = array_count_values(array_column($questions, 'category'));
+
+									foreach ($paged_categories as $index => $category):
+										$global_index = $offset + $index;
+										$count = isset($category_counts[$category]) ? $category_counts[$category] : 0;
+										?>
+											<tr>
+												<td class="ca-col-id"><?php echo esc_html($global_index + 1); ?></td>
+												<td>
+													<strong class="ca-category-name" id="category-name-<?php echo esc_attr($global_index); ?>">
+														<?php echo esc_html($category); ?>
+													</strong>
+													<input type="text" class="ca-category-input"
+														id="category-input-<?php echo esc_attr($global_index); ?>"
+														value="<?php echo esc_attr($category); ?>" style="display: none; width: 100%;"
+														data-original="<?php echo esc_attr($category); ?>">
+												</td>
+												<td><?php echo esc_html($count); ?></td>
+												<td>
+													<button type="button" class="button button-small ca-edit-btn"
+														data-index="<?php echo esc_attr($global_index); ?>"
+														data-category="<?php echo esc_attr($category); ?>">
+														<?php esc_html_e('Edit', CA_TEXT_DOMAIN); ?>
+													</button>
+													<button type="button" class="button button-small ca-save-btn" style="display: none;"
+														data-index="<?php echo esc_attr($global_index); ?>"
+														data-category="<?php echo esc_attr($category); ?>">
+														<?php esc_html_e('Save', CA_TEXT_DOMAIN); ?>
+													</button>
+													<button type="button" class="button button-small button-secondary ca-category-cancel-btn" style="display: none;"
+														data-index="<?php echo esc_attr($global_index); ?>"
+														data-category="<?php echo esc_attr($category); ?>">
+														<?php esc_html_e('Cancel', CA_TEXT_DOMAIN); ?>
+													</button>
+													<form method="post" style="display: inline;"
+														onsubmit="return confirm('<?php echo esc_js(__('Are you sure you want to delete this category? This will also delete all questions in this category.', CA_TEXT_DOMAIN)); ?>');">
+														<?php wp_nonce_field('ca_categories_action', '_wpnonce'); ?>
+														<input type="hidden" name="ca_action" value="delete_category">
+														<input type="hidden" name="category_name" value="<?php echo esc_attr($category); ?>">
+														<button type="submit" class="button button-small button-secondary">
+															<?php esc_html_e('Delete', CA_TEXT_DOMAIN); ?>
+														</button>
+													</form>
+												</td>
+											</tr>
+									<?php endforeach; ?>
+								</tbody>
+							</table>
+
+							<div class="tablenav bottom">
+								<div class="tablenav-pages">
+									<span class="displaying-num">
+										<?php echo esc_html($total_categories); ?>			 			<?php esc_html_e('items', CA_TEXT_DOMAIN); ?>
+									</span>
+									<?php if ($total_pages > 1): ?>
+											<span class="pagination-links">
+												<?php
+												// Previous button
+												echo '<a class="prev-page button ' . esc_attr($prev_disabled) . '" href="' . esc_url(add_query_arg('paged', max(1, $current_page - 1), $base_url)) . '">&laquo;</a>';
+
+												// Page numbers (show up to 5 page numbers)
+												$start_page = max(1, $current_page - 2);
+												$end_page = min($total_pages, $start_page + 4);
+
+												if ($start_page > 1) {
+													echo '<a class="page-numbers" href="' . esc_url(add_query_arg('paged', 1, $base_url)) . '">1</a>';
+													if ($start_page > 2) {
+														echo '<span class="dots">…</span>';
+													}
+												}
+
+												for ($i = $start_page; $i <= $end_page; $i++) {
+													$active_class = ($i === $current_page) ? 'current' : '';
+													echo '<a class="page-numbers ' . esc_attr($active_class) . '" href="' . esc_url(add_query_arg('paged', $i, $base_url)) . '">' . esc_html($i) . '</a>';
+												}
+
+												if ($end_page < $total_pages) {
+													if ($end_page < $total_pages - 1) {
+														echo '<span class="dots">…</span>';
+													}
+													echo '<a class="page-numbers" href="' . esc_url(add_query_arg('paged', $total_pages, $base_url)) . '">' . esc_html($total_pages) . '</a>';
+												}
+
+												// Next button
+												echo '<a class="next-page button ' . esc_attr($next_disabled) . '" href="' . esc_url(add_query_arg('paged', min($total_pages, $current_page + 1), $base_url)) . '">&raquo;</a>';
+												?>
+											</span>
+									<?php endif; ?>
+								</div>
+								<br class="clear">
+							</div>
+					<?php endif; ?>
 				</div>
-			<?php endif; ?>
-		</div>
-		<?php
+				<?php
 	}
 
 	/**
