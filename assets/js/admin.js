@@ -194,7 +194,14 @@ jQuery(document).ready(function ($) {
         : [];
 
       var $tr = $("<tr>");
-      $tr.append($("<td>").addClass("ca-col-id").text((questionIndex || 0) + 1));
+      var $idTd = $("<td>").addClass("ca-col-id");
+      var $idCheckbox = $("<input>")
+        .attr("type", "checkbox")
+        .addClass("ca-question-select")
+        .val(questionIndex);
+      $idTd.append($idCheckbox);
+      $idTd.append((questionIndex || 0) + 1);
+      $tr.append($idTd);
 
       // Category cell (span + hidden dropdown)
       var $categoryTd = $("<td>").addClass("ca-col-category");
@@ -225,7 +232,6 @@ jQuery(document).ready(function ($) {
       // Priority cell (static)
       var $priorityTd = $("<td>").addClass("ca-col-priority");
       var priorityVal = item.priority != null ? parseInt(item.priority, 10) : 0;
-      var priorityMax = window.CA_ADMIN_QUESTIONS_PRIORITY_MAX || 5;
 
       var $prioritySpan = $("<span>")
         .addClass("ca-question-priority-text")
@@ -240,7 +246,6 @@ jQuery(document).ready(function ($) {
         .attr("name", "new_priority")
         .attr("data-original", priorityVal)
         .attr("min", 1)
-        .attr("max", priorityMax)
         .attr("step", 1)
         .attr("autocomplete", "off")
         .val(priorityVal);
@@ -929,6 +934,106 @@ jQuery(document).ready(function ($) {
       });
       $category.on("change", updateSubmitState);
       $priority.on("change", updateSubmitState);
+    })();
+  }
+
+  // Bulk Edit UX for Assessment Questions
+  if ($("#ca-bulk-edit-form").length) {
+    (function initBulkEditUX() {
+      var $openBtn = $(".ca-bulk-edit-open").first();
+      var $overlay = $("#ca-bulk-edit-modal-overlay");
+      var $cancelBtn = $(".ca-bulk-edit-cancel");
+      var $selectedCount = $(".ca-bulk-selected-count");
+      var $allSelect = $("#ca-bulk-select-all");
+      var $indexesContainer = $("#ca-bulk-selected-indexes");
+      var $indexesCount = $("#ca-bulk-question-indexes-count");
+      var $bulkForm = $("#ca-bulk-edit-form");
+
+      function getSelectedIndexes() {
+        return $(".ca-question-select:checked")
+          .map(function () {
+            return $(this).val();
+          })
+          .get();
+      }
+
+      function syncSelectAll() {
+        var $items = $(".ca-question-select");
+        var total = $items.length;
+        var selected = $items.filter(":checked").length;
+
+        if (total === 0) {
+          $allSelect.prop("checked", false);
+          return;
+        }
+
+        $allSelect.prop("checked", selected === total);
+      }
+
+      function updateBulkBar() {
+        var selectedArr = getSelectedIndexes();
+        var count = selectedArr.length;
+
+        if ($selectedCount.length) {
+          $selectedCount.text(count + " selected");
+        }
+
+        if ($openBtn.length) {
+          $openBtn.prop("disabled", count === 0);
+        }
+
+        syncSelectAll();
+      }
+
+      // Open modal
+      $(document).on("click", ".ca-bulk-edit-open", function (e) {
+        e.preventDefault();
+        updateBulkBar();
+        if ($openBtn.prop("disabled")) return;
+        $overlay.show();
+      });
+
+      // Cancel modal
+      $(document).on("click", ".ca-bulk-edit-cancel", function (e) {
+        e.preventDefault();
+        $overlay.hide();
+      });
+
+      // Toggle select-all
+      $(document).on("change", "#ca-bulk-select-all", function () {
+        var checked = $(this).is(":checked");
+        $(".ca-question-select").prop("checked", checked);
+        updateBulkBar();
+      });
+
+      // Individual selection
+      $(document).on("change", ".ca-question-select", function () {
+        updateBulkBar();
+      });
+
+      // Build hidden index inputs on submit
+      $bulkForm.on("submit", function (e) {
+        var selectedArr = getSelectedIndexes();
+        if (!selectedArr.length) {
+          e.preventDefault();
+          return;
+        }
+
+        $indexesContainer.empty();
+        selectedArr.forEach(function (idx) {
+          $("<input>")
+            .attr("type", "hidden")
+            .attr("name", "question_indexes[]")
+            .val(idx)
+            .appendTo($indexesContainer);
+        });
+        if ($indexesCount.length) {
+          $indexesCount.val(selectedArr.length);
+        }
+      });
+
+      // Init state
+      updateBulkBar();
     })();
   }
 });

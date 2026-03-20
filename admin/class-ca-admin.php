@@ -307,6 +307,55 @@ class CA_Admin
 			}
 		}
 
+		if (isset($_POST['ca_action']) && 'bulk_edit_questions' === $_POST['ca_action'] && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'ca_bulk_edit_question_action')) {
+			$indexes = isset($_POST['question_indexes']) ? (array) $_POST['question_indexes'] : array();
+			$indexes = array_map('absint', $indexes);
+			$indexes = array_values(array_filter($indexes, fn($i) => $i >= 0));
+
+			$bulk_category = isset($_POST['bulk_category']) ? sanitize_text_field(wp_unslash($_POST['bulk_category'])) : '';
+			$bulk_question_text = isset($_POST['bulk_question_text']) ? sanitize_text_field(wp_unslash($_POST['bulk_question_text'])) : '';
+			$bulk_priority = isset($_POST['bulk_priority']) ? absint($_POST['bulk_priority']) : 0;
+
+			$override_category = '' !== $bulk_category;
+			$override_text = '' !== $bulk_question_text;
+			$override_priority = $bulk_priority > 0;
+
+			if (empty($indexes)) {
+				$message = 'bulk_edit_failed';
+				$redirect_url = add_query_arg('message', $message, admin_url('admin.php?page=custom-assessment-questions'));
+				wp_safe_redirect(esc_url_raw($redirect_url));
+				exit;
+			}
+
+			$flat_questions = CA_Questions::get_flat();
+			$updated_any = false;
+
+			foreach ($indexes as $idx) {
+				if (!isset($flat_questions[$idx])) {
+					continue;
+				}
+
+				$original = $flat_questions[$idx];
+				$set_category = $override_category ? $bulk_category : $original['category'];
+				$set_text = $override_text ? $bulk_question_text : $original['text'];
+				$set_priority = $override_priority ? $bulk_priority : (int) $original['priority'];
+
+				// edit_question requires non-empty category/text/priority when editing.
+				// For keep-current, we pass the original values.
+				if (!empty($set_category) && !empty($set_text) && $set_priority > 0) {
+					$ok = $this->edit_question($idx, $set_category, $set_text, $set_priority);
+					if ($ok) {
+						$updated_any = true;
+					}
+				}
+			}
+
+			$message = $updated_any ? 'bulk_edit_success' : 'bulk_edit_failed';
+			$redirect_url = add_query_arg('message', $message, admin_url('admin.php?page=custom-assessment-questions'));
+			wp_safe_redirect(esc_url_raw($redirect_url));
+			exit;
+		}
+
 		if (isset($_POST['ca_action']) && 'add_question' === $_POST['ca_action'] && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'ca_add_question_action')) {
 			$question_text = sanitize_text_field(wp_unslash($_POST['question_text']));
 			$question_category = sanitize_text_field(wp_unslash($_POST['question_category']));
@@ -1183,6 +1232,58 @@ class CA_Admin
 				</div>
 			</div>
 
+			<div class="ca-bulk-actions-bar" style="margin-top: 10px;">
+				<button type="button" class="button button-secondary ca-bulk-edit-open" disabled>
+					<?php esc_html_e('Bulk Edit', CA_TEXT_DOMAIN); ?>
+				</button>
+				<span class="ca-bulk-selected-count">0 selected</span>
+			</div>
+
+			<div class="ca-bulk-edit-modal-overlay" id="ca-bulk-edit-modal-overlay" style="display:none;">
+				<div class="ca-bulk-edit-modal">
+					<h3><?php esc_html_e('Bulk Edit Questions', CA_TEXT_DOMAIN); ?></h3>
+					<form method="post" action="" id="ca-bulk-edit-form">
+						<?php wp_nonce_field('ca_bulk_edit_question_action', '_wpnonce'); ?>
+						<input type="hidden" name="ca_action" value="bulk_edit_questions">
+						<input type="hidden" name="question_indexes_count" id="ca-bulk-question-indexes-count" value="0">
+
+						<div class="ca-bulk-edit-fields">
+							<div class="ca-bulk-field">
+								<label for="ca-bulk-category"><?php esc_html_e('Category', CA_TEXT_DOMAIN); ?></label>
+								<select id="ca-bulk-category" name="bulk_category">
+									<option value=""><?php esc_html_e('Keep current', CA_TEXT_DOMAIN); ?></option>
+									<?php foreach ($categories as $cat): ?>
+										<option value="<?php echo esc_attr($cat); ?>"><?php echo esc_html($cat); ?></option>
+									<?php endforeach; ?>
+								</select>
+							</div>
+
+							<div class="ca-bulk-field">
+								<label for="ca-bulk-priority"><?php esc_html_e('Priority', CA_TEXT_DOMAIN); ?></label>
+								<input type="number" id="ca-bulk-priority" name="bulk_priority" min="1" step="1" placeholder="">
+							</div>
+
+							<div class="ca-bulk-field">
+								<label for="ca-bulk-question-text"><?php esc_html_e('Question Text', CA_TEXT_DOMAIN); ?></label>
+								<textarea id="ca-bulk-question-text" name="bulk_question_text" rows="3" maxlength="500"
+									placeholder="<?php esc_attr_e('Leave empty to keep current', CA_TEXT_DOMAIN); ?>"></textarea>
+							</div>
+						</div>
+
+						<div id="ca-bulk-selected-indexes"></div>
+
+						<div class="ca-bulk-edit-actions">
+							<button type="button" class="button ca-bulk-edit-cancel">
+								<?php esc_html_e('Cancel', CA_TEXT_DOMAIN); ?>
+							</button>
+							<button type="submit" class="button button-primary">
+								<?php esc_html_e('Save Bulk Changes', CA_TEXT_DOMAIN); ?>
+							</button>
+						</div>
+					</form>
+				</div>
+			</div>
+
 			<br />
 
 			<?php if (isset($_GET['message']) && 'question_deleted' === $_GET['message']): ?>
@@ -1205,8 +1306,20 @@ class CA_Admin
 
 			<?php if (isset($_GET['message']) && 'question_edit_failed' === $_GET['message']): ?>
 				<div class="notice notice-error is-dismissible">
-					<p><?php esc_html_e('Unable to update this question. Only custom questions can be edited.', CA_TEXT_DOMAIN); ?>
+					<p><?php esc_html_e('Unable to update this question.', CA_TEXT_DOMAIN); ?>
 					</p>
+				</div>
+			<?php endif; ?>
+
+			<?php if (isset($_GET['message']) && 'bulk_edit_success' === $_GET['message']): ?>
+				<div class="notice notice-success is-dismissible">
+					<p><?php esc_html_e('Bulk edit applied successfully.', CA_TEXT_DOMAIN); ?></p>
+				</div>
+			<?php endif; ?>
+
+			<?php if (isset($_GET['message']) && 'bulk_edit_failed' === $_GET['message']): ?>
+				<div class="notice notice-error is-dismissible">
+					<p><?php esc_html_e('Bulk edit failed. Please select questions and try again.', CA_TEXT_DOMAIN); ?></p>
 				</div>
 			<?php endif; ?>
 
@@ -1219,7 +1332,10 @@ class CA_Admin
 				<table class="wp-list-table widefat fixed striped ca-admin-table">
 					<thead>
 						<tr>
-							<th class="ca-col-id"><?php esc_html_e('#', CA_TEXT_DOMAIN); ?></th>
+							<th class="ca-col-id">
+								<input type="checkbox" id="ca-bulk-select-all" class="ca-bulk-select-all">
+								<?php esc_html_e('#', CA_TEXT_DOMAIN); ?>
+							</th>
 							<th><?php esc_html_e('Category', CA_TEXT_DOMAIN); ?></th>
 							<th><?php esc_html_e('Priority', CA_TEXT_DOMAIN); ?></th>
 							<th><?php esc_html_e('Question', CA_TEXT_DOMAIN); ?></th>
@@ -1229,7 +1345,10 @@ class CA_Admin
 					<tbody>
 						<?php foreach ($paged_questions as $q): ?>
 							<tr>
-								<td class="ca-col-id"><?php echo esc_html($q['index'] + 1); ?></td>
+								<td class="ca-col-id">
+									<input type="checkbox" class="ca-question-select" value="<?php echo esc_attr($q['index']); ?>">
+									<?php echo esc_html($q['index'] + 1); ?>
+								</td>
 								<td class="ca-col-category">
 									<span class="ca-question-category-text" data-original="<?php echo esc_attr($q['category']); ?>">
 										<?php echo esc_html($q['category']); ?>
@@ -1250,8 +1369,7 @@ class CA_Admin
 									</span>
 									<input type="number" class="ca-question-priority-input" style="display: none;"
 										form="ca-edit-question-form-<?php echo esc_attr($q['index']); ?>" name="new_priority"
-										value="<?php echo esc_attr($q['priority']); ?>" min="1"
-										max="<?php echo esc_attr($priority_end); ?>" step="1" autocomplete="off"
+										value="<?php echo esc_attr($q['priority']); ?>" min="1" step="1" autocomplete="off"
 										data-original="<?php echo esc_attr($q['priority']); ?>">
 								</td>
 								<td class="ca-col-question">

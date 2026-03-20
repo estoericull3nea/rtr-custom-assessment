@@ -657,3 +657,93 @@ body,
 .ca-col-actions .ca-question-save-btn {
   margin: 0 2px 0 0;
 }
+
+/* --- Bulk Edit Modal (Assessment Questions) ------------- */
+.ca-bulk-actions-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 10px 0 15px;
+}
+
+.ca-bulk-selected-count {
+  color: var(--ca-text-muted);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.ca-bulk-edit-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 99999;
+  padding: 60px 16px;
+}
+
+.ca-bulk-edit-modal {
+  max-width: 860px;
+  margin: 0 auto;
+  background: #fff;
+  border: 1px solid var(--ca-border);
+  border-radius: var(--ca-radius);
+  padding: 22px 22px 20px;
+  box-shadow: 0 10px 35px rgba(0, 0, 0, 0.2);
+}
+
+.ca-bulk-edit-modal h3 {
+  margin: 0 0 14px !important;
+  font-weight: 800 !important;
+}
+
+.ca-bulk-edit-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 18px;
+}
+
+.ca-bulk-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ca-bulk-field label {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ca-text-muted);
+}
+
+#ca-bulk-priority,
+#ca-bulk-question-text,
+#ca-bulk-category,
+#ca-bulk-category option,
+#ca-bulk-category select,
+#ca-bulk-category input,
+#ca-bulk-priority input {
+  font-family: inherit;
+}
+
+.ca-bulk-edit-modal input[type="number"],
+.ca-bulk-edit-modal select,
+.ca-bulk-edit-modal textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--ca-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  outline: none;
+  box-shadow: none;
+}
+
+.ca-bulk-edit-modal textarea {
+  resize: vertical;
+}
+
+.ca-bulk-edit-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
