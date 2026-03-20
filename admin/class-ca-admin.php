@@ -1325,12 +1325,6 @@ class CA_Admin
 					<div class="ca-stat-label"><?php esc_html_e('Most Used Category', CA_TEXT_DOMAIN); ?></div>
 					<div class="ca-stat-sublabel"><?php echo esc_html($most_used_count . ' questions'); ?></div>
 				</div>
-
-				<div class="ca-stat-card">
-					<div class="ca-stat-value"><?php echo esc_html($most_used_priority); ?></div>
-					<div class="ca-stat-label"><?php esc_html_e('Most Used Priority', CA_TEXT_DOMAIN); ?></div>
-					<div class="ca-stat-sublabel"><?php echo esc_html($most_used_priority_count . ' questions'); ?></div>
-				</div>
 			</div>
 
 			<!-- Add Question Form -->
