@@ -309,13 +309,19 @@ jQuery(document).ready(function ($) {
         .attr("data-index", questionIndex)
         .text("Edit");
 
+      var $cancelBtn = $("<button>")
+        .attr("type", "button")
+        .addClass("button button-small button-secondary ca-question-cancel-btn")
+        .css("display", "none")
+        .text("Cancel");
+
       var $saveBtn = $("<button>")
         .attr("type", "submit")
         .addClass("button button-small button-primary ca-question-save-btn")
         .css("display", "none")
         .text("Save");
 
-      $editForm.append($editNonceField, $editActionField, $editIndexField, $editBtn, $saveBtn);
+      $editForm.append($editNonceField, $editActionField, $editIndexField, $editBtn, $cancelBtn, $saveBtn);
       $actionsTd.append($editForm);
 
       // Delete form
@@ -802,6 +808,7 @@ jQuery(document).ready(function ($) {
     var $priorityText = $row.find(".ca-question-priority-text");
     var $prioritySelect = $row.find(".ca-question-priority-select");
     var $editBtn = $row.find(".ca-question-edit-btn");
+    var $cancelBtn = $row.find(".ca-question-cancel-btn");
     var $saveBtn = $row.find(".ca-question-save-btn");
 
     $categoryText.hide();
@@ -812,6 +819,7 @@ jQuery(document).ready(function ($) {
     $prioritySelect.show();
 
     $editBtn.hide();
+    $cancelBtn.show();
     $saveBtn.show();
   }
 
@@ -819,6 +827,7 @@ jQuery(document).ready(function ($) {
     var $categorySelect = $row.find(".ca-question-category-select");
     var $questionInput = $row.find(".ca-question-text-input");
     var $prioritySelect = $row.find(".ca-question-priority-select");
+    var $cancelBtn = $row.find(".ca-question-cancel-btn");
 
     var origCat = $categorySelect.data("original");
     var origText = $questionInput.data("original");
@@ -850,6 +859,7 @@ jQuery(document).ready(function ($) {
     $prioritySelect.hide();
 
     $row.find(".ca-question-edit-btn").show();
+    $cancelBtn.hide();
     $row.find(".ca-question-save-btn").hide();
   }
 
@@ -864,6 +874,12 @@ jQuery(document).ready(function ($) {
     } else {
       enableQuestionEditMode($row);
     }
+  });
+
+  $(document).on("click", ".ca-question-cancel-btn", function (e) {
+    e.preventDefault();
+    var $row = $(this).closest("tr");
+    cancelQuestionEditMode($row);
   });
 
   $(document).on("keydown", function (e) {

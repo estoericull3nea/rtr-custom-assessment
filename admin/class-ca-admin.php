@@ -1277,6 +1277,10 @@ class CA_Admin
 											data-index="<?php echo esc_attr($q['index']); ?>">
 											<?php esc_html_e('Edit', CA_TEXT_DOMAIN); ?>
 										</button>
+										<button type="button" class="button button-small button-secondary ca-question-cancel-btn"
+											style="display: none;">
+											<?php esc_html_e('Cancel', CA_TEXT_DOMAIN); ?>
+										</button>
 										<button type="submit" class="button button-small button-primary ca-question-save-btn"
 											style="display: none;">
 											<?php esc_html_e('Save', CA_TEXT_DOMAIN); ?>
