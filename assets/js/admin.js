@@ -1048,8 +1048,27 @@ jQuery(document).ready(function ($) {
 
         $saveBtn.prop("disabled", false);
       },
-      error: function () {
-        alert("Network/server error while saving.");
+      error: function (xhr) {
+        var msg =
+          "Unable to save this question. Please check your Priority value and try again.";
+
+        // jQuery may reject non-2xx responses, so we try to extract the message.
+        try {
+          if (xhr && xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message) {
+            msg = xhr.responseJSON.data.message;
+          } else if (xhr && xhr.responseJSON && xhr.responseJSON.message) {
+            msg = xhr.responseJSON.message;
+          } else if (xhr && xhr.responseText) {
+            var parsed = JSON.parse(xhr.responseText);
+            if (parsed && parsed.data && parsed.data.message) {
+              msg = parsed.data.message;
+            }
+          }
+        } catch (e) {
+          // Keep fallback message.
+        }
+
+        alert(msg);
         $saveBtn.prop("disabled", false);
       },
     });

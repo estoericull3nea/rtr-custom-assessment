@@ -299,6 +299,30 @@ class CA_Admin
 			$new_priority = isset($_POST['new_priority']) ? absint($_POST['new_priority']) : 0;
 
 			if ($question_index >= 0 && '' !== $new_category && '' !== $new_question_text && $new_priority > 0) {
+				// Enforce unique priority within the same category (except the current question).
+				$flat_questions = CA_Questions::get_flat();
+				$priority_exists = false;
+				foreach ($flat_questions as $q) {
+					if (!isset($q['index'], $q['category'], $q['priority'])) {
+						continue;
+					}
+					$idx = (int) $q['index'];
+					if ($idx === (int) $question_index) {
+						continue;
+					}
+					if ((string) $q['category'] === (string) $new_category && (int) $q['priority'] === (int) $new_priority) {
+						$priority_exists = true;
+						break;
+					}
+				}
+
+				if ($priority_exists) {
+					$message = 'priority_exists';
+					$redirect_url = add_query_arg('message', $message, admin_url('admin.php?page=custom-assessment-questions'));
+					wp_safe_redirect(esc_url_raw($redirect_url));
+					exit;
+				}
+
 				$edited = $this->edit_question($question_index, $new_category, $new_question_text, $new_priority);
 				$message = $edited ? 'question_edited' : 'question_edit_failed';
 
@@ -329,8 +353,10 @@ class CA_Admin
 			}
 
 			$flat_questions = CA_Questions::get_flat();
-			$updated_any = false;
+			$selected_set = array_flip($indexes);
 
+			// Build the target category/text/priority for each selected question.
+			$targets = array();
 			foreach ($indexes as $idx) {
 				if (!isset($flat_questions[$idx])) {
 					continue;
@@ -341,13 +367,65 @@ class CA_Admin
 				$set_text = $override_text ? $bulk_question_text : $original['text'];
 				$set_priority = $override_priority ? $bulk_priority : (int) $original['priority'];
 
-				// edit_question requires non-empty category/text/priority when editing.
-				// For keep-current, we pass the original values.
 				if (!empty($set_category) && !empty($set_text) && $set_priority > 0) {
-					$ok = $this->edit_question($idx, $set_category, $set_text, $set_priority);
-					if ($ok) {
-						$updated_any = true;
-					}
+					$targets[$idx] = array(
+						'category' => $set_category,
+						'text' => $set_text,
+						'priority' => (int) $set_priority,
+					);
+				}
+			}
+
+			if (empty($targets)) {
+				$message = 'bulk_edit_failed';
+				$redirect_url = add_query_arg('message', $message, admin_url('admin.php?page=custom-assessment-questions'));
+				wp_safe_redirect(esc_url_raw($redirect_url));
+				exit;
+			}
+
+			// Enforce unique priority within the same category, including collisions inside the selected batch.
+			$existing_keys = array();
+			foreach ($flat_questions as $q) {
+				if (!isset($q['index'], $q['category'], $q['priority'])) {
+					continue;
+				}
+				$q_idx = (int) $q['index'];
+				if (isset($selected_set[$q_idx])) {
+					continue;
+				}
+				$key = (string) $q['category'] . '|' . (int) $q['priority'];
+				$existing_keys[$key] = true;
+			}
+
+			$target_keys = array();
+			$priority_collision = false;
+			foreach ($targets as $idx => $t) {
+				$key = (string) $t['category'] . '|' . (int) $t['priority'];
+
+				if (isset($target_keys[$key])) {
+					$priority_collision = true;
+					break;
+				}
+				$target_keys[$key] = true;
+
+				if (isset($existing_keys[$key])) {
+					$priority_collision = true;
+					break;
+				}
+			}
+
+			if ($priority_collision) {
+				$message = 'priority_exists';
+				$redirect_url = add_query_arg('message', $message, admin_url('admin.php?page=custom-assessment-questions'));
+				wp_safe_redirect(esc_url_raw($redirect_url));
+				exit;
+			}
+
+			$updated_any = false;
+			foreach ($targets as $idx => $t) {
+				$ok = $this->edit_question($idx, $t['category'], $t['text'], $t['priority']);
+				if ($ok) {
+					$updated_any = true;
 				}
 			}
 
@@ -397,6 +475,29 @@ class CA_Admin
 
 		if ($question_index < 0 || '' === $new_category || '' === $new_question_text || $new_priority <= 0) {
 			wp_send_json_error(array('message' => 'Invalid input.'), 400);
+		}
+
+		// Enforce unique priority within the same category (except the current question).
+		$flat_questions = CA_Questions::get_flat();
+		$priority_exists = false;
+		foreach ($flat_questions as $q) {
+			if (!isset($q['index'], $q['category'], $q['priority'])) {
+				continue;
+			}
+			$idx = (int) $q['index'];
+			if ($idx === (int) $question_index) {
+				continue;
+			}
+			if ((string) $q['category'] === (string) $new_category && (int) $q['priority'] === (int) $new_priority) {
+				$priority_exists = true;
+				break;
+			}
+		}
+		if ($priority_exists) {
+			wp_send_json_error(
+				array('message' => esc_html__('Priority already exists in this category. Please choose another number.', CA_TEXT_DOMAIN)),
+				409
+			);
 		}
 
 		$edited = $this->edit_question($question_index, $new_category, $new_question_text, $new_priority);
@@ -1346,6 +1447,13 @@ class CA_Admin
 			<?php if (isset($_GET['message']) && 'question_edit_failed' === $_GET['message']): ?>
 				<div class="notice notice-error is-dismissible">
 					<p><?php esc_html_e('Unable to update this question.', CA_TEXT_DOMAIN); ?>
+					</p>
+				</div>
+			<?php endif; ?>
+
+			<?php if (isset($_GET['message']) && 'priority_exists' === $_GET['message']): ?>
+				<div class="notice notice-error is-dismissible">
+					<p><?php esc_html_e('Priority already exists in this category. Please choose another number.', CA_TEXT_DOMAIN); ?>
 					</p>
 				</div>
 			<?php endif; ?>
