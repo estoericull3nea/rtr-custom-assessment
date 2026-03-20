@@ -11,9 +11,13 @@
 	------------------------------------------------------- */
   var state = {
     submissionId: null,
-    currentIndex: 0,
+    // Step index (0..totalQuestions-1) in the priority-sorted display order.
+    stepIndex: 0,
     totalQuestions: CA_Config.total_questions || 30,
-    answersCache: {}, // { questionIndex: answerValue }
+    // Priority-sorted order of the stable backend `question_index` values.
+    questionOrder: [],
+    // Cache answers by stable `question_index`: { [questionIndex]: answerValue }
+    answersCache: {},
     isSubmitting: false,
   };
 
@@ -186,12 +190,45 @@
 
   function resetState() {
     state.submissionId = null;
-    state.currentIndex = 0;
+    state.stepIndex = 0;
     state.answersCache = {};
     state.isSubmitting = false;
+    state.questionOrder = buildQuestionOrder();
     $infoForm[0].reset();
     hideError($infoError);
     setProgress(0);
+  }
+
+  function buildQuestionOrder() {
+    var list = Array.isArray(CA_Config.questions_priority)
+      ? CA_Config.questions_priority
+      : [];
+
+    if (list.length > 0) {
+      // Smallest -> largest priority, stable tie-breaker by original index.
+      list = list.slice().sort(function (a, b) {
+        var ap = parseInt(a.priority, 10) || 0;
+        var bp = parseInt(b.priority, 10) || 0;
+        if (ap !== bp) return ap - bp;
+        var ai = parseInt(a.index, 10) || 0;
+        var bi = parseInt(b.index, 10) || 0;
+        return ai - bi;
+      });
+
+      return list
+        .map(function (item) {
+          return parseInt(item.index, 10) || 0;
+        })
+        .filter(function (v, i, arr) {
+          // De-dupe (shouldn't be needed, but prevents weirdness if data is malformed)
+          return arr.indexOf(v) === i;
+        });
+    }
+
+    // Fallback: natural order.
+    var order = [];
+    for (var i = 0; i < state.totalQuestions; i++) order.push(i);
+    return order;
   }
 
   /* -------------------------------------------------------
@@ -243,16 +280,48 @@
     $progressLabel.text(pct + "% Complete");
   }
 
-  function resumeAssessment(submissionId, answered, total) {
+  function resumeAssessment(submissionId, answersMap, total) {
     state.submissionId = submissionId;
-    state.currentIndex = answered;
+    state.answersCache = answersMap && typeof answersMap === "object" ? answersMap : {};
+
     saveSession(
       $("#ca-email").val().trim() || getSavedSession().email || "",
       submissionId,
     );
-    setProgress(total > 0 ? Math.round((answered / total) * 100) : 0);
+
+    var answeredCount = Object.keys(state.answersCache).length;
+    setProgress(total > 0 ? Math.round((answeredCount / total) * 100) : 0);
     showProgress();
-    loadQuestion(answered);
+
+    // Find first unanswered question in the priority-sorted order.
+    function hasAnswer(questionIndex) {
+      var idx = parseInt(questionIndex, 10);
+      return (
+        Object.prototype.hasOwnProperty.call(state.answersCache, idx) ||
+        Object.prototype.hasOwnProperty.call(state.answersCache, String(idx))
+      );
+    }
+
+    var nextStep = 0;
+    var allAnswered = true;
+    for (var step = 0; step < total; step++) {
+      var qIndex = state.questionOrder[step];
+      if (!hasAnswer(qIndex)) {
+        nextStep = step;
+        allAnswered = false;
+        break;
+      }
+    }
+
+    state.stepIndex = nextStep;
+
+    if (allAnswered) {
+      // Should be rare, but if everything is answered just compute results.
+      submitAssessment();
+      return;
+    }
+
+    loadQuestion(state.stepIndex);
   }
 
   function findInProgressByEmail(email, next) {
@@ -288,11 +357,11 @@
       .done(function (response) {
         if (response.success) {
           state.submissionId = response.data.submission_id;
-          state.currentIndex = 0;
+          state.stepIndex = 0;
           saveSession(data.email, state.submissionId);
           showScreen("questions");
           showProgress();
-          loadQuestion(0);
+          loadQuestion(state.stepIndex);
         } else {
           showError(
             $infoError,
@@ -341,7 +410,7 @@
           function () {
             resumeAssessment(
               response.data.submission_id,
-              response.data.answered,
+              response.data.answers_map,
               response.data.total,
             );
           },
@@ -361,20 +430,25 @@
   /* -------------------------------------------------------
 	   Question loading
 	------------------------------------------------------- */
-  function loadQuestion(index) {
+  function loadQuestion(stepIndex) {
     showScreen("loading");
+
+    var questionIndex =
+      state.questionOrder && state.questionOrder.length > 0
+        ? state.questionOrder[stepIndex]
+        : stepIndex;
 
     var data = {
       action: "ca_get_question",
       nonce: CA_Config.nonce,
-      question_index: index,
+      question_index: questionIndex,
       submission_id: state.submissionId,
     };
 
     $.post(CA_Config.ajax_url, data)
       .done(function (response) {
         if (response.success) {
-          renderQuestion(response.data, index);
+          renderQuestion(response.data, stepIndex, questionIndex);
         } else {
           alert(response.data.message || CA_Config.labels.error_generic);
         }
@@ -384,22 +458,22 @@
       });
   }
 
-  function renderQuestion(data, index) {
+  function renderQuestion(data, stepIndex, questionIndex) {
     var q = data.question;
     var total = data.total;
-    var isLast = data.is_last;
     var saved = data.saved_answer;
+    var isLast = stepIndex >= total - 1;
 
     // Update text
     $categoryLabel.text(q.category);
-    $questionCounter.text("Question " + (index + 1) + " of " + total);
+    $questionCounter.text("Question " + (stepIndex + 1) + " of " + total);
     $questionText.text(q.text);
 
     // Clear and restore answers
     $answerOptions.removeClass("ca-selected");
     $modal.find(".ca-answer-radio").prop("checked", false);
 
-    var selectedVal = state.answersCache[index] || saved;
+    var selectedVal = state.answersCache[questionIndex] || saved;
     if (selectedVal) {
       var $opt = $modal.find(
         '.ca-answer-option[data-value="' + selectedVal + '"]',
@@ -409,11 +483,11 @@
     }
 
     // Progress
-    var pct = total > 0 ? Math.round((index / total) * 100) : 0;
+    var pct = total > 0 ? Math.round((stepIndex / total) * 100) : 0;
     setProgress(pct);
 
     // Buttons
-    $backBtn.prop("disabled", index === 0);
+    $backBtn.prop("disabled", stepIndex === 0);
     $nextBtn.text(isLast ? CA_Config.labels.submit : CA_Config.labels.next);
     if (isLast) {
       $nextBtn.append(""); // clear icon for submit
@@ -438,10 +512,14 @@
     }
 
     var answer = parseInt($selected.data("value"), 10);
-    var index = state.currentIndex;
+    var stepIndex = state.stepIndex;
+    var questionIndex =
+      state.questionOrder && state.questionOrder.length > 0
+        ? state.questionOrder[stepIndex]
+        : stepIndex;
 
     // Cache it
-    state.answersCache[index] = answer;
+    state.answersCache[questionIndex] = answer;
 
     state.isSubmitting = true;
     $nextBtn.prop("disabled", true);
@@ -450,23 +528,21 @@
       action: "ca_save_answer",
       nonce: CA_Config.nonce,
       submission_id: state.submissionId,
-      question_index: index,
+      question_index: questionIndex,
       answer: answer,
     };
 
     $.post(CA_Config.ajax_url, data)
       .done(function (response) {
         if (response.success) {
-          var next = response.data.next_index;
-          var isLast = response.data.is_last;
-          setProgress(response.data.progress);
+          var nextStep = stepIndex + 1;
+          var isLast = nextStep >= state.totalQuestions;
 
           if (isLast) {
-            // Final submit
             submitAssessment();
           } else {
-            state.currentIndex = next;
-            loadQuestion(next);
+            state.stepIndex = nextStep;
+            loadQuestion(nextStep);
           }
         } else {
           showError(
@@ -485,9 +561,9 @@
   }
 
   function handleBack() {
-    if (state.currentIndex <= 0) return;
-    state.currentIndex--;
-    loadQuestion(state.currentIndex);
+    if (state.stepIndex <= 0) return;
+    state.stepIndex--;
+    loadQuestion(state.stepIndex);
   }
 
   /* -------------------------------------------------------

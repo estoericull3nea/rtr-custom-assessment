@@ -205,6 +205,8 @@ class CA_Ajax {
 			'total'         => $total,
 			'progress'      => $progress,
 			'status'        => $submission->status,
+			// Used by the frontend to continue in the correct priority-based order.
+			'answers_map'   => $answers,
 		) );
 	}
 

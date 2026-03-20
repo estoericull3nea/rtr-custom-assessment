@@ -42,6 +42,19 @@ class CA_Shortcode {
 			'ajax_url'       => admin_url( 'admin-ajax.php' ),
 			'nonce'          => wp_create_nonce( 'ca_nonce' ),
 			'total_questions'=> CA_Questions::get_total_count(),
+			// Used to order questions on the frontend (smallest -> largest priority).
+			// Each entry is keyed by the stable question_index used by backend storage.
+			'questions_priority' => array_values(
+				array_map(
+					function ( $q ) {
+						return array(
+							'index'    => isset( $q['index'] ) ? (int) $q['index'] : 0,
+							'priority' => isset( $q['priority'] ) ? (int) $q['priority'] : 0,
+						);
+					},
+					CA_Questions::get_flat()
+				)
+			),
 			'labels'         => array(
 				'next'          => __( 'Next', CA_TEXT_DOMAIN ),
 				'back'          => __( 'Back', CA_TEXT_DOMAIN ),
