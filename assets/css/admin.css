@@ -308,7 +308,9 @@ body,
 .ca-export-dropdown {
   position: absolute;
   bottom: calc(100% + 4px);
-  left: 0;
+  /* Center dropdown over the Export button */
+  left: 50%;
+  transform: translateX(-50%);
   background: white;
   border: 1px solid #ccc;
   border-radius: 3px;
