@@ -8,6 +8,19 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 class CA_Questions {
+	/**
+	 * Question overrides for base questions.
+	 *
+	 * Stored in `ca_question_overrides` as:
+	 * - key: base flat index (int)
+	 * - value: [ 'category' => string, 'text' => string, 'priority' => int ]
+	 *
+	 * @return array
+	 */
+	private static function get_question_overrides() {
+		$overrides = get_option( 'ca_question_overrides', array() );
+		return is_array( $overrides ) ? $overrides : array();
+	}
 
 	/**
 	 * Returns all categories with their questions.
@@ -89,6 +102,25 @@ class CA_Questions {
 			),
 		);
 
+		// Apply overrides to base questions without changing their ordering/indexes.
+		// We store overrides at the base-question flat index (0-based).
+		$overrides = self::get_question_overrides();
+		$base_flat_index = 0;
+		for ( $cat_idx = 0; $cat_idx < count( $base_questions ); $cat_idx++ ) {
+			for ( $q_idx = 0; $q_idx < count( $base_questions[ $cat_idx ]['questions'] ); $q_idx++ ) {
+				if ( isset( $overrides[ $base_flat_index ] ) && is_array( $overrides[ $base_flat_index ] ) ) {
+					$ov = $overrides[ $base_flat_index ];
+					// Add question-level category so get_flat() can use overridden category.
+					$base_questions[ $cat_idx ]['questions'][ $q_idx ] = array(
+						'text'     => isset( $ov['text'] ) ? (string) $ov['text'] : $base_questions[ $cat_idx ]['questions'][ $q_idx ]['text'],
+						'priority' => isset( $ov['priority'] ) ? (int) $ov['priority'] : $base_questions[ $cat_idx ]['questions'][ $q_idx ]['priority'],
+						'category' => isset( $ov['category'] ) ? (string) $ov['category'] : $base_questions[ $cat_idx ]['category'],
+					);
+				}
+				$base_flat_index++;
+			}
+		}
+
 		// Add custom questions
 		$custom_questions = get_option( 'ca_custom_questions', array() );
 		
@@ -128,9 +160,10 @@ class CA_Questions {
 
 		foreach ( $categories as $cat ) {
 			foreach ( $cat['questions'] as $q ) {
+				$category_value = isset( $q['category'] ) ? (string) $q['category'] : (string) $cat['category'];
 				$flat[] = array(
 					'index'    => $index,
-					'category' => $cat['category'],
+					'category' => $category_value,
 					'text'     => $q['text'],
 					'priority' => $q['priority'],
 				);
@@ -167,22 +200,24 @@ class CA_Questions {
 	 * @return array
 	 */
 	public static function get_categories() {
+		$flat = self::get_flat();
 		$categories = array();
-		$all = self::get_all();
-		
-		// Get base categories from the hardcoded structure
-		foreach ( $all as $cat ) {
-			$categories[] = $cat['category'];
-		}
-		
-		// Add custom categories from WordPress options
-		$custom_categories = get_option( 'ca_custom_categories', array() );
-		foreach ( $custom_categories as $custom_category ) {
-			if ( ! in_array( $custom_category, $categories ) ) {
-				$categories[] = $custom_category;
+		foreach ( $flat as $q ) {
+			if ( isset( $q['category'] ) && ! in_array( $q['category'], $categories, true ) ) {
+				$categories[] = $q['category'];
 			}
 		}
-		
+
+		// Add custom categories (even if there are no questions yet in that category).
+		$custom_categories = get_option( 'ca_custom_categories', array() );
+		if ( is_array( $custom_categories ) ) {
+			foreach ( $custom_categories as $custom_category ) {
+				if ( ! in_array( $custom_category, $categories, true ) ) {
+					$categories[] = $custom_category;
+				}
+			}
+		}
+
 		return $categories;
 	}
 }

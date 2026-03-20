@@ -1799,9 +1799,25 @@ class CA_Admin
 
 		if ($found) {
 			update_option('ca_custom_questions', array_values($custom_questions));
+			return true;
 		}
 
-		return $found;
+		// If not found in custom questions, allow editing base (hardcoded) questions
+		// by storing an override entry.
+		$overrides = get_option('ca_question_overrides', array());
+		if (!is_array($overrides)) {
+			$overrides = array();
+		}
+
+		$overrides[(int) $question_index] = array(
+			'category' => $new_category,
+			'text' => $new_question_text,
+			'priority' => (int) $new_priority,
+		);
+
+		update_option('ca_question_overrides', $overrides);
+
+		return true;
 	}
 
 	/**
