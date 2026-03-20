@@ -293,7 +293,7 @@ body,
 /* Export Dropdown */
 .ca-export-dropdown-wrapper {
   display: inline-flex;
-  flex-direction: column-reverse;
+  flex-direction: column;
   position: relative;
   margin: 0 3px;
 }
@@ -307,10 +307,10 @@ body,
 
 .ca-export-dropdown {
   position: absolute;
-  bottom: calc(100% + 4px);
-  /* Center dropdown over the Export button */
-  left: 50%;
-  transform: translateX(-50%);
+  /* Show dropdown to the right of the Export button */
+  top: 50%;
+  left: 100%;
+  transform: translate(8px, -50%);
   background: white;
   border: 1px solid #ccc;
   border-radius: 3px;
