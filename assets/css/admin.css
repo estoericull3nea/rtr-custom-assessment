@@ -565,3 +565,66 @@ body,
   color: #6b7280 !important;
   box-shadow: none;
 }
+
+/* --- Add Question UX ------------------------------------- */
+.ca-questions-actions .ca-question-form {
+  background: #fff;
+  border: 1px solid var(--ca-border);
+  border-radius: var(--ca-radius);
+  padding: 18px 18px 22px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.ca-questions-actions .ca-question-form h3 {
+  margin: 0 0 14px !important;
+  font-weight: 800 !important;
+  color: var(--ca-text) !important;
+}
+
+.ca-questions-actions .ca-question-form .ca-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ca-questions-actions
+  .ca-question-form
+  input.ca-question-text-input,
+.ca-questions-actions
+  .ca-question-form
+  select#question_category,
+.ca-questions-actions
+  .ca-question-form
+  select#question_priority {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--ca-border);
+  border-radius: 8px;
+  outline: none;
+  box-shadow: none;
+}
+
+.ca-questions-actions
+  .ca-question-form
+  input.ca-question-text-input:focus,
+.ca-questions-actions
+  .ca-question-form
+  select#question_category:focus,
+.ca-questions-actions
+  .ca-question-form
+  select#question_priority:focus {
+  border-color: var(--ca-primary);
+  box-shadow: 0 0 0 3px rgba(170, 49, 48, 0.15);
+}
+
+.ca-question-text-counter {
+  font-size: 12px;
+  color: var(--ca-text-muted);
+  font-weight: 600;
+  margin-top: -2px;
+}
+
+.ca-question-submit[disabled] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

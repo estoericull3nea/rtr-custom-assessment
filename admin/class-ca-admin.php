@@ -1122,12 +1122,16 @@ class CA_Admin
 							</div>
 							<div class="ca-form-field">
 								<label for="question_text"><?php esc_html_e('Question Text', CA_TEXT_DOMAIN); ?></label>
-								<input type="text" id="question_text" name="question_text"
-									placeholder="<?php esc_attr_e('Enter the question text', CA_TEXT_DOMAIN); ?>" required>
+								<input type="text" id="question_text" name="question_text" class="ca-question-text-input"
+									placeholder="<?php esc_attr_e('Enter the question text', CA_TEXT_DOMAIN); ?>" required
+									maxlength="500" autocomplete="off">
+								<div class="ca-question-text-counter" aria-live="polite">
+									<span id="ca-question-text-counter">0</span> / 500
+								</div>
 							</div>
 						</div>
 						<div class="ca-form-actions">
-							<button type="submit" class="button button-primary">
+							<button type="submit" class="button button-primary ca-question-submit">
 								<?php esc_html_e('Add Question', CA_TEXT_DOMAIN); ?>
 							</button>
 						</div>
@@ -1135,7 +1139,9 @@ class CA_Admin
 				</div>
 			</div>
 
-			<div class="ca-questions-search">
+			<br />
+
+			<div class="ca-questions-search" style="text-align: end;">
 				<div class="ca-search-field">
 					<label for="ca-search-questions"><?php esc_html_e('Search Questions', CA_TEXT_DOMAIN); ?></label>
 					<input type="text" id="ca-search-questions"
@@ -1146,6 +1152,8 @@ class CA_Admin
 					</div>
 				</div>
 			</div>
+
+			<br />
 
 			<?php if (isset($_GET['message']) && 'question_deleted' === $_GET['message']): ?>
 				<div class="notice notice-success is-dismissible">

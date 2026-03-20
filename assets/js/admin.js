@@ -668,4 +668,47 @@ jQuery(document).ready(function ($) {
   ) {
     initUniversalSearch();
   }
+
+  // Improve Add New Question UX (live counter + enable/disable submit).
+  if ($("#question_text").length) {
+    (function initQuestionFormUX() {
+      var $questionText = $("#question_text");
+      var $category = $("#question_category");
+      var $priority = $("#question_priority");
+      var $submitBtn = $(".ca-question-submit").first();
+      var $counter = $("#ca-question-text-counter");
+
+      var maxLen = parseInt($questionText.attr("maxlength"), 10);
+      if (isNaN(maxLen)) {
+        maxLen = 500;
+      }
+
+      function updateCounter() {
+        if (!$counter.length) return;
+        var len = ($questionText.val() || "").length;
+        $counter.text(len);
+      }
+
+      function updateSubmitState() {
+        if (!$submitBtn.length) return;
+        var catVal = ($category.val() || "").trim();
+        var prioVal = ($priority.val() || "").toString().trim();
+        var qText = ($questionText.val() || "").trim();
+
+        var isValid = catVal !== "" && prioVal !== "" && qText.length > 0;
+        $submitBtn.prop("disabled", !isValid);
+        $submitBtn.attr("aria-disabled", (!isValid).toString());
+      }
+
+      updateCounter();
+      updateSubmitState();
+
+      $questionText.on("input", function () {
+        updateCounter();
+        updateSubmitState();
+      });
+      $category.on("change", updateSubmitState);
+      $priority.on("change", updateSubmitState);
+    })();
+  }
 });
