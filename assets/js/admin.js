@@ -274,6 +274,7 @@ jQuery(document).ready(function ($) {
 
     function fetchAllDataPages(totalPages, currentPage) {
       var requests = [];
+      var fetchedData = []; // Store fetched data temporarily to avoid duplicates
 
       // Create AJAX requests for all pages except current (already loaded)
       for (var i = 1; i <= totalPages; i++) {
@@ -324,7 +325,37 @@ jQuery(document).ready(function ($) {
                 }
 
                 if (rowData) {
-                  originalData.push(rowData);
+                  // Check for duplicates before adding to fetched data
+                  var isDuplicate = false;
+                  for (var j = 0; j < fetchedData.length; j++) {
+                    var existingData = fetchedData[j];
+                    if (currentPageType === "questions") {
+                      if (
+                        existingData.number === rowData.number &&
+                        existingData.question === rowData.question
+                      ) {
+                        isDuplicate = true;
+                        break;
+                      }
+                    } else if (currentPageType === "categories") {
+                      if (
+                        existingData.number === rowData.number &&
+                        existingData.category === rowData.category
+                      ) {
+                        isDuplicate = true;
+                        break;
+                      }
+                    } else if (currentPageType === "submissions") {
+                      if (existingData.id === rowData.id) {
+                        isDuplicate = true;
+                        break;
+                      }
+                    }
+                  }
+
+                  if (!isDuplicate) {
+                    fetchedData.push(rowData);
+                  }
                 }
               });
 
@@ -337,8 +368,42 @@ jQuery(document).ready(function ($) {
         }
       }
 
-      // Wait for all requests to complete
+      // Wait for all requests to complete, then merge data
       $.when.apply($, requests).done(function () {
+        // Add fetched data to originalData (only if not already present)
+        fetchedData.forEach(function (newData) {
+          var isDuplicate = false;
+          for (var k = 0; k < originalData.length; k++) {
+            var existingData = originalData[k];
+            if (currentPageType === "questions") {
+              if (
+                existingData.number === newData.number &&
+                existingData.question === newData.question
+              ) {
+                isDuplicate = true;
+                break;
+              }
+            } else if (currentPageType === "categories") {
+              if (
+                existingData.number === newData.number &&
+                existingData.category === newData.category
+              ) {
+                isDuplicate = true;
+                break;
+              }
+            } else if (currentPageType === "submissions") {
+              if (existingData.id === newData.id) {
+                isDuplicate = true;
+                break;
+              }
+            }
+          }
+
+          if (!isDuplicate) {
+            originalData.push(newData);
+          }
+        });
+
         allDataLoaded = true;
       });
     }
