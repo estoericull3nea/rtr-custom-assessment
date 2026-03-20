@@ -1038,6 +1038,20 @@ class CA_Admin
 					</div>
 				</div>
 
+				<div class="ca-questions-search" style="text-align: end;">
+					<div class="ca-search-field">
+						<label for="ca-search-submissions"><?php esc_html_e('Search Submissions', CA_TEXT_DOMAIN); ?></label>
+						<input type="text" id="ca-search-submissions"
+							placeholder="<?php esc_attr_e('Search by ID, name, email, phone, job title, score, or status (minimum 3 characters)...', CA_TEXT_DOMAIN); ?>"
+							autocomplete="off">
+						<div class="ca-search-count" style="display: none;">
+							<span id="ca-search-results-count"></span>
+						</div>
+					</div>
+				</div>
+
+				<br />
+
 				<table class="wp-list-table widefat fixed striped ca-admin-table">
 					<thead>
 						<tr>
@@ -1597,7 +1611,8 @@ class CA_Admin
 			<?php if (empty($questions)): ?>
 				<div class="ca-admin-empty">
 					<span class="dashicons dashicons-format-chat" aria-hidden="true"></span>
-					<p><?php esc_html_e('No questions found. Please check your assessment configuration.', CA_TEXT_DOMAIN); ?></p>
+					<p><?php esc_html_e('No questions found. Please check your assessment configuration.', CA_TEXT_DOMAIN); ?>
+					</p>
 				</div>
 			<?php else: ?>
 				<table class="wp-list-table widefat fixed striped ca-admin-table">
@@ -1801,7 +1816,8 @@ class CA_Admin
 			<?php if (isset($_GET['message'])): ?>
 				<?php if ('duplicate' === $_GET['message']): ?>
 					<div class="notice notice-error is-dismissible">
-						<p><?php esc_html_e('Error: Category already exists. Please choose a different name.', CA_TEXT_DOMAIN); ?></p>
+						<p><?php esc_html_e('Error: Category already exists. Please choose a different name.', CA_TEXT_DOMAIN); ?>
+						</p>
 					</div>
 				<?php else: ?>
 					<div class="notice notice-success is-dismissible">

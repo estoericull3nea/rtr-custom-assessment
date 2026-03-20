@@ -3,8 +3,8 @@
  */
 
 jQuery(document).ready(function ($) {
-  // Export dropdown menu toggle
-  $(".ca-export-dropdown-btn").on("click", function (e) {
+  // Export dropdown menu toggle (delegated so it still works after search re-renders rows)
+  $(document).on("click", ".ca-export-dropdown-btn", function (e) {
     e.preventDefault();
     e.stopPropagation();
 
@@ -28,8 +28,8 @@ jQuery(document).ready(function ($) {
     }
   });
 
-  // Close menu when clicking an option
-  $(".ca-export-option").on("click", function () {
+  // Close menu when clicking an option (delegated)
+  $(document).on("click", ".ca-export-option", function () {
     $(this).closest(".ca-export-dropdown").removeClass("show");
   });
 
