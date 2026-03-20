@@ -184,6 +184,11 @@ jQuery(document).ready(function ($) {
     var $paginationControls = $(".tablenav.top, .tablenav.bottom");
     var currentPageType = getCurrentPageType();
 
+    // Keep a reference to the default paginated rows so inline edits remain when clearing search.
+    if (currentPageType === "questions") {
+      window.CA_ADMIN_QUESTIONS_DEFAULT_PAGE_ROWS = $defaultPageRows;
+    }
+
     function buildQuestionRow(item) {
       // Build a <tr> that matches the PHP-rendered layout for the Questions page.
       // Used when the data source doesn't provide a cloned DOM row.
@@ -891,6 +896,162 @@ jQuery(document).ready(function ($) {
     if (e.key !== "Escape") return;
     $(".ca-question-text-input:visible").each(function () {
       cancelQuestionEditMode($(this).closest("tr"));
+    });
+  });
+
+  function finishQuestionEditModeAfterSave($row) {
+    // Switch back to display-only state after a successful save.
+    $row.find(".ca-question-category-text").show();
+    $row.find(".ca-question-category-select").hide();
+    $row.find(".ca-question-text-display").show();
+    $row.find(".ca-question-text-input").hide();
+    $row.find(".ca-question-priority-text").show();
+    $row.find(".ca-question-priority-input").hide();
+
+    $row.find(".ca-question-edit-btn").show();
+    $row.find(".ca-question-cancel-btn").hide();
+    $row.find(".ca-question-save-btn").hide();
+  }
+
+  function syncQuestionRowValues($row, updated) {
+    // updated: { category, text, priority }
+    var cat = updated.category != null ? String(updated.category) : "";
+    var text = updated.text != null ? String(updated.text) : "";
+    var prio = updated.priority != null ? String(updated.priority) : "";
+
+    var $categorySelect = $row.find(".ca-question-category-select");
+    var $questionInput = $row.find(".ca-question-text-input");
+    var $priorityInput = $row.find(".ca-question-priority-input");
+
+    if ($categorySelect.length) {
+      $categorySelect.val(cat);
+      $categorySelect.data("original", cat);
+      $categorySelect.attr("data-original", cat);
+    }
+    if ($questionInput.length) {
+      $questionInput.val(text);
+      $questionInput.data("original", text);
+      $questionInput.attr("data-original", text);
+    }
+    if ($priorityInput.length) {
+      $priorityInput.val(prio);
+      $priorityInput.data("original", prio);
+      $priorityInput.attr("data-original", prio);
+    }
+
+    $row.find(".ca-question-category-text").text(cat).attr("data-original", cat);
+    $row
+      .find(".ca-question-text-display")
+      .text(text)
+      .attr("data-original", text);
+    $row
+      .find(".ca-question-priority-text")
+      .text(prio || "")
+      .attr("data-original", prio);
+  }
+
+  function updateQuestionsAllData(updated) {
+    if (!Array.isArray(window.CA_ADMIN_QUESTIONS_ALL)) return;
+
+    var idx = parseInt(updated.question_index, 10);
+    for (var i = 0; i < window.CA_ADMIN_QUESTIONS_ALL.length; i++) {
+      var item = window.CA_ADMIN_QUESTIONS_ALL[i];
+      if (item && parseInt(item.question_index, 10) === idx) {
+        item.category = updated.category;
+        item.priority = String(updated.priority);
+        item.question = updated.text;
+        break;
+      }
+    }
+  }
+
+  function updateDefaultQuestionRowClones(updated) {
+    if (
+      !window.CA_ADMIN_QUESTIONS_DEFAULT_PAGE_ROWS ||
+      !window.CA_ADMIN_QUESTIONS_DEFAULT_PAGE_ROWS.length
+    ) {
+      return;
+    }
+
+    var idx = parseInt(updated.question_index, 10);
+    var $cloneRow = window.CA_ADMIN_QUESTIONS_DEFAULT_PAGE_ROWS.filter(function () {
+      var val = $(this).find(".ca-question-select").val();
+      return parseInt(val, 10) === idx;
+    });
+
+    if ($cloneRow.length) {
+      syncQuestionRowValues($cloneRow, updated);
+    }
+  }
+
+  // AJAX save for inline edits (prevents full page reload)
+  $(document).on("submit", ".ca-question-edit-form", function (e) {
+    e.preventDefault();
+
+    var $form = $(this);
+    var $row = $form.closest("tr");
+    if (!$row.length) return;
+
+    var formId = $form.attr("id");
+    var ajaxUrl =
+      window.CA_ADMIN_AJAX_URL ||
+      (typeof ajaxurl !== "undefined" ? ajaxurl : null);
+    if (!ajaxUrl) {
+      alert("AJAX URL not available.");
+      return;
+    }
+
+    var editNonce = $form.find('input[name="_wpnonce"]').val();
+    var questionIndex = $form.find('input[name="question_index"]').val();
+    var $categorySelect = $row.find(
+      'select[form="' + formId + '"][name="new_category"]'
+    );
+    var $questionInput = $row.find(
+      'input[form="' + formId + '"][name="new_question_text"]'
+    );
+    var $priorityInput = $row.find(
+      'input[form="' + formId + '"][name="new_priority"]'
+    );
+
+    var payload = {
+      action: "ca_edit_question_ajax",
+      _wpnonce: editNonce,
+      question_index: questionIndex,
+      new_category: $categorySelect.val() || "",
+      new_question_text: $questionInput.val() || "",
+      new_priority: $priorityInput.val() || 0,
+    };
+
+    var $saveBtn = $row.find(".ca-question-save-btn").first();
+    $saveBtn.prop("disabled", true);
+
+    $.ajax({
+      url: ajaxUrl,
+      method: "POST",
+      data: payload,
+      dataType: "json",
+      success: function (resp) {
+        if (!resp || !resp.success) {
+          var msg =
+            resp && resp.data && resp.data.message
+              ? resp.data.message
+              : "Unable to save this question.";
+          alert(msg);
+          $saveBtn.prop("disabled", false);
+          return;
+        }
+
+        syncQuestionRowValues($row, resp.data);
+        finishQuestionEditModeAfterSave($row);
+        updateQuestionsAllData(resp.data);
+        updateDefaultQuestionRowClones(resp.data);
+
+        $saveBtn.prop("disabled", false);
+      },
+      error: function () {
+        alert("Network/server error while saving.");
+        $saveBtn.prop("disabled", false);
+      },
     });
   });
 

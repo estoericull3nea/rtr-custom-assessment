@@ -18,6 +18,7 @@ class CA_Admin
 		add_action('admin_init', array($this, 'handle_categories_action'));
 		add_action('admin_init', array($this, 'handle_edit_category_action'));
 		add_action('admin_init', array($this, 'handle_questions_action'));
+		add_action('wp_ajax_ca_edit_question_ajax', array($this, 'handle_edit_question_ajax'));
 		add_action('admin_menu', array($this, 'register_menu'));
 		add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
 	}
@@ -373,6 +374,43 @@ class CA_Admin
 				exit;
 			}
 		}
+	}
+
+	/**
+	 * AJAX handler for inline edits on the Assessment Questions table.
+	 */
+	public function handle_edit_question_ajax()
+	{
+		if (!current_user_can('manage_options')) {
+			wp_send_json_error(array('message' => 'You do not have permission to edit questions.'), 403);
+		}
+
+		$nonce = isset($_POST['_wpnonce']) ? sanitize_text_field(wp_unslash($_POST['_wpnonce'])) : '';
+		if (empty($nonce) || !wp_verify_nonce($nonce, 'ca_edit_question_action')) {
+			wp_send_json_error(array('message' => 'Security check failed.'), 403);
+		}
+
+		$question_index = isset($_POST['question_index']) ? absint($_POST['question_index']) : -1;
+		$new_category = isset($_POST['new_category']) ? sanitize_text_field(wp_unslash($_POST['new_category'])) : '';
+		$new_question_text = isset($_POST['new_question_text']) ? sanitize_text_field(wp_unslash($_POST['new_question_text'])) : '';
+		$new_priority = isset($_POST['new_priority']) ? absint($_POST['new_priority']) : 0;
+
+		if ($question_index < 0 || '' === $new_category || '' === $new_question_text || $new_priority <= 0) {
+			wp_send_json_error(array('message' => 'Invalid input.'), 400);
+		}
+
+		$edited = $this->edit_question($question_index, $new_category, $new_question_text, $new_priority);
+		if (!$edited) {
+			wp_send_json_error(array('message' => 'Unable to update this question.'), 404);
+		}
+
+		$updated = CA_Questions::get_question($question_index);
+		wp_send_json_success(array(
+			'question_index' => $question_index,
+			'category' => isset($updated['category']) ? (string) $updated['category'] : $new_category,
+			'text' => isset($updated['text']) ? (string) $updated['text'] : $new_question_text,
+			'priority' => isset($updated['priority']) ? (int) $updated['priority'] : (int) $new_priority,
+		));
 	}
 
 	/**
@@ -1136,6 +1174,7 @@ class CA_Admin
 		<div class="wrap ca-admin-wrap">
 			<script type="text/javascript">
 				window.CA_ADMIN_QUESTIONS_ALL = <?php echo wp_json_encode($all_questions_js); ?>;
+				window.CA_ADMIN_AJAX_URL = <?php echo wp_json_encode(admin_url('admin-ajax.php')); ?>;
 				window.CA_ADMIN_QUESTIONS_DELETE_NONCE = <?php echo wp_json_encode($delete_question_nonce); ?>;
 				window.CA_ADMIN_QUESTIONS_DELETE_CONFIRM = <?php echo wp_json_encode($delete_question_confirm); ?>;
 				window.CA_ADMIN_QUESTIONS_EDIT_NONCE = <?php echo wp_json_encode($edit_question_nonce); ?>;
