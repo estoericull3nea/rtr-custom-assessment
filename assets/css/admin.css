@@ -631,7 +631,8 @@ body,
 
 /* Inline question edit (table row) */
 .ca-col-category .ca-question-category-select,
-.ca-col-question .ca-question-text-input {
+.ca-col-question .ca-question-text-input,
+.ca-col-priority .ca-question-priority-select {
   width: 100%;
   box-sizing: border-box;
   padding: 8px 10px;

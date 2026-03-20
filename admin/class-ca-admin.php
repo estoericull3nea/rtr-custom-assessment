@@ -295,9 +295,10 @@ class CA_Admin
 			$question_index = absint($_POST['question_index']);
 			$new_category = isset($_POST['new_category']) ? sanitize_text_field(wp_unslash($_POST['new_category'])) : '';
 			$new_question_text = isset($_POST['new_question_text']) ? sanitize_text_field(wp_unslash($_POST['new_question_text'])) : '';
+			$new_priority = isset($_POST['new_priority']) ? absint($_POST['new_priority']) : 0;
 
-			if ($question_index >= 0 && '' !== $new_category && '' !== $new_question_text) {
-				$edited = $this->edit_question($question_index, $new_category, $new_question_text);
+			if ($question_index >= 0 && '' !== $new_category && '' !== $new_question_text && $new_priority > 0) {
+				$edited = $this->edit_question($question_index, $new_category, $new_question_text, $new_priority);
 				$message = $edited ? 'question_edited' : 'question_edit_failed';
 
 				$redirect_url = add_query_arg('message', $message, admin_url('admin.php?page=custom-assessment-questions'));
@@ -1006,6 +1007,15 @@ class CA_Admin
 		$total_questions = CA_Questions::get_total_count();
 		$categories = CA_Questions::get_categories();
 
+		// Priority range for edit dropdown: 1..max (at least 5 for consistency with Add New Question).
+		$priority_max = 0;
+		foreach ($questions as $q) {
+			if (isset($q['priority'])) {
+				$priority_max = max($priority_max, (int) $q['priority']);
+			}
+		}
+		$priority_end = max(5, (int) $priority_max);
+
 		// Provide the full questions list to the admin search script.
 		// This guarantees global searching across pagination.
 		$all_questions_js = array();
@@ -1081,6 +1091,7 @@ class CA_Admin
 				window.CA_ADMIN_QUESTIONS_DELETE_CONFIRM = <?php echo wp_json_encode($delete_question_confirm); ?>;
 				window.CA_ADMIN_QUESTIONS_EDIT_NONCE = <?php echo wp_json_encode($edit_question_nonce); ?>;
 				window.CA_ADMIN_QUESTIONS_CATEGORIES = <?php echo wp_json_encode($categories); ?>;
+				window.CA_ADMIN_QUESTIONS_PRIORITY_MAX = <?php echo (int) $priority_end; ?>;
 			</script>
 			<h1 class="ca-admin-title">
 				<span class="ca-admin-title-icon dashicons dashicons-format-chat"></span>
@@ -1134,7 +1145,7 @@ class CA_Admin
 								<label for="question_priority"><?php esc_html_e('Priority', CA_TEXT_DOMAIN); ?></label>
 								<select id="question_priority" name="question_priority" required>
 									<option value=""><?php esc_html_e('Select priority', CA_TEXT_DOMAIN); ?></option>
-									<?php for ($i = 1; $i <= 5; $i++): ?>
+									<?php for ($i = 1; $i <= (int) $priority_end; $i++): ?>
 										<option value="<?php echo esc_attr($i); ?>"><?php echo esc_html($i); ?></option>
 									<?php endfor; ?>
 								</select>
@@ -1233,7 +1244,20 @@ class CA_Admin
 										<?php endforeach; ?>
 									</select>
 								</td>
-								<td class="ca-col-priority"><?php echo esc_html($q['priority']); ?></td>
+								<td class="ca-col-priority">
+									<span class="ca-question-priority-text" data-original="<?php echo esc_attr($q['priority']); ?>">
+										<?php echo esc_html($q['priority']); ?>
+									</span>
+									<select class="ca-question-priority-select" style="display: none;"
+										form="ca-edit-question-form-<?php echo esc_attr($q['index']); ?>" name="new_priority"
+										data-original="<?php echo esc_attr($q['priority']); ?>">
+										<?php for ($p = 1; $p <= (int) $priority_end; $p++): ?>
+											<option value="<?php echo esc_attr($p); ?>" <?php echo ((int) $q['priority'] === $p) ? 'selected' : ''; ?>>
+												<?php echo esc_html($p); ?>
+											</option>
+										<?php endfor; ?>
+									</select>
+								</td>
 								<td class="ca-col-question">
 									<span class="ca-question-text-display" data-original="<?php echo esc_attr($q['text']); ?>">
 										<?php echo esc_html($q['text']); ?>
@@ -1740,7 +1764,7 @@ class CA_Admin
 	 *
 	 * @return bool True if edited, false if question is not found in custom questions.
 	 */
-	private function edit_question($question_index, $new_category, $new_question_text)
+	private function edit_question($question_index, $new_category, $new_question_text, $new_priority)
 	{
 		$flat_questions = CA_Questions::get_flat();
 		if (!isset($flat_questions[$question_index])) {
@@ -1767,6 +1791,7 @@ class CA_Admin
 			) {
 				$custom_questions[$key]['category'] = $new_category;
 				$custom_questions[$key]['text'] = $new_question_text;
+				$custom_questions[$key]['priority'] = (int) $new_priority;
 				$found = true;
 				break;
 			}
