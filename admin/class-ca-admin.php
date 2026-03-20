@@ -291,6 +291,21 @@ class CA_Admin
 			}
 		}
 
+		if (isset($_POST['ca_action']) && 'edit_question' === $_POST['ca_action'] && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'ca_edit_question_action')) {
+			$question_index = absint($_POST['question_index']);
+			$new_category = isset($_POST['new_category']) ? sanitize_text_field(wp_unslash($_POST['new_category'])) : '';
+			$new_question_text = isset($_POST['new_question_text']) ? sanitize_text_field(wp_unslash($_POST['new_question_text'])) : '';
+
+			if ($question_index >= 0 && '' !== $new_category && '' !== $new_question_text) {
+				$edited = $this->edit_question($question_index, $new_category, $new_question_text);
+				$message = $edited ? 'question_edited' : 'question_edit_failed';
+
+				$redirect_url = add_query_arg('message', $message, admin_url('admin.php?page=custom-assessment-questions'));
+				wp_safe_redirect(esc_url_raw($redirect_url));
+				exit;
+			}
+		}
+
 		if (isset($_POST['ca_action']) && 'add_question' === $_POST['ca_action'] && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'ca_add_question_action')) {
 			$question_text = sanitize_text_field(wp_unslash($_POST['question_text']));
 			$question_category = sanitize_text_field(wp_unslash($_POST['question_category']));
@@ -1010,6 +1025,8 @@ class CA_Admin
 			__('Are you sure you want to delete this question? This action cannot be undone.', CA_TEXT_DOMAIN)
 		);
 
+		$edit_question_nonce = wp_create_nonce('ca_edit_question_action');
+
 		// Calculate question statistics
 		$priority_counts = array_count_values(array_column($questions, 'priority'));
 		$category_counts = array_count_values(array_column($questions, 'category'));
@@ -1062,6 +1079,8 @@ class CA_Admin
 				window.CA_ADMIN_QUESTIONS_ALL = <?php echo wp_json_encode($all_questions_js); ?>;
 				window.CA_ADMIN_QUESTIONS_DELETE_NONCE = <?php echo wp_json_encode($delete_question_nonce); ?>;
 				window.CA_ADMIN_QUESTIONS_DELETE_CONFIRM = <?php echo wp_json_encode($delete_question_confirm); ?>;
+				window.CA_ADMIN_QUESTIONS_EDIT_NONCE = <?php echo wp_json_encode($edit_question_nonce); ?>;
+				window.CA_ADMIN_QUESTIONS_CATEGORIES = <?php echo wp_json_encode($categories); ?>;
 			</script>
 			<h1 class="ca-admin-title">
 				<span class="ca-admin-title-icon dashicons dashicons-format-chat"></span>
@@ -1167,6 +1186,19 @@ class CA_Admin
 				</div>
 			<?php endif; ?>
 
+			<?php if (isset($_GET['message']) && 'question_edited' === $_GET['message']): ?>
+				<div class="notice notice-success is-dismissible">
+					<p><?php esc_html_e('Question updated successfully.', CA_TEXT_DOMAIN); ?></p>
+				</div>
+			<?php endif; ?>
+
+			<?php if (isset($_GET['message']) && 'question_edit_failed' === $_GET['message']): ?>
+				<div class="notice notice-error is-dismissible">
+					<p><?php esc_html_e('Unable to update this question. Only custom questions can be edited.', CA_TEXT_DOMAIN); ?>
+					</p>
+				</div>
+			<?php endif; ?>
+
 			<?php if (empty($questions)): ?>
 				<div class="ca-admin-empty">
 					<span class="dashicons dashicons-format-chat" aria-hidden="true"></span>
@@ -1187,10 +1219,45 @@ class CA_Admin
 						<?php foreach ($paged_questions as $q): ?>
 							<tr>
 								<td class="ca-col-id"><?php echo esc_html($q['index'] + 1); ?></td>
-								<td><?php echo esc_html($q['category']); ?></td>
+								<td class="ca-col-category">
+									<span class="ca-question-category-text" data-original="<?php echo esc_attr($q['category']); ?>">
+										<?php echo esc_html($q['category']); ?>
+									</span>
+									<select class="ca-question-category-select" style="display: none;"
+										form="ca-edit-question-form-<?php echo esc_attr($q['index']); ?>" name="new_category"
+										data-original="<?php echo esc_attr($q['category']); ?>">
+										<?php foreach ($categories as $cat): ?>
+											<option value="<?php echo esc_attr($cat); ?>" <?php echo $cat === $q['category'] ? 'selected' : ''; ?>>
+												<?php echo esc_html($cat); ?>
+											</option>
+										<?php endforeach; ?>
+									</select>
+								</td>
 								<td class="ca-col-priority"><?php echo esc_html($q['priority']); ?></td>
-								<td><?php echo esc_html($q['text']); ?></td>
-								<td>
+								<td class="ca-col-question">
+									<span class="ca-question-text-display" data-original="<?php echo esc_attr($q['text']); ?>">
+										<?php echo esc_html($q['text']); ?>
+									</span>
+									<input type="text" class="ca-question-text-input" style="display: none;"
+										form="ca-edit-question-form-<?php echo esc_attr($q['index']); ?>" name="new_question_text"
+										value="<?php echo esc_attr($q['text']); ?>" maxlength="500" autocomplete="off"
+										data-original="<?php echo esc_attr($q['text']); ?>">
+								</td>
+								<td class="ca-col-actions">
+									<form method="post" action="" id="ca-edit-question-form-<?php echo esc_attr($q['index']); ?>"
+										class="ca-question-edit-form" style="display: inline;">
+										<?php wp_nonce_field('ca_edit_question_action', '_wpnonce'); ?>
+										<input type="hidden" name="ca_action" value="edit_question">
+										<input type="hidden" name="question_index" value="<?php echo esc_attr($q['index']); ?>">
+										<button type="button" class="button button-small button-secondary ca-question-edit-btn"
+											data-index="<?php echo esc_attr($q['index']); ?>">
+											<?php esc_html_e('Edit', CA_TEXT_DOMAIN); ?>
+										</button>
+										<button type="submit" class="button button-small button-primary ca-question-save-btn"
+											style="display: none;">
+											<?php esc_html_e('Save', CA_TEXT_DOMAIN); ?>
+										</button>
+									</form>
 									<form method="post" style="display: inline;"
 										onsubmit="return confirm('<?php echo esc_js(__('Are you sure you want to delete this question? This action cannot be undone.', CA_TEXT_DOMAIN)); ?>');">
 										<?php wp_nonce_field('ca_delete_question_action', '_wpnonce'); ?>
@@ -1666,6 +1733,50 @@ class CA_Admin
 			$custom_questions = array_values($custom_questions); // Re-index array
 			update_option('ca_custom_questions', $custom_questions);
 		}
+	}
+
+	/**
+	 * Edit a question's category and text (updates custom questions only).
+	 *
+	 * @return bool True if edited, false if question is not found in custom questions.
+	 */
+	private function edit_question($question_index, $new_category, $new_question_text)
+	{
+		$flat_questions = CA_Questions::get_flat();
+		if (!isset($flat_questions[$question_index])) {
+			return false;
+		}
+
+		$question_to_edit = $flat_questions[$question_index];
+		$original_category = isset($question_to_edit['category']) ? (string) $question_to_edit['category'] : '';
+		$original_priority = isset($question_to_edit['priority']) ? (int) $question_to_edit['priority'] : 0;
+		$original_text = isset($question_to_edit['text']) ? (string) $question_to_edit['text'] : '';
+
+		$custom_questions = get_option('ca_custom_questions', array());
+
+		$found = false;
+		foreach ($custom_questions as $key => $custom_question) {
+			$custom_category = isset($custom_question['category']) ? (string) $custom_question['category'] : '';
+			$custom_priority = isset($custom_question['priority']) ? (int) $custom_question['priority'] : 0;
+			$custom_text = isset($custom_question['text']) ? (string) $custom_question['text'] : '';
+
+			if (
+				$custom_category === $original_category &&
+				$custom_priority === $original_priority &&
+				$custom_text === $original_text
+			) {
+				$custom_questions[$key]['category'] = $new_category;
+				$custom_questions[$key]['text'] = $new_question_text;
+				$found = true;
+				break;
+			}
+		}
+
+		if ($found) {
+			update_option('ca_custom_questions', array_values($custom_questions));
+		}
+
+		return $found;
 	}
 
 	/**

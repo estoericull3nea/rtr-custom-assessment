@@ -628,3 +628,30 @@ body,
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+/* Inline question edit (table row) */
+.ca-col-category .ca-question-category-select,
+.ca-col-question .ca-question-text-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--ca-border);
+  border-radius: 8px;
+  outline: none;
+  box-shadow: none;
+}
+
+.ca-col-category .ca-question-category-select:focus,
+.ca-col-question .ca-question-text-input:focus {
+  border-color: var(--ca-primary);
+  box-shadow: 0 0 0 3px rgba(170, 49, 48, 0.15);
+}
+
+.ca-col-actions .ca-question-edit-form {
+  margin-right: 8px;
+}
+
+.ca-col-actions .ca-question-edit-btn,
+.ca-col-actions .ca-question-save-btn {
+  margin: 0 2px 0 0;
+}

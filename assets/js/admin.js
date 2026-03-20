@@ -188,20 +188,117 @@ jQuery(document).ready(function ($) {
       // Build a <tr> that matches the PHP-rendered layout for the Questions page.
       // Used when the data source doesn't provide a cloned DOM row.
       var questionIndex = item.question_index != null ? parseInt(item.question_index, 10) : 0;
+      var editFormId = "ca-edit-question-form-" + questionIndex;
+      var categoriesList = Array.isArray(window.CA_ADMIN_QUESTIONS_CATEGORIES)
+        ? window.CA_ADMIN_QUESTIONS_CATEGORIES
+        : [];
 
       var $tr = $("<tr>");
       $tr.append($("<td>").addClass("ca-col-id").text((questionIndex || 0) + 1));
-      $tr.append($("<td>").text(item.category != null ? item.category : ""));
-      $tr.append($("<td>").addClass("ca-col-priority").text(item.priority != null ? item.priority : ""));
-      $tr.append($("<td>").text(item.question != null ? item.question : ""));
+
+      // Category cell (span + hidden dropdown)
+      var $categoryTd = $("<td>").addClass("ca-col-category");
+      var categoryVal = item.category != null ? item.category : "";
+      var $categorySpan = $("<span>")
+        .addClass("ca-question-category-text")
+        .attr("data-original", categoryVal)
+        .text(categoryVal);
+
+      var $categorySelect = $("<select>")
+        .addClass("ca-question-category-select")
+        .css("display", "none")
+        .attr("form", editFormId)
+        .attr("name", "new_category")
+        .attr("data-original", categoryVal);
+
+      categoriesList.forEach(function (cat) {
+        var $opt = $("<option>").attr("value", cat).text(cat);
+        if (cat === categoryVal) {
+          $opt.prop("selected", true);
+        }
+        $categorySelect.append($opt);
+      });
+
+      $categoryTd.append($categorySpan, $categorySelect);
+      $tr.append($categoryTd);
+
+      // Priority cell (static)
+      $tr.append(
+        $("<td>")
+          .addClass("ca-col-priority")
+          .text(item.priority != null ? item.priority : "")
+      );
+
+      // Question cell (span + hidden input)
+      var $questionTd = $("<td>").addClass("ca-col-question");
+      var questionVal = item.question != null ? item.question : "";
+      var $questionSpan = $("<span>")
+        .addClass("ca-question-text-display")
+        .attr("data-original", questionVal)
+        .text(questionVal);
+
+      var $questionInput = $("<input>")
+        .addClass("ca-question-text-input")
+        .css("display", "none")
+        .attr("type", "text")
+        .attr("form", editFormId)
+        .attr("name", "new_question_text")
+        .attr("maxlength", "500")
+        .attr("autocomplete", "off")
+        .attr("data-original", questionVal)
+        .val(questionVal);
+
+      $questionTd.append($questionSpan, $questionInput);
+      $tr.append($questionTd);
 
       var confirmText =
         window.CA_ADMIN_QUESTIONS_DELETE_CONFIRM || "Are you sure you want to delete this question?";
 
       var nonceVal = window.CA_ADMIN_QUESTIONS_DELETE_NONCE || "";
 
-      var $actionsTd = $("<td>");
-      var $form = $("<form>")
+      var $actionsTd = $("<td>").addClass("ca-col-actions");
+
+      // Edit form (used by Save button submission)
+      var $editForm = $("<form>")
+        .attr("method", "post")
+        .attr("action", "")
+        .attr("id", editFormId)
+        .attr("class", "ca-question-edit-form")
+        .attr("style", "display: inline;");
+
+      var editNonceVal = window.CA_ADMIN_QUESTIONS_EDIT_NONCE || "";
+      var $editNonceField = $("<input>")
+        .attr("type", "hidden")
+        .attr("name", "_wpnonce")
+        .val(editNonceVal);
+
+      var $editActionField = $("<input>")
+        .attr("type", "hidden")
+        .attr("name", "ca_action")
+        .val("edit_question");
+
+      var $editIndexField = $("<input>")
+        .attr("type", "hidden")
+        .attr("name", "question_index")
+        .val(questionIndex);
+
+      var $editBtn = $("<button>")
+        .attr("type", "button")
+        .addClass("button button-small button-secondary ca-question-edit-btn")
+        .attr("data-index", questionIndex)
+        .text("Edit");
+
+      var $saveBtn = $("<button>")
+        .attr("type", "submit")
+        .addClass("button button-small button-primary ca-question-save-btn")
+        .css("display", "none")
+        .text("Save");
+
+      $editForm.append($editNonceField, $editActionField, $editIndexField, $editBtn, $saveBtn);
+      $actionsTd.append($editForm);
+
+      // Delete form
+      var $deleteForm = $("<form>")
         .attr("method", "post")
         .attr("style", "display: inline;")
         .attr(
@@ -209,28 +306,34 @@ jQuery(document).ready(function ($) {
           "return confirm(" + JSON.stringify(confirmText) + ");"
         );
 
-      var $nonceField = $("<input>")
+      var $deleteNonceField = $("<input>")
         .attr("type", "hidden")
         .attr("name", "_wpnonce")
         .val(nonceVal);
 
-      var $actionField = $("<input>")
+      var $deleteActionField = $("<input>")
         .attr("type", "hidden")
         .attr("name", "ca_action")
         .val("delete_question");
 
-      var $indexField = $("<input>")
+      var $deleteIndexField = $("<input>")
         .attr("type", "hidden")
         .attr("name", "question_index")
         .val(questionIndex);
 
-      var $btn = $("<button>")
+      var $deleteBtn = $("<button>")
         .attr("type", "submit")
         .addClass("button button-small button-secondary")
         .text("Delete");
 
-      $form.append($nonceField, $actionField, $indexField, $btn);
-      $actionsTd.append($form);
+      $deleteForm.append(
+        $deleteNonceField,
+        $deleteActionField,
+        $deleteIndexField,
+        $deleteBtn
+      );
+      $actionsTd.append($deleteForm);
+
       $tr.append($actionsTd);
 
       return $tr;
@@ -668,6 +771,73 @@ jQuery(document).ready(function ($) {
   ) {
     initUniversalSearch();
   }
+
+  // Inline edit for Assessment Questions (Edit -> dropdown/text -> Save)
+  function enableQuestionEditMode($row) {
+    var $categoryText = $row.find(".ca-question-category-text");
+    var $categorySelect = $row.find(".ca-question-category-select");
+    var $questionText = $row.find(".ca-question-text-display");
+    var $questionInput = $row.find(".ca-question-text-input");
+    var $editBtn = $row.find(".ca-question-edit-btn");
+    var $saveBtn = $row.find(".ca-question-save-btn");
+
+    $categoryText.hide();
+    $categorySelect.show();
+    $questionText.hide();
+    $questionInput.show().focus();
+
+    $editBtn.hide();
+    $saveBtn.show();
+  }
+
+  function cancelQuestionEditMode($row) {
+    var $categorySelect = $row.find(".ca-question-category-select");
+    var $questionInput = $row.find(".ca-question-text-input");
+
+    var origCat = $categorySelect.data("original");
+    var origText = $questionInput.data("original");
+
+    if (origCat != null) {
+      $categorySelect.val(origCat);
+    }
+    if (origText != null) {
+      $questionInput.val(origText);
+    }
+
+    // Update visible spans back to the original values.
+    var $categorySpan = $row.find(".ca-question-category-text");
+    var $questionSpan = $row.find(".ca-question-text-display");
+    $categorySpan.text($categorySelect.val() != null ? $categorySelect.val() : "");
+    $questionSpan.text($questionInput.val() != null ? $questionInput.val() : "");
+
+    $categorySpan.show();
+    $categorySelect.hide();
+    $questionSpan.show();
+    $questionInput.hide();
+
+    $row.find(".ca-question-edit-btn").show();
+    $row.find(".ca-question-save-btn").hide();
+  }
+
+  // Use delegated handlers so search-rebuilt rows still work.
+  $(document).on("click", ".ca-question-edit-btn", function (e) {
+    e.preventDefault();
+    var $row = $(this).closest("tr");
+    var isEditing = $row.find(".ca-question-text-input:visible").length > 0;
+
+    if (isEditing) {
+      cancelQuestionEditMode($row);
+    } else {
+      enableQuestionEditMode($row);
+    }
+  });
+
+  $(document).on("keydown", function (e) {
+    if (e.key !== "Escape") return;
+    $(".ca-question-text-input:visible").each(function () {
+      cancelQuestionEditMode($(this).closest("tr"));
+    });
+  });
 
   // Improve Add New Question UX (live counter + enable/disable submit).
   if ($("#question_text").length) {
