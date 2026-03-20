@@ -926,7 +926,47 @@ class CA_Admin
 		}
 
 		// List view
-		$submissions = CA_Database::get_all_submissions();
+		$all_submissions = CA_Database::get_all_submissions();
+
+		// Pagination setup
+		$per_page = 10;
+		$current_page = max(1, isset($_GET['paged']) ? absint($_GET['paged']) : 1);
+		$total_submissions_count = count($all_submissions);
+		$total_pages = max(1, (int) ceil($total_submissions_count / $per_page));
+		$offset = ($current_page - 1) * $per_page;
+		$paged_submissions = array_slice($all_submissions, $offset, $per_page);
+
+		$submissions = $paged_submissions;
+
+		// Statistics (calculated over all submissions, not paged subset).
+		$completed_count = 0;
+		$active_count = 0; // started + in_progress
+		$latest_created_at = '';
+		$completed_avg_sum = 0.0;
+
+		foreach ($all_submissions as $sub) {
+			if (!isset($sub->status, $sub->created_at, $sub->average_score)) {
+				continue;
+			}
+
+			$status = (string) $sub->status;
+			if ('completed' === $status) {
+				$completed_count++;
+				$completed_avg_sum += (float) $sub->average_score;
+			} elseif ('started' === $status || 'in_progress' === $status) {
+				$active_count++;
+			}
+
+			$created_ts = strtotime($sub->created_at);
+			if (false !== $created_ts) {
+				if ('' === $latest_created_at || $created_ts > strtotime($latest_created_at)) {
+					$latest_created_at = $sub->created_at;
+				}
+			}
+		}
+
+		$completed_avg = $completed_count > 0 ? $completed_avg_sum / $completed_count : 0.0;
+		$latest_created_display = $latest_created_at ? date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($latest_created_at)) : '—';
 		?>
 		<div class="wrap ca-admin-wrap">
 			<h1 class="ca-admin-title">
@@ -963,13 +1003,37 @@ class CA_Admin
 				</div>
 			<?php endif; ?>
 
-			<?php if (empty($submissions)): ?>
+			<?php if (empty($all_submissions)): ?>
 				<div class="ca-admin-empty">
 					<span class="dashicons dashicons-clipboard" aria-hidden="true"></span>
 					<p><?php esc_html_e('No submissions yet. Share the assessment shortcode [custom_assessment] on any page.', CA_TEXT_DOMAIN); ?>
 					</p>
 				</div>
 			<?php else: ?>
+
+				<!-- Basic Statistics -->
+				<div class="ca-questions-stats-grid">
+					<div class="ca-stat-card">
+						<div class="ca-stat-value"><?php echo esc_html($total_submissions_count); ?></div>
+						<div class="ca-stat-label"><?php esc_html_e('Total Submissions', CA_TEXT_DOMAIN); ?></div>
+					</div>
+
+					<div class="ca-stat-card">
+						<div class="ca-stat-value"><?php echo esc_html($completed_count); ?></div>
+						<div class="ca-stat-label"><?php esc_html_e('Completed', CA_TEXT_DOMAIN); ?></div>
+					</div>
+
+					<div class="ca-stat-card">
+						<div class="ca-stat-value"><?php echo esc_html($active_count); ?></div>
+						<div class="ca-stat-label"><?php esc_html_e('In Progress', CA_TEXT_DOMAIN); ?></div>
+					</div>
+
+					<div class="ca-stat-card">
+						<div class="ca-stat-value"><?php echo esc_html(number_format($completed_avg, 2)); ?></div>
+						<div class="ca-stat-label"><?php esc_html_e('Avg Score (Completed)', CA_TEXT_DOMAIN); ?></div>
+						<div class="ca-stat-sublabel"><?php esc_html_e('Latest submission: ', CA_TEXT_DOMAIN); ?><?php echo esc_html($latest_created_display); ?></div>
+					</div>
+				</div>
 
 				<table class="wp-list-table widefat fixed striped ca-admin-table">
 					<thead>
@@ -1048,6 +1112,51 @@ class CA_Admin
 						<?php endforeach; ?>
 					</tbody>
 				</table>
+
+				<div class="tablenav bottom">
+					<div class="tablenav-pages">
+						<span class="displaying-num">
+							<?php echo esc_html($total_submissions_count); ?> <?php esc_html_e('submissions', CA_TEXT_DOMAIN); ?>
+						</span>
+
+						<?php if ($total_pages > 1): ?>
+							<span class="pagination-links">
+								<?php
+								$base_url = admin_url('admin.php?page=custom-assessment-submissions');
+								$prev_disabled = $current_page <= 1 ? 'disabled' : '';
+								$next_disabled = $current_page >= $total_pages ? 'disabled' : '';
+
+								echo '<a class="prev-page button ' . esc_attr($prev_disabled) . '" href="' . esc_url(add_query_arg('paged', max(1, $current_page - 1), $base_url)) . '">&laquo;</a>';
+
+								$start_page = max(1, $current_page - 2);
+								$end_page = min($total_pages, $start_page + 4);
+
+								if ($start_page > 1) {
+									echo '<a class="page-numbers" href="' . esc_url(add_query_arg('paged', 1, $base_url)) . '">1</a>';
+									if ($start_page > 2) {
+										echo '<span class="dots">…</span>';
+									}
+								}
+
+								for ($i = $start_page; $i <= $end_page; $i++) {
+									$active_class = ($i === $current_page) ? 'current' : '';
+									echo '<a class="page-numbers ' . esc_attr($active_class) . '" href="' . esc_url(add_query_arg('paged', $i, $base_url)) . '">' . esc_html($i) . '</a>';
+								}
+
+								if ($end_page < $total_pages) {
+									if ($end_page < $total_pages - 1) {
+										echo '<span class="dots">…</span>';
+									}
+									echo '<a class="page-numbers" href="' . esc_url(add_query_arg('paged', $total_pages, $base_url)) . '">' . esc_html($total_pages) . '</a>';
+								}
+
+								echo '<a class="next-page button ' . esc_attr($next_disabled) . '" href="' . esc_url(add_query_arg('paged', min($total_pages, $current_page + 1), $base_url)) . '">&raquo;</a>';
+								?>
+							</span>
+						<?php endif; ?>
+					</div>
+					<br class="clear">
+				</div>
 			<?php endif; ?>
 		</div>
 		<?php
