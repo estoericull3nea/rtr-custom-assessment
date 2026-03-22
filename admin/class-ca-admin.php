@@ -26,8 +26,8 @@ class CA_Admin
 	public function register_menu()
 	{
 		add_menu_page(
-			__('Assessment Dashboard', CA_TEXT_DOMAIN),
-			__('Assessment', CA_TEXT_DOMAIN),
+			__('Assessment Dashboard', 'custom-assessment'),
+			__('Assessment', 'custom-assessment'),
 			'manage_options',
 			'custom-assessment-dashboard',
 			array($this, 'render_dashboard_page'),
@@ -37,8 +37,8 @@ class CA_Admin
 
 		add_submenu_page(
 			'custom-assessment-dashboard',
-			__('Dashboard', CA_TEXT_DOMAIN),
-			__('Dashboard', CA_TEXT_DOMAIN),
+			__('Dashboard', 'custom-assessment'),
+			__('Dashboard', 'custom-assessment'),
 			'manage_options',
 			'custom-assessment-dashboard',
 			array($this, 'render_dashboard_page')
@@ -46,8 +46,8 @@ class CA_Admin
 
 		add_submenu_page(
 			'custom-assessment-dashboard',
-			__('Submissions', CA_TEXT_DOMAIN),
-			__('Submissions', CA_TEXT_DOMAIN),
+			__('Submissions', 'custom-assessment'),
+			__('Submissions', 'custom-assessment'),
 			'manage_options',
 			'custom-assessment-submissions',
 			array($this, 'render_list_page')
@@ -55,8 +55,8 @@ class CA_Admin
 
 		add_submenu_page(
 			'custom-assessment-dashboard',
-			__('Questions', CA_TEXT_DOMAIN),
-			__('Questions', CA_TEXT_DOMAIN),
+			__('Questions', 'custom-assessment'),
+			__('Questions', 'custom-assessment'),
 			'manage_options',
 			'custom-assessment-questions',
 			array($this, 'render_questions_page')
@@ -64,8 +64,8 @@ class CA_Admin
 
 		add_submenu_page(
 			'custom-assessment-dashboard',
-			__('Categories', CA_TEXT_DOMAIN),
-			__('Categories', CA_TEXT_DOMAIN),
+			__('Categories', 'custom-assessment'),
+			__('Categories', 'custom-assessment'),
 			'manage_options',
 			'custom-assessment-categories',
 			array($this, 'render_categories_page')
@@ -107,7 +107,7 @@ class CA_Admin
 
 		if (isset($_GET['action']) && 'delete' === $_GET['action'] && !empty($_GET['id'])) {
 			if (!isset($_GET['_wpnonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'])), 'ca_delete_submission_' . absint($_GET['id']))) {
-				wp_die(esc_html__('Security check failed.', CA_TEXT_DOMAIN));
+				wp_die(esc_html__('Security check failed.', 'custom-assessment'));
 			}
 
 			CA_Database::delete_submission(absint($_GET['id']));
@@ -133,7 +133,7 @@ class CA_Admin
 
 		if (isset($_GET['action']) && 'export' === $_GET['action'] && !empty($_GET['id']) && !empty($_GET['format'])) {
 			if (!isset($_GET['_wpnonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'])), 'ca_export_submission_' . absint($_GET['id']))) {
-				wp_die(esc_html__('Security check failed.', CA_TEXT_DOMAIN));
+				wp_die(esc_html__('Security check failed.', 'custom-assessment'));
 			}
 
 			$submission_id = absint($_GET['id']);
@@ -141,7 +141,7 @@ class CA_Admin
 			$submission = CA_Database::get_submission($submission_id);
 
 			if (!$submission || 'completed' !== $submission->status) {
-				wp_die(esc_html__('Only completed submissions can be exported.', CA_TEXT_DOMAIN));
+				wp_die(esc_html__('Only completed submissions can be exported.', 'custom-assessment'));
 			}
 
 			if ('csv' === $format) {
@@ -169,18 +169,18 @@ class CA_Admin
 
 		if (isset($_GET['action']) && 'send_email' === $_GET['action'] && !empty($_GET['id'])) {
 			if (!isset($_GET['_wpnonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'])), 'ca_send_email_' . absint($_GET['id']))) {
-				wp_die(esc_html__('Security check failed.', CA_TEXT_DOMAIN));
+				wp_die(esc_html__('Security check failed.', 'custom-assessment'));
 			}
 
 			$submission_id = absint($_GET['id']);
 			$submission = CA_Database::get_submission($submission_id);
 
 			if (!$submission) {
-				wp_die(esc_html__('Submission not found.', CA_TEXT_DOMAIN));
+				wp_die(esc_html__('Submission not found.', 'custom-assessment'));
 			}
 
 			if ('completed' !== $submission->status) {
-				wp_die(esc_html__('Only completed submissions can have emails sent.', CA_TEXT_DOMAIN));
+				wp_die(esc_html__('Only completed submissions can have emails sent.', 'custom-assessment'));
 			}
 
 			// Send the email using the existing mailer
@@ -516,7 +516,7 @@ class CA_Admin
 		}
 		if ($priority_exists) {
 			wp_send_json_error(
-				array('message' => esc_html__('Priority already exists in this category. Please choose another number.', CA_TEXT_DOMAIN)),
+				array('message' => esc_html__('Priority already exists in this category. Please choose another number.', 'custom-assessment')),
 				409
 			);
 		}
@@ -771,7 +771,7 @@ class CA_Admin
 	public function render_dashboard_page()
 	{
 		if (!current_user_can('manage_options')) {
-			wp_die(esc_html__('You do not have permission to view this page.', CA_TEXT_DOMAIN));
+			wp_die(esc_html__('You do not have permission to view this page.', 'custom-assessment'));
 		}
 
 		// Check SMTP configuration - show error if no SMTP detected
@@ -804,15 +804,15 @@ class CA_Admin
 		<div class="wrap ca-admin-wrap">
 			<h1 class="ca-admin-title">
 				<span class="ca-admin-title-icon dashicons dashicons-chart-bar"></span>
-				<?php esc_html_e('Assessment Dashboard', CA_TEXT_DOMAIN); ?>
+				<?php esc_html_e('Assessment Dashboard', 'custom-assessment'); ?>
 			</h1>
 
 			<?php if (!$smtp_configured): ?>
 				<div class="notice notice-error is-dismissible">
-					<p><strong><?php esc_html_e('Warning: No SMTP configuration detected.', CA_TEXT_DOMAIN); ?></strong></p>
-					<p><?php esc_html_e('Email notifications for completed assessments may not work properly. Please configure an SMTP plugin to ensure emails are delivered successfully.', CA_TEXT_DOMAIN); ?>
+					<p><strong><?php esc_html_e('Warning: No SMTP configuration detected.', 'custom-assessment'); ?></strong></p>
+					<p><?php esc_html_e('Email notifications for completed assessments may not work properly. Please configure an SMTP plugin to ensure emails are delivered successfully.', 'custom-assessment'); ?>
 					</p>
-					<p><em><?php esc_html_e('Recommended plugins: WP Mail SMTP, Easy WP SMTP, Post SMTP Mailer, or similar.', CA_TEXT_DOMAIN); ?></em>
+					<p><em><?php esc_html_e('Recommended plugins: WP Mail SMTP, Easy WP SMTP, Post SMTP Mailer, or similar.', 'custom-assessment'); ?></em>
 					</p>
 				</div>
 			<?php endif; ?>
@@ -820,51 +820,51 @@ class CA_Admin
 			<div class="ca-dashboard-grid">
 				<div class="ca-dashboard-card">
 					<div class="ca-dashboard-card-value"><?php echo esc_html($total_submissions); ?></div>
-					<div class="ca-dashboard-card-label"><?php esc_html_e('Total Submissions', CA_TEXT_DOMAIN); ?></div>
+					<div class="ca-dashboard-card-label"><?php esc_html_e('Total Submissions', 'custom-assessment'); ?></div>
 				</div>
 
 				<div class="ca-dashboard-card">
 					<div class="ca-dashboard-card-value"><?php echo esc_html($completed_count); ?></div>
-					<div class="ca-dashboard-card-label"><?php esc_html_e('Completed', CA_TEXT_DOMAIN); ?></div>
+					<div class="ca-dashboard-card-label"><?php esc_html_e('Completed', 'custom-assessment'); ?></div>
 				</div>
 
 				<div class="ca-dashboard-card">
 					<div class="ca-dashboard-card-value"><?php echo esc_html($in_progress_count); ?></div>
-					<div class="ca-dashboard-card-label"><?php esc_html_e('In Progress', CA_TEXT_DOMAIN); ?></div>
+					<div class="ca-dashboard-card-label"><?php esc_html_e('In Progress', 'custom-assessment'); ?></div>
 				</div>
 
 				<div class="ca-dashboard-card">
 					<div class="ca-dashboard-card-value"><?php echo esc_html($completion_rate); ?>%</div>
-					<div class="ca-dashboard-card-label"><?php esc_html_e('Completion Rate', CA_TEXT_DOMAIN); ?></div>
+					<div class="ca-dashboard-card-label"><?php esc_html_e('Completion Rate', 'custom-assessment'); ?></div>
 				</div>
 
 				<div class="ca-dashboard-card">
 					<div class="ca-dashboard-card-value"><?php echo esc_html(number_format($avg_total_score, 1)); ?></div>
-					<div class="ca-dashboard-card-label"><?php esc_html_e('Avg Total Score', CA_TEXT_DOMAIN); ?></div>
+					<div class="ca-dashboard-card-label"><?php esc_html_e('Avg Total Score', 'custom-assessment'); ?></div>
 				</div>
 
 				<div class="ca-dashboard-card">
 					<div class="ca-dashboard-card-value"><?php echo esc_html(number_format($avg_average_score, 2)); ?>/5
 					</div>
-					<div class="ca-dashboard-card-label"><?php esc_html_e('Avg Score Per Q', CA_TEXT_DOMAIN); ?></div>
+					<div class="ca-dashboard-card-label"><?php esc_html_e('Avg Score Per Q', 'custom-assessment'); ?></div>
 				</div>
 			</div>
 
 			<div class="ca-dashboard-section">
-				<h2><?php esc_html_e('Recent Submissions', CA_TEXT_DOMAIN); ?></h2>
+				<h2><?php esc_html_e('Recent Submissions', 'custom-assessment'); ?></h2>
 
 				<?php if (empty($recent_submissions)): ?>
-					<p><?php esc_html_e('No submissions yet.', CA_TEXT_DOMAIN); ?></p>
+					<p><?php esc_html_e('No submissions yet.', 'custom-assessment'); ?></p>
 				<?php else: ?>
 					<table class="wp-list-table widefat fixed striped ca-admin-table">
 						<thead>
 							<tr>
-								<th scope="col"><?php esc_html_e('Name', CA_TEXT_DOMAIN); ?></th>
-								<th scope="col"><?php esc_html_e('Email', CA_TEXT_DOMAIN); ?></th>
-								<th scope="col" class="ca-col-score"><?php esc_html_e('Score', CA_TEXT_DOMAIN); ?></th>
-								<th scope="col" class="ca-col-status"><?php esc_html_e('Status', CA_TEXT_DOMAIN); ?></th>
-								<th scope="col"><?php esc_html_e('Date', CA_TEXT_DOMAIN); ?></th>
-								<th scope="col"><?php esc_html_e('Action', CA_TEXT_DOMAIN); ?></th>
+								<th scope="col"><?php esc_html_e('Name', 'custom-assessment'); ?></th>
+								<th scope="col"><?php esc_html_e('Email', 'custom-assessment'); ?></th>
+								<th scope="col" class="ca-col-score"><?php esc_html_e('Score', 'custom-assessment'); ?></th>
+								<th scope="col" class="ca-col-status"><?php esc_html_e('Status', 'custom-assessment'); ?></th>
+								<th scope="col"><?php esc_html_e('Date', 'custom-assessment'); ?></th>
+								<th scope="col"><?php esc_html_e('Action', 'custom-assessment'); ?></th>
 							</tr>
 						</thead>
 						<tbody>
@@ -885,7 +885,7 @@ class CA_Admin
 									<td>
 										<a href="<?php echo esc_url(add_query_arg(array('page' => 'custom-assessment-submissions', 'view' => 'detail', 'id' => $sub->id), admin_url('admin.php'))); ?>"
 											class="button button-small">
-											<?php esc_html_e('View', CA_TEXT_DOMAIN); ?>
+											<?php esc_html_e('View', 'custom-assessment'); ?>
 										</a>
 									</td>
 								</tr>
@@ -895,7 +895,7 @@ class CA_Admin
 					<p>
 						<a href="<?php echo esc_url(add_query_arg(array('page' => 'custom-assessment-submissions'), admin_url('admin.php'))); ?>"
 							class="button button-primary">
-							<?php esc_html_e('View All Submissions', CA_TEXT_DOMAIN); ?>
+							<?php esc_html_e('View All Submissions', 'custom-assessment'); ?>
 						</a>
 					</p>
 				<?php endif; ?>
@@ -911,7 +911,7 @@ class CA_Admin
 	public function render_list_page()
 	{
 		if (!current_user_can('manage_options')) {
-			wp_die(esc_html__('You do not have permission to view this page.', CA_TEXT_DOMAIN));
+			wp_die(esc_html__('You do not have permission to view this page.', 'custom-assessment'));
 		}
 
 		// Check SMTP configuration - show error if no SMTP detected
@@ -971,34 +971,34 @@ class CA_Admin
 		<div class="wrap ca-admin-wrap">
 			<h1 class="ca-admin-title">
 				<span class="ca-admin-title-icon dashicons dashicons-chart-bar"></span>
-				<?php esc_html_e('Assessment Submissions', CA_TEXT_DOMAIN); ?>
+				<?php esc_html_e('Assessment Submissions', 'custom-assessment'); ?>
 			</h1>
 
 			<?php if (!$smtp_configured): ?>
 				<div class="notice notice-error is-dismissible">
-					<p><strong><?php esc_html_e('Warning: No SMTP configuration detected.', CA_TEXT_DOMAIN); ?></strong></p>
-					<p><?php esc_html_e('Email notifications for completed assessments may not work properly. Please configure an SMTP plugin to ensure emails are delivered successfully.', CA_TEXT_DOMAIN); ?>
+					<p><strong><?php esc_html_e('Warning: No SMTP configuration detected.', 'custom-assessment'); ?></strong></p>
+					<p><?php esc_html_e('Email notifications for completed assessments may not work properly. Please configure an SMTP plugin to ensure emails are delivered successfully.', 'custom-assessment'); ?>
 					</p>
-					<p><em><?php esc_html_e('Recommended plugins: WP Mail SMTP, Easy WP SMTP, Post SMTP Mailer, or similar.', CA_TEXT_DOMAIN); ?></em>
+					<p><em><?php esc_html_e('Recommended plugins: WP Mail SMTP, Easy WP SMTP, Post SMTP Mailer, or similar.', 'custom-assessment'); ?></em>
 					</p>
 				</div>
 			<?php endif; ?>
 
 			<?php if (isset($_GET['message']) && 'deleted' === $_GET['message']): ?>
 				<div class="notice notice-success is-dismissible">
-					<p><?php esc_html_e('Submission deleted successfully.', CA_TEXT_DOMAIN); ?></p>
+					<p><?php esc_html_e('Submission deleted successfully.', 'custom-assessment'); ?></p>
 				</div>
 			<?php endif; ?>
 
 			<?php if (isset($_GET['message']) && 'email_sent' === $_GET['message']): ?>
 				<div class="notice notice-success is-dismissible">
-					<p><?php esc_html_e('Assessment results email sent successfully to the customer.', CA_TEXT_DOMAIN); ?></p>
+					<p><?php esc_html_e('Assessment results email sent successfully to the customer.', 'custom-assessment'); ?></p>
 				</div>
 			<?php endif; ?>
 
 			<?php if (isset($_GET['message']) && 'email_failed' === $_GET['message']): ?>
 				<div class="notice notice-error is-dismissible">
-					<p><?php esc_html_e('Failed to send assessment results email. Please check your SMTP configuration.', CA_TEXT_DOMAIN); ?>
+					<p><?php esc_html_e('Failed to send assessment results email. Please check your SMTP configuration.', 'custom-assessment'); ?>
 					</p>
 				</div>
 			<?php endif; ?>
@@ -1006,7 +1006,7 @@ class CA_Admin
 			<?php if (empty($all_submissions)): ?>
 				<div class="ca-admin-empty">
 					<span class="dashicons dashicons-clipboard" aria-hidden="true"></span>
-					<p><?php esc_html_e('No submissions yet. Share the assessment shortcode [custom_assessment] on any page.', CA_TEXT_DOMAIN); ?>
+					<p><?php esc_html_e('No submissions yet. Share the assessment shortcode [custom_assessment] on any page.', 'custom-assessment'); ?>
 					</p>
 				</div>
 			<?php else: ?>
@@ -1015,24 +1015,24 @@ class CA_Admin
 				<div class="ca-questions-stats-grid">
 					<div class="ca-stat-card">
 						<div class="ca-stat-value"><?php echo esc_html($total_submissions_count); ?></div>
-						<div class="ca-stat-label"><?php esc_html_e('Total Submissions', CA_TEXT_DOMAIN); ?></div>
+						<div class="ca-stat-label"><?php esc_html_e('Total Submissions', 'custom-assessment'); ?></div>
 					</div>
 
 					<div class="ca-stat-card">
 						<div class="ca-stat-value"><?php echo esc_html($completed_count); ?></div>
-						<div class="ca-stat-label"><?php esc_html_e('Completed', CA_TEXT_DOMAIN); ?></div>
+						<div class="ca-stat-label"><?php esc_html_e('Completed', 'custom-assessment'); ?></div>
 					</div>
 
 					<div class="ca-stat-card">
 						<div class="ca-stat-value"><?php echo esc_html($active_count); ?></div>
-						<div class="ca-stat-label"><?php esc_html_e('In Progress', CA_TEXT_DOMAIN); ?></div>
+						<div class="ca-stat-label"><?php esc_html_e('In Progress', 'custom-assessment'); ?></div>
 					</div>
 
 					<div class="ca-stat-card">
 						<div class="ca-stat-value"><?php echo esc_html(number_format($completed_avg, 2)); ?></div>
-						<div class="ca-stat-label"><?php esc_html_e('Avg Score (Completed)', CA_TEXT_DOMAIN); ?></div>
+						<div class="ca-stat-label"><?php esc_html_e('Avg Score (Completed)', 'custom-assessment'); ?></div>
 						<div class="ca-stat-sublabel">
-							<?php esc_html_e('Latest submission: ', CA_TEXT_DOMAIN); ?>
+							<?php esc_html_e('Latest submission: ', 'custom-assessment'); ?>
 							<?php echo esc_html($latest_created_display); ?>
 						</div>
 					</div>
@@ -1040,9 +1040,9 @@ class CA_Admin
 
 				<div class="ca-questions-search" style="text-align: end;">
 					<div class="ca-search-field">
-						<label for="ca-search-submissions"><?php esc_html_e('Search Submissions', CA_TEXT_DOMAIN); ?></label>
+						<label for="ca-search-submissions"><?php esc_html_e('Search Submissions', 'custom-assessment'); ?></label>
 						<input type="text" id="ca-search-submissions"
-							placeholder="<?php esc_attr_e('Search by ID, name, email, phone, job title, score, or status (minimum 3 characters)...', CA_TEXT_DOMAIN); ?>"
+							placeholder="<?php esc_attr_e('Search by ID, name, email, phone, job title, score, or status (minimum 3 characters)...', 'custom-assessment'); ?>"
 							autocomplete="off">
 						<div class="ca-search-count" style="display: none;">
 							<span id="ca-search-results-count"></span>
@@ -1055,16 +1055,16 @@ class CA_Admin
 				<table class="wp-list-table widefat fixed striped ca-admin-table">
 					<thead>
 						<tr>
-							<th scope="col" class="ca-col-id"><?php esc_html_e('#', CA_TEXT_DOMAIN); ?></th>
-							<th scope="col"><?php esc_html_e('Name', CA_TEXT_DOMAIN); ?></th>
-							<th scope="col"><?php esc_html_e('Email', CA_TEXT_DOMAIN); ?></th>
-							<th scope="col"><?php esc_html_e('Phone', CA_TEXT_DOMAIN); ?></th>
-							<th scope="col"><?php esc_html_e('Job Title', CA_TEXT_DOMAIN); ?></th>
-							<th scope="col" class="ca-col-score"><?php esc_html_e('Total Score', CA_TEXT_DOMAIN); ?></th>
-							<th scope="col" class="ca-col-score"><?php esc_html_e('Average', CA_TEXT_DOMAIN); ?></th>
-							<th scope="col" class="ca-col-status"><?php esc_html_e('Status', CA_TEXT_DOMAIN); ?></th>
-							<th scope="col"><?php esc_html_e('Date', CA_TEXT_DOMAIN); ?></th>
-							<th scope="col"><?php esc_html_e('Actions', CA_TEXT_DOMAIN); ?></th>
+							<th scope="col" class="ca-col-id"><?php esc_html_e('#', 'custom-assessment'); ?></th>
+							<th scope="col"><?php esc_html_e('Name', 'custom-assessment'); ?></th>
+							<th scope="col"><?php esc_html_e('Email', 'custom-assessment'); ?></th>
+							<th scope="col"><?php esc_html_e('Phone', 'custom-assessment'); ?></th>
+							<th scope="col"><?php esc_html_e('Job Title', 'custom-assessment'); ?></th>
+							<th scope="col" class="ca-col-score"><?php esc_html_e('Total Score', 'custom-assessment'); ?></th>
+							<th scope="col" class="ca-col-score"><?php esc_html_e('Average', 'custom-assessment'); ?></th>
+							<th scope="col" class="ca-col-status"><?php esc_html_e('Status', 'custom-assessment'); ?></th>
+							<th scope="col"><?php esc_html_e('Date', 'custom-assessment'); ?></th>
+							<th scope="col"><?php esc_html_e('Actions', 'custom-assessment'); ?></th>
 						</tr>
 					</thead>
 					<tbody>
@@ -1093,7 +1093,7 @@ class CA_Admin
 								<td>
 									<a href="<?php echo esc_url(add_query_arg(array('page' => 'custom-assessment-submissions', 'view' => 'detail', 'id' => $sub->id), admin_url('admin.php'))); ?>"
 										class="button button-small">
-										<?php esc_html_e('View', CA_TEXT_DOMAIN); ?>
+										<?php esc_html_e('View', 'custom-assessment'); ?>
 									</a>
 									<?php if ('completed' === $sub->status): ?>
 										<div class="ca-export-dropdown-wrapper">
@@ -1109,20 +1109,20 @@ class CA_Admin
 											</div>
 											<button type="button" class="button button-small ca-export-dropdown-btn"
 												data-id="<?php echo esc_attr($sub->id); ?>">
-												<?php esc_html_e('Export', CA_TEXT_DOMAIN); ?> ▼
+												<?php esc_html_e('Export', 'custom-assessment'); ?> ▼
 											</button>
 										</div>
 
 										<?php $email_url = add_query_arg(array('page' => 'custom-assessment-submissions', 'action' => 'send_email', 'id' => $sub->id, '_wpnonce' => wp_create_nonce('ca_send_email_' . $sub->id)), admin_url('admin.php')); ?>
 										<a href="<?php echo esc_url($email_url); ?>" class="button button-small"
-											onclick="return confirm('<?php echo esc_js(__('Are you sure you want to resend the assessment results email to this customer?', CA_TEXT_DOMAIN)); ?>');">
-											<?php esc_html_e('Resend Email', CA_TEXT_DOMAIN); ?>
+											onclick="return confirm('<?php echo esc_js(__('Are you sure you want to resend the assessment results email to this customer?', 'custom-assessment')); ?>');">
+											<?php esc_html_e('Resend Email', 'custom-assessment'); ?>
 										</a>
 									<?php endif; ?>
 									<?php $delete_url = add_query_arg(array('page' => 'custom-assessment-submissions', 'action' => 'delete', 'id' => $sub->id, '_wpnonce' => wp_create_nonce('ca_delete_submission_' . $sub->id)), admin_url('admin.php')); ?>
 									<a href="<?php echo esc_url($delete_url); ?>" class="button button-small"
-										onclick="return confirm('<?php echo esc_js(__('Are you sure you want to delete this submission? This action cannot be undone.', CA_TEXT_DOMAIN)); ?>');">
-										<?php esc_html_e('Delete', CA_TEXT_DOMAIN); ?>
+										onclick="return confirm('<?php echo esc_js(__('Are you sure you want to delete this submission? This action cannot be undone.', 'custom-assessment')); ?>');">
+										<?php esc_html_e('Delete', 'custom-assessment'); ?>
 									</a>
 								</td>
 							</tr>
@@ -1133,7 +1133,7 @@ class CA_Admin
 				<div class="tablenav bottom">
 					<div class="tablenav-pages">
 						<span class="displaying-num">
-							<?php echo esc_html($total_submissions_count); ?> 			<?php esc_html_e('submissions', CA_TEXT_DOMAIN); ?>
+							<?php echo esc_html($total_submissions_count); ?> 			<?php esc_html_e('submissions', 'custom-assessment'); ?>
 						</span>
 
 						<?php if ($total_pages > 1): ?>
@@ -1192,7 +1192,7 @@ class CA_Admin
 		$flat_q = CA_Questions::get_flat();
 
 		if (!$submission) {
-			echo '<div class="wrap"><p>' . esc_html__('Submission not found.', CA_TEXT_DOMAIN) . '</p></div>';
+			echo '<div class="wrap"><p>' . esc_html__('Submission not found.', 'custom-assessment') . '</p></div>';
 			return;
 		}
 		?>
@@ -1202,29 +1202,29 @@ class CA_Admin
 					class="ca-admin-back">
 					<span class="dashicons dashicons-arrow-left-alt"></span>
 				</a>
-				<?php esc_html_e('Submission Detail', CA_TEXT_DOMAIN); ?>
+				<?php esc_html_e('Submission Detail', 'custom-assessment'); ?>
 			</h1>
 
 			<!-- User Info -->
 			<div class="ca-admin-card">
-				<h2 class="ca-admin-card-title"><?php esc_html_e('Respondent Information', CA_TEXT_DOMAIN); ?></h2>
+				<h2 class="ca-admin-card-title"><?php esc_html_e('Respondent Information', 'custom-assessment'); ?></h2>
 				<div class="ca-admin-info-grid">
 					<div>
-						<label><?php esc_html_e('Name', CA_TEXT_DOMAIN); ?></label><span><?php echo esc_html($submission->first_name . ' ' . $submission->last_name); ?></span>
+						<label><?php esc_html_e('Name', 'custom-assessment'); ?></label><span><?php echo esc_html($submission->first_name . ' ' . $submission->last_name); ?></span>
 					</div>
 					<div>
-						<label><?php esc_html_e('Email', CA_TEXT_DOMAIN); ?></label><span><?php echo esc_html($submission->email); ?></span>
+						<label><?php esc_html_e('Email', 'custom-assessment'); ?></label><span><?php echo esc_html($submission->email); ?></span>
 					</div>
 					<div>
-						<label><?php esc_html_e('Phone', CA_TEXT_DOMAIN); ?></label><span><?php echo esc_html($submission->phone); ?></span>
+						<label><?php esc_html_e('Phone', 'custom-assessment'); ?></label><span><?php echo esc_html($submission->phone); ?></span>
 					</div>
 					<div>
-						<label><?php esc_html_e('Job Title', CA_TEXT_DOMAIN); ?></label><span><?php echo esc_html($submission->job_title); ?></span>
+						<label><?php esc_html_e('Job Title', 'custom-assessment'); ?></label><span><?php echo esc_html($submission->job_title); ?></span>
 					</div>
 					<div>
-						<label><?php esc_html_e('Submitted', CA_TEXT_DOMAIN); ?></label><span><?php echo esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($submission->created_at))); ?></span>
+						<label><?php esc_html_e('Submitted', 'custom-assessment'); ?></label><span><?php echo esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($submission->created_at))); ?></span>
 					</div>
-					<div><label><?php esc_html_e('Status', CA_TEXT_DOMAIN); ?></label>
+					<div><label><?php esc_html_e('Status', 'custom-assessment'); ?></label>
 						<span
 							class="ca-status-badge ca-status--<?php echo esc_attr($submission->status); ?>"><?php echo esc_html(ucwords(str_replace('_', ' ', $submission->status))); ?></span>
 					</div>
@@ -1235,11 +1235,11 @@ class CA_Admin
 
 				<!-- Overall Scores -->
 				<div class="ca-admin-card">
-					<h2 class="ca-admin-card-title"><?php esc_html_e('Overall Scores', CA_TEXT_DOMAIN); ?></h2>
+					<h2 class="ca-admin-card-title"><?php esc_html_e('Overall Scores', 'custom-assessment'); ?></h2>
 					<div class="ca-admin-score-row">
 						<div class="ca-admin-score-box">
 							<div class="ca-admin-score-value"><?php echo esc_html($submission->total_score); ?></div>
-							<div class="ca-admin-score-label"><?php esc_html_e('Total Score', CA_TEXT_DOMAIN); ?></div>
+							<div class="ca-admin-score-label"><?php esc_html_e('Total Score', 'custom-assessment'); ?></div>
 							<div class="ca-admin-score-max">
 								<?php echo esc_html('/ ' . (CA_Questions::get_total_count() * 5)); ?>
 							</div>
@@ -1248,28 +1248,28 @@ class CA_Admin
 							<div class="ca-admin-score-value">
 								<?php echo esc_html(number_format($submission->average_score, 2)); ?>
 							</div>
-							<div class="ca-admin-score-label"><?php esc_html_e('Average Score', CA_TEXT_DOMAIN); ?></div>
-							<div class="ca-admin-score-max"><?php esc_html_e('/ 5.00', CA_TEXT_DOMAIN); ?></div>
+							<div class="ca-admin-score-label"><?php esc_html_e('Average Score', 'custom-assessment'); ?></div>
+							<div class="ca-admin-score-max"><?php esc_html_e('/ 5.00', 'custom-assessment'); ?></div>
 						</div>
 						<div class="ca-admin-score-box">
 							<div class="ca-admin-score-value ca-admin-score-profile">
 								<?php echo esc_html(CA_Scoring::get_overall_profile((float) $submission->average_score)); ?>
 							</div>
-							<div class="ca-admin-score-label"><?php esc_html_e('Profile', CA_TEXT_DOMAIN); ?></div>
+							<div class="ca-admin-score-label"><?php esc_html_e('Profile', 'custom-assessment'); ?></div>
 						</div>
 					</div>
 				</div>
 
 				<!-- Category Scores -->
 				<div class="ca-admin-card">
-					<h2 class="ca-admin-card-title"><?php esc_html_e('Category Scores', CA_TEXT_DOMAIN); ?></h2>
+					<h2 class="ca-admin-card-title"><?php esc_html_e('Category Scores', 'custom-assessment'); ?></h2>
 					<table class="wp-list-table widefat fixed ca-admin-table">
 						<thead>
 							<tr>
-								<th><?php esc_html_e('Category', CA_TEXT_DOMAIN); ?></th>
-								<th><?php esc_html_e('Subtotal', CA_TEXT_DOMAIN); ?></th>
-								<th><?php esc_html_e('Average', CA_TEXT_DOMAIN); ?></th>
-								<th><?php esc_html_e('Summary', CA_TEXT_DOMAIN); ?></th>
+								<th><?php esc_html_e('Category', 'custom-assessment'); ?></th>
+								<th><?php esc_html_e('Subtotal', 'custom-assessment'); ?></th>
+								<th><?php esc_html_e('Average', 'custom-assessment'); ?></th>
+								<th><?php esc_html_e('Summary', 'custom-assessment'); ?></th>
 							</tr>
 						</thead>
 						<tbody>
@@ -1291,17 +1291,17 @@ class CA_Admin
 
 			<!-- All Answers -->
 			<div class="ca-admin-card">
-				<h2 class="ca-admin-card-title"><?php esc_html_e('Question Responses', CA_TEXT_DOMAIN); ?></h2>
+				<h2 class="ca-admin-card-title"><?php esc_html_e('Question Responses', 'custom-assessment'); ?></h2>
 				<?php if (empty($answers)): ?>
-					<p><?php esc_html_e('No answers recorded yet.', CA_TEXT_DOMAIN); ?></p>
+					<p><?php esc_html_e('No answers recorded yet.', 'custom-assessment'); ?></p>
 				<?php else: ?>
 					<table class="wp-list-table widefat fixed ca-admin-table">
 						<thead>
 							<tr>
-								<th class="ca-col-id"><?php esc_html_e('#', CA_TEXT_DOMAIN); ?></th>
-								<th><?php esc_html_e('Category', CA_TEXT_DOMAIN); ?></th>
-								<th><?php esc_html_e('Question', CA_TEXT_DOMAIN); ?></th>
-								<th class="ca-col-score"><?php esc_html_e('Answer', CA_TEXT_DOMAIN); ?></th>
+								<th class="ca-col-id"><?php esc_html_e('#', 'custom-assessment'); ?></th>
+								<th><?php esc_html_e('Category', 'custom-assessment'); ?></th>
+								<th><?php esc_html_e('Question', 'custom-assessment'); ?></th>
+								<th class="ca-col-score"><?php esc_html_e('Answer', 'custom-assessment'); ?></th>
 							</tr>
 						</thead>
 						<tbody>
@@ -1336,7 +1336,7 @@ class CA_Admin
 	public function render_questions_page()
 	{
 		if (!current_user_can('manage_options')) {
-			wp_die(esc_html__('You do not have permission to view this page.', CA_TEXT_DOMAIN));
+			wp_die(esc_html__('You do not have permission to view this page.', 'custom-assessment'));
 		}
 
 		$questions = CA_Questions::get_flat();
@@ -1368,7 +1368,7 @@ class CA_Admin
 
 		$delete_question_nonce = wp_create_nonce('ca_delete_question_action');
 		$delete_question_confirm = esc_js(
-			__('Are you sure you want to delete this question? This action cannot be undone.', CA_TEXT_DOMAIN)
+			__('Are you sure you want to delete this question? This action cannot be undone.', 'custom-assessment')
 		);
 
 		$edit_question_nonce = wp_create_nonce('ca_edit_question_action');
@@ -1432,24 +1432,24 @@ class CA_Admin
 			</script>
 			<h1 class="ca-admin-title">
 				<span class="ca-admin-title-icon dashicons dashicons-format-chat"></span>
-				<?php esc_html_e('Assessment Questions', CA_TEXT_DOMAIN); ?>
+				<?php esc_html_e('Assessment Questions', 'custom-assessment'); ?>
 			</h1>
 
 			<!-- Basic Statistics -->
 			<div class="ca-questions-stats-grid">
 				<div class="ca-stat-card">
 					<div class="ca-stat-value"><?php echo esc_html($total_questions); ?></div>
-					<div class="ca-stat-label"><?php esc_html_e('Total Questions', CA_TEXT_DOMAIN); ?></div>
+					<div class="ca-stat-label"><?php esc_html_e('Total Questions', 'custom-assessment'); ?></div>
 				</div>
 
 				<div class="ca-stat-card">
 					<div class="ca-stat-value"><?php echo esc_html(count($categories)); ?></div>
-					<div class="ca-stat-label"><?php esc_html_e('Categories', CA_TEXT_DOMAIN); ?></div>
+					<div class="ca-stat-label"><?php esc_html_e('Categories', 'custom-assessment'); ?></div>
 				</div>
 
 				<div class="ca-stat-card">
 					<div class="ca-stat-value"><?php echo esc_html($most_used_category); ?></div>
-					<div class="ca-stat-label"><?php esc_html_e('Most Used Category', CA_TEXT_DOMAIN); ?></div>
+					<div class="ca-stat-label"><?php esc_html_e('Most Used Category', 'custom-assessment'); ?></div>
 					<div class="ca-stat-sublabel"><?php echo esc_html($most_used_count . ' questions'); ?></div>
 				</div>
 			</div>
@@ -1457,15 +1457,15 @@ class CA_Admin
 			<!-- Add Question Form -->
 			<div class="ca-questions-actions">
 				<div class="ca-question-form">
-					<h3><?php esc_html_e('Add New Question', CA_TEXT_DOMAIN); ?></h3>
+					<h3><?php esc_html_e('Add New Question', 'custom-assessment'); ?></h3>
 					<form method="post" action="">
 						<?php wp_nonce_field('ca_add_question_action', '_wpnonce'); ?>
 						<input type="hidden" name="ca_action" value="add_question">
 						<div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 20px;">
 							<div class="ca-form-field">
-								<label for="question_category"><?php esc_html_e('Category', CA_TEXT_DOMAIN); ?></label>
+								<label for="question_category"><?php esc_html_e('Category', 'custom-assessment'); ?></label>
 								<select id="question_category" name="question_category" required>
-									<option value=""><?php esc_html_e('Select a category', CA_TEXT_DOMAIN); ?></option>
+									<option value=""><?php esc_html_e('Select a category', 'custom-assessment'); ?></option>
 									<?php foreach ($categories as $category): ?>
 										<option value="<?php echo esc_attr($category); ?>"><?php echo esc_html($category); ?>
 										</option>
@@ -1473,14 +1473,14 @@ class CA_Admin
 								</select>
 							</div>
 							<div class="ca-form-field">
-								<label for="question_priority"><?php esc_html_e('Priority', CA_TEXT_DOMAIN); ?></label>
+								<label for="question_priority"><?php esc_html_e('Priority', 'custom-assessment'); ?></label>
 								<input type="number" id="question_priority" name="question_priority" required min="1" step="1"
 									autocomplete="off" placeholder="" />
 							</div>
 							<div class="ca-form-field">
-								<label for="question_text"><?php esc_html_e('Question Text', CA_TEXT_DOMAIN); ?></label>
+								<label for="question_text"><?php esc_html_e('Question Text', 'custom-assessment'); ?></label>
 								<input type="text" id="question_text" name="question_text" class="ca-question-text-input"
-									placeholder="<?php esc_attr_e('Enter the question text', CA_TEXT_DOMAIN); ?>" required
+									placeholder="<?php esc_attr_e('Enter the question text', 'custom-assessment'); ?>" required
 									maxlength="500" autocomplete="off">
 								<div class="ca-question-text-counter" aria-live="polite">
 									<span id="ca-question-text-counter">0</span> / 500
@@ -1489,7 +1489,7 @@ class CA_Admin
 						</div>
 						<div class="ca-form-actions">
 							<button type="submit" class="button button-primary ca-question-submit">
-								<?php esc_html_e('Add Question', CA_TEXT_DOMAIN); ?>
+								<?php esc_html_e('Add Question', 'custom-assessment'); ?>
 							</button>
 						</div>
 					</form>
@@ -1500,9 +1500,9 @@ class CA_Admin
 
 			<div class="ca-questions-search" style="text-align: end;">
 				<div class="ca-search-field">
-					<label for="ca-search-questions"><?php esc_html_e('Search Questions', CA_TEXT_DOMAIN); ?></label>
+					<label for="ca-search-questions"><?php esc_html_e('Search Questions', 'custom-assessment'); ?></label>
 					<input type="text" id="ca-search-questions"
-						placeholder="<?php esc_attr_e('Search by number, category, or question text (minimum 3 characters)...', CA_TEXT_DOMAIN); ?>"
+						placeholder="<?php esc_attr_e('Search by number, category, or question text (minimum 3 characters)...', 'custom-assessment'); ?>"
 						autocomplete="off">
 					<div class="ca-search-count" style="display: none;">
 						<span id="ca-search-results-count"></span>
@@ -1512,14 +1512,14 @@ class CA_Admin
 
 			<div class="ca-bulk-actions-bar" style="margin-top: 10px;">
 				<button type="button" class="button button-secondary ca-bulk-edit-open" disabled>
-					<?php esc_html_e('Bulk Edit', CA_TEXT_DOMAIN); ?>
+					<?php esc_html_e('Bulk Edit', 'custom-assessment'); ?>
 				</button>
 				<span class="ca-bulk-selected-count">0 selected</span>
 			</div>
 
 			<div class="ca-bulk-edit-modal-overlay" id="ca-bulk-edit-modal-overlay" style="display:none;">
 				<div class="ca-bulk-edit-modal">
-					<h3><?php esc_html_e('Bulk Edit Questions', CA_TEXT_DOMAIN); ?></h3>
+					<h3><?php esc_html_e('Bulk Edit Questions', 'custom-assessment'); ?></h3>
 					<form method="post" action="" id="ca-bulk-edit-form">
 						<?php wp_nonce_field('ca_bulk_edit_question_action', '_wpnonce'); ?>
 						<input type="hidden" name="ca_action" value="bulk_edit_questions">
@@ -1527,9 +1527,9 @@ class CA_Admin
 
 						<div class="ca-bulk-edit-fields">
 							<div class="ca-bulk-field">
-								<label for="ca-bulk-category"><?php esc_html_e('Category', CA_TEXT_DOMAIN); ?></label>
+								<label for="ca-bulk-category"><?php esc_html_e('Category', 'custom-assessment'); ?></label>
 								<select id="ca-bulk-category" name="bulk_category">
-									<option value=""><?php esc_html_e('Keep current', CA_TEXT_DOMAIN); ?></option>
+									<option value=""><?php esc_html_e('Keep current', 'custom-assessment'); ?></option>
 									<?php foreach ($categories as $cat): ?>
 										<option value="<?php echo esc_attr($cat); ?>"><?php echo esc_html($cat); ?></option>
 									<?php endforeach; ?>
@@ -1537,14 +1537,14 @@ class CA_Admin
 							</div>
 
 							<div class="ca-bulk-field">
-								<label for="ca-bulk-priority"><?php esc_html_e('Priority', CA_TEXT_DOMAIN); ?></label>
+								<label for="ca-bulk-priority"><?php esc_html_e('Priority', 'custom-assessment'); ?></label>
 								<input type="number" id="ca-bulk-priority" name="bulk_priority" min="1" step="1" placeholder="">
 							</div>
 
 							<div class="ca-bulk-field">
-								<label for="ca-bulk-question-text"><?php esc_html_e('Question Text', CA_TEXT_DOMAIN); ?></label>
+								<label for="ca-bulk-question-text"><?php esc_html_e('Question Text', 'custom-assessment'); ?></label>
 								<textarea id="ca-bulk-question-text" name="bulk_question_text" rows="3" maxlength="500"
-									placeholder="<?php esc_attr_e('Leave empty to keep current', CA_TEXT_DOMAIN); ?>"></textarea>
+									placeholder="<?php esc_attr_e('Leave empty to keep current', 'custom-assessment'); ?>"></textarea>
 							</div>
 						</div>
 
@@ -1552,10 +1552,10 @@ class CA_Admin
 
 						<div class="ca-bulk-edit-actions">
 							<button type="button" class="button ca-bulk-edit-cancel">
-								<?php esc_html_e('Cancel', CA_TEXT_DOMAIN); ?>
+								<?php esc_html_e('Cancel', 'custom-assessment'); ?>
 							</button>
 							<button type="submit" class="button button-primary">
-								<?php esc_html_e('Save Bulk Changes', CA_TEXT_DOMAIN); ?>
+								<?php esc_html_e('Save Bulk Changes', 'custom-assessment'); ?>
 							</button>
 						</div>
 					</form>
@@ -1566,52 +1566,52 @@ class CA_Admin
 
 			<?php if (isset($_GET['message']) && 'question_deleted' === $_GET['message']): ?>
 				<div class="notice notice-success is-dismissible">
-					<p><?php esc_html_e('Question deleted successfully.', CA_TEXT_DOMAIN); ?></p>
+					<p><?php esc_html_e('Question deleted successfully.', 'custom-assessment'); ?></p>
 				</div>
 			<?php endif; ?>
 
 			<?php if (isset($_GET['message']) && 'question_added' === $_GET['message']): ?>
 				<div class="notice notice-success is-dismissible">
-					<p><?php esc_html_e('Question added successfully.', CA_TEXT_DOMAIN); ?></p>
+					<p><?php esc_html_e('Question added successfully.', 'custom-assessment'); ?></p>
 				</div>
 			<?php endif; ?>
 
 			<?php if (isset($_GET['message']) && 'question_edited' === $_GET['message']): ?>
 				<div class="notice notice-success is-dismissible">
-					<p><?php esc_html_e('Question updated successfully.', CA_TEXT_DOMAIN); ?></p>
+					<p><?php esc_html_e('Question updated successfully.', 'custom-assessment'); ?></p>
 				</div>
 			<?php endif; ?>
 
 			<?php if (isset($_GET['message']) && 'question_edit_failed' === $_GET['message']): ?>
 				<div class="notice notice-error is-dismissible">
-					<p><?php esc_html_e('Unable to update this question.', CA_TEXT_DOMAIN); ?>
+					<p><?php esc_html_e('Unable to update this question.', 'custom-assessment'); ?>
 					</p>
 				</div>
 			<?php endif; ?>
 
 			<?php if (isset($_GET['message']) && 'priority_exists' === $_GET['message']): ?>
 				<div class="notice notice-error is-dismissible">
-					<p><?php esc_html_e('Priority already exists in this category. Please choose another number.', CA_TEXT_DOMAIN); ?>
+					<p><?php esc_html_e('Priority already exists in this category. Please choose another number.', 'custom-assessment'); ?>
 					</p>
 				</div>
 			<?php endif; ?>
 
 			<?php if (isset($_GET['message']) && 'bulk_edit_success' === $_GET['message']): ?>
 				<div class="notice notice-success is-dismissible">
-					<p><?php esc_html_e('Bulk edit applied successfully.', CA_TEXT_DOMAIN); ?></p>
+					<p><?php esc_html_e('Bulk edit applied successfully.', 'custom-assessment'); ?></p>
 				</div>
 			<?php endif; ?>
 
 			<?php if (isset($_GET['message']) && 'bulk_edit_failed' === $_GET['message']): ?>
 				<div class="notice notice-error is-dismissible">
-					<p><?php esc_html_e('Bulk edit failed. Please select questions and try again.', CA_TEXT_DOMAIN); ?></p>
+					<p><?php esc_html_e('Bulk edit failed. Please select questions and try again.', 'custom-assessment'); ?></p>
 				</div>
 			<?php endif; ?>
 
 			<?php if (empty($questions)): ?>
 				<div class="ca-admin-empty">
 					<span class="dashicons dashicons-format-chat" aria-hidden="true"></span>
-					<p><?php esc_html_e('No questions found. Please check your assessment configuration.', CA_TEXT_DOMAIN); ?>
+					<p><?php esc_html_e('No questions found. Please check your assessment configuration.', 'custom-assessment'); ?>
 					</p>
 				</div>
 			<?php else: ?>
@@ -1620,12 +1620,12 @@ class CA_Admin
 						<tr>
 							<th class="ca-col-id">
 								<input type="checkbox" id="ca-bulk-select-all" class="ca-bulk-select-all">
-								<?php esc_html_e('#', CA_TEXT_DOMAIN); ?>
+								<?php esc_html_e('#', 'custom-assessment'); ?>
 							</th>
-							<th><?php esc_html_e('Category', CA_TEXT_DOMAIN); ?></th>
-							<th><?php esc_html_e('Priority', CA_TEXT_DOMAIN); ?></th>
-							<th><?php esc_html_e('Question', CA_TEXT_DOMAIN); ?></th>
-							<th><?php esc_html_e('Actions', CA_TEXT_DOMAIN); ?></th>
+							<th><?php esc_html_e('Category', 'custom-assessment'); ?></th>
+							<th><?php esc_html_e('Priority', 'custom-assessment'); ?></th>
+							<th><?php esc_html_e('Question', 'custom-assessment'); ?></th>
+							<th><?php esc_html_e('Actions', 'custom-assessment'); ?></th>
 						</tr>
 					</thead>
 					<tbody>
@@ -1675,24 +1675,24 @@ class CA_Admin
 										<input type="hidden" name="question_index" value="<?php echo esc_attr($q['index']); ?>">
 										<button type="button" class="button button-small button-secondary ca-question-edit-btn"
 											data-index="<?php echo esc_attr($q['index']); ?>">
-											<?php esc_html_e('Edit', CA_TEXT_DOMAIN); ?>
+											<?php esc_html_e('Edit', 'custom-assessment'); ?>
 										</button>
 										<button type="button" class="button button-small button-secondary ca-question-cancel-btn"
 											style="display: none;">
-											<?php esc_html_e('Cancel', CA_TEXT_DOMAIN); ?>
+											<?php esc_html_e('Cancel', 'custom-assessment'); ?>
 										</button>
 										<button type="submit" class="button button-small button-primary ca-question-save-btn"
 											style="display: none;">
-											<?php esc_html_e('Save', CA_TEXT_DOMAIN); ?>
+											<?php esc_html_e('Save', 'custom-assessment'); ?>
 										</button>
 									</form>
 									<form method="post" style="display: inline;"
-										onsubmit="return confirm('<?php echo esc_js(__('Are you sure you want to delete this question? This action cannot be undone.', CA_TEXT_DOMAIN)); ?>');">
+										onsubmit="return confirm('<?php echo esc_js(__('Are you sure you want to delete this question? This action cannot be undone.', 'custom-assessment')); ?>');">
 										<?php wp_nonce_field('ca_delete_question_action', '_wpnonce'); ?>
 										<input type="hidden" name="ca_action" value="delete_question">
 										<input type="hidden" name="question_index" value="<?php echo esc_attr($q['index']); ?>">
 										<button type="submit" class="button button-small button-secondary">
-											<?php esc_html_e('Delete', CA_TEXT_DOMAIN); ?>
+											<?php esc_html_e('Delete', 'custom-assessment'); ?>
 										</button>
 									</form>
 								</td>
@@ -1704,7 +1704,7 @@ class CA_Admin
 				<div class="tablenav bottom">
 					<div class="tablenav-pages">
 						<span class="displaying-num">
-							<?php echo esc_html($total_questions_count); ?> 			<?php esc_html_e('items', CA_TEXT_DOMAIN); ?>
+							<?php echo esc_html($total_questions_count); ?> 			<?php esc_html_e('items', 'custom-assessment'); ?>
 						</span>
 						<?php if ($total_pages > 1): ?>
 							<span class="pagination-links">
@@ -1758,7 +1758,7 @@ class CA_Admin
 	public function render_categories_page()
 	{
 		if (!current_user_can('manage_options')) {
-			wp_die(esc_html__('You do not have permission to view this page.', CA_TEXT_DOMAIN));
+			wp_die(esc_html__('You do not have permission to view this page.', 'custom-assessment'));
 		}
 
 		// Handle form submissions
@@ -1804,7 +1804,7 @@ class CA_Admin
 		<div class="wrap ca-admin-wrap">
 			<h1 class="ca-admin-title">
 				<span class="ca-admin-title-icon dashicons dashicons-category"></span>
-				<?php esc_html_e('Assessment Categories', CA_TEXT_DOMAIN); ?>
+				<?php esc_html_e('Assessment Categories', 'custom-assessment'); ?>
 			</h1>
 
 			<script type="text/javascript">
@@ -1816,7 +1816,7 @@ class CA_Admin
 			<?php if (isset($_GET['message'])): ?>
 				<?php if ('duplicate' === $_GET['message']): ?>
 					<div class="notice notice-error is-dismissible">
-						<p><?php esc_html_e('Error: Category already exists. Please choose a different name.', CA_TEXT_DOMAIN); ?>
+						<p><?php esc_html_e('Error: Category already exists. Please choose a different name.', 'custom-assessment'); ?>
 						</p>
 					</div>
 				<?php else: ?>
@@ -1824,11 +1824,11 @@ class CA_Admin
 						<p>
 							<?php
 							if ('added' === $_GET['message']) {
-								esc_html_e('Category added successfully.', CA_TEXT_DOMAIN);
+								esc_html_e('Category added successfully.', 'custom-assessment');
 							} elseif ('deleted' === $_GET['message']) {
-								esc_html_e('Category deleted successfully.', CA_TEXT_DOMAIN);
+								esc_html_e('Category deleted successfully.', 'custom-assessment');
 							} elseif ('edited' === $_GET['message']) {
-								esc_html_e('Category updated successfully.', CA_TEXT_DOMAIN);
+								esc_html_e('Category updated successfully.', 'custom-assessment');
 							}
 							?>
 						</p>
@@ -1840,7 +1840,7 @@ class CA_Admin
 			<div class="ca-categories-stats-grid">
 				<div class="ca-stat-card">
 					<div class="ca-stat-value"><?php echo esc_html(count($categories)); ?></div>
-					<div class="ca-stat-label"><?php esc_html_e('Total Categories', CA_TEXT_DOMAIN); ?></div>
+					<div class="ca-stat-label"><?php esc_html_e('Total Categories', 'custom-assessment'); ?></div>
 				</div>
 
 				<?php
@@ -1868,13 +1868,13 @@ class CA_Admin
 
 				<div class="ca-stat-card">
 					<div class="ca-stat-value"><?php echo esc_html($most_used_category); ?></div>
-					<div class="ca-stat-label"><?php esc_html_e('Most Used Category', CA_TEXT_DOMAIN); ?></div>
+					<div class="ca-stat-label"><?php esc_html_e('Most Used Category', 'custom-assessment'); ?></div>
 					<div class="ca-stat-sublabel"><?php echo esc_html($most_used_count . ' questions'); ?></div>
 				</div>
 
 				<div class="ca-stat-card">
 					<div class="ca-stat-value"><?php echo esc_html($least_used_category); ?></div>
-					<div class="ca-stat-label"><?php esc_html_e('Least Used Category', CA_TEXT_DOMAIN); ?></div>
+					<div class="ca-stat-label"><?php esc_html_e('Least Used Category', 'custom-assessment'); ?></div>
 					<div class="ca-stat-sublabel"><?php echo esc_html($least_used_count . ' questions'); ?></div>
 				</div>
 			</div>
@@ -1883,25 +1883,25 @@ class CA_Admin
 				<div class="ca-categories-stats">
 					<span class="ca-stat-item">
 						<strong><?php echo esc_html(count($categories)); ?></strong>
-						<?php esc_html_e('Total Categories', CA_TEXT_DOMAIN); ?>
+						<?php esc_html_e('Total Categories', 'custom-assessment'); ?>
 					</span>
 				</div>
 			</div>
 
 			<div class="ca-categories-actions">
 				<div class="ca-category-form">
-					<h3><?php esc_html_e('Add New Category', CA_TEXT_DOMAIN); ?></h3>
+					<h3><?php esc_html_e('Add New Category', 'custom-assessment'); ?></h3>
 					<form method="post" action="">
 						<?php wp_nonce_field('ca_categories_action', '_wpnonce'); ?>
 						<input type="hidden" name="ca_action" value="add_category">
 						<div style="display: flex; gap: 10px; align-items: center; margin-bottom: 20px;">
 							<div class="ca-form-field">
 								<input type="text" id="new_category" name="new_category"
-									placeholder="<?php esc_attr_e('Enter category name', CA_TEXT_DOMAIN); ?>" required>
+									placeholder="<?php esc_attr_e('Enter category name', 'custom-assessment'); ?>" required>
 							</div>
 							<div class="ca-form-actions">
 								<button type="submit" class="button button-primary">
-									<?php esc_html_e('Add Category', CA_TEXT_DOMAIN); ?>
+									<?php esc_html_e('Add Category', 'custom-assessment'); ?>
 								</button>
 							</div>
 						</div>
@@ -1912,13 +1912,13 @@ class CA_Admin
 			<?php if (empty($categories)): ?>
 				<div class="ca-admin-empty">
 					<span class="dashicons dashicons-category" aria-hidden="true"></span>
-					<p><?php esc_html_e('No categories found. Add your first category above.', CA_TEXT_DOMAIN); ?></p>
+					<p><?php esc_html_e('No categories found. Add your first category above.', 'custom-assessment'); ?></p>
 				</div>
 			<?php else: ?>
 				<div class="tablenav top">
 					<div class="tablenav-pages">
 						<span class="displaying-num">
-							<?php echo esc_html($total_categories); ?> 			<?php esc_html_e('items', CA_TEXT_DOMAIN); ?>
+							<?php echo esc_html($total_categories); ?> 			<?php esc_html_e('items', 'custom-assessment'); ?>
 						</span>
 						<?php if ($total_pages > 1): ?>
 							<span class="pagination-links">
@@ -1965,10 +1965,10 @@ class CA_Admin
 				<table class="wp-list-table widefat fixed striped ca-admin-table">
 					<thead>
 						<tr>
-							<th class="ca-col-id"><?php esc_html_e('#', CA_TEXT_DOMAIN); ?></th>
-							<th><?php esc_html_e('Category Name', CA_TEXT_DOMAIN); ?></th>
-							<th><?php esc_html_e('Questions Count', CA_TEXT_DOMAIN); ?></th>
-							<th><?php esc_html_e('Actions', CA_TEXT_DOMAIN); ?></th>
+							<th class="ca-col-id"><?php esc_html_e('#', 'custom-assessment'); ?></th>
+							<th><?php esc_html_e('Category Name', 'custom-assessment'); ?></th>
+							<th><?php esc_html_e('Questions Count', 'custom-assessment'); ?></th>
+							<th><?php esc_html_e('Actions', 'custom-assessment'); ?></th>
 						</tr>
 					</thead>
 					<tbody>
@@ -1996,25 +1996,25 @@ class CA_Admin
 									<button type="button" class="button button-small ca-edit-btn"
 										data-index="<?php echo esc_attr($global_index); ?>"
 										data-category="<?php echo esc_attr($category); ?>">
-										<?php esc_html_e('Edit', CA_TEXT_DOMAIN); ?>
+										<?php esc_html_e('Edit', 'custom-assessment'); ?>
 									</button>
 									<button type="button" class="button button-small ca-save-btn" style="display: none;"
 										data-index="<?php echo esc_attr($global_index); ?>"
 										data-category="<?php echo esc_attr($category); ?>">
-										<?php esc_html_e('Save', CA_TEXT_DOMAIN); ?>
+										<?php esc_html_e('Save', 'custom-assessment'); ?>
 									</button>
 									<button type="button" class="button button-small button-secondary ca-category-cancel-btn"
 										style="display: none;" data-index="<?php echo esc_attr($global_index); ?>"
 										data-category="<?php echo esc_attr($category); ?>">
-										<?php esc_html_e('Cancel', CA_TEXT_DOMAIN); ?>
+										<?php esc_html_e('Cancel', 'custom-assessment'); ?>
 									</button>
 									<form method="post" style="display: inline;"
-										onsubmit="return confirm('<?php echo esc_js(__('Are you sure you want to delete this category? This will also delete all questions in this category.', CA_TEXT_DOMAIN)); ?>');">
+										onsubmit="return confirm('<?php echo esc_js(__('Are you sure you want to delete this category? This will also delete all questions in this category.', 'custom-assessment')); ?>');">
 										<?php wp_nonce_field('ca_categories_action', '_wpnonce'); ?>
 										<input type="hidden" name="ca_action" value="delete_category">
 										<input type="hidden" name="category_name" value="<?php echo esc_attr($category); ?>">
 										<button type="submit" class="button button-small button-secondary">
-											<?php esc_html_e('Delete', CA_TEXT_DOMAIN); ?>
+											<?php esc_html_e('Delete', 'custom-assessment'); ?>
 										</button>
 									</form>
 								</td>
@@ -2026,7 +2026,7 @@ class CA_Admin
 				<div class="tablenav bottom">
 					<div class="tablenav-pages">
 						<span class="displaying-num">
-							<?php echo esc_html($total_categories); ?> 			<?php esc_html_e('items', CA_TEXT_DOMAIN); ?>
+							<?php echo esc_html($total_categories); ?> 			<?php esc_html_e('items', 'custom-assessment'); ?>
 						</span>
 						<?php if ($total_pages > 1): ?>
 							<span class="pagination-links">
@@ -2253,3 +2253,4 @@ class CA_Admin
 		update_option('ca_custom_questions', $questions);
 	}
 }
+
