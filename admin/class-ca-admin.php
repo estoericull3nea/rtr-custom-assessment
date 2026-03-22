@@ -1596,6 +1596,7 @@ class CA_Admin
 
 			<br />
 
+			<?php // phpcs:disable WordPress.Security.NonceVerification.Recommended -- Read-only display of sanitized status message from query string. ?>
 			<?php if ('question_deleted' === $questions_message): ?>
 				<div class="notice notice-success is-dismissible">
 					<p><?php esc_html_e('Question deleted successfully.', 'custom-assessment'); ?></p>
@@ -1639,6 +1640,7 @@ class CA_Admin
 					<p><?php esc_html_e('Bulk edit failed. Please select questions and try again.', 'custom-assessment'); ?></p>
 				</div>
 			<?php endif; ?>
+			<?php // phpcs:enable WordPress.Security.NonceVerification.Recommended ?>
 
 			<?php if (empty($questions)): ?>
 				<div class="ca-admin-empty">
@@ -1794,7 +1796,7 @@ class CA_Admin
 		}
 
 		// Handle form submissions
-		if (isset($_POST['ca_action']) && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'ca_categories_action')) {
+		if (isset($_POST['ca_action'], $_POST['_wpnonce']) && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'ca_categories_action')) {
 			if ('add_category' === $_POST['ca_action'] && !empty($_POST['new_category'])) {
 				$new_category = sanitize_text_field(wp_unslash($_POST['new_category']));
 				if (!empty($new_category)) {
