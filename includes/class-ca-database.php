@@ -286,9 +286,11 @@ class CA_Database
 		$table = $wpdb->prefix . 'ca_category_scores';
 
 		// Delete existing first (in case of re-submit)
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Intentional write in data-access layer.
 		$wpdb->delete($table, array('submission_id' => (int) $submission_id), array('%d'));
 
 		foreach ($category_scores as $cat) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Intentional write in data-access layer.
 			$wpdb->insert(
 				$table,
 				array(
@@ -313,6 +315,7 @@ class CA_Database
 		global $wpdb;
 		$table = $wpdb->prefix . 'ca_category_scores';
 
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Intentional read in data-access layer.
 		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $table is derived from $wpdb->prefix and not user input.
 		return $wpdb->get_results($wpdb->prepare("SELECT * FROM {$table} WHERE submission_id = %d", (int) $submission_id));
 	}
@@ -332,8 +335,11 @@ class CA_Database
 		$table_answers = $wpdb->prefix . 'ca_answers';
 		$table_cat_scores = $wpdb->prefix . 'ca_category_scores';
 
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Intentional writes in data-access layer.
 		$deleted = $wpdb->delete($table_submissions, array('id' => $submission_id), array('%d'));
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Intentional writes in data-access layer.
 		$wpdb->delete($table_answers, array('submission_id' => $submission_id), array('%d'));
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Intentional writes in data-access layer.
 		$wpdb->delete($table_cat_scores, array('submission_id' => $submission_id), array('%d'));
 
 		return (bool) $deleted;
