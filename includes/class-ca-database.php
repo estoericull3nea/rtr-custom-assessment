@@ -78,7 +78,7 @@ class CA_Database
 	public static function insert_submission($data)
 	{
 		global $wpdb;
-		$table = $wpdb->prefix . 'ca_submissions';
+		$table = esc_sql($wpdb->prefix . 'ca_submissions');
 
 		$inserted = $wpdb->insert(
 			$table,
@@ -108,7 +108,7 @@ class CA_Database
 	public static function update_submission_scores($submission_id, $total_score, $average_score)
 	{
 		global $wpdb;
-		$table = $wpdb->prefix . 'ca_submissions';
+		$table = esc_sql($wpdb->prefix . 'ca_submissions');
 
 		$wpdb->update(
 			$table,
@@ -188,11 +188,9 @@ class CA_Database
 	public static function get_all_submissions()
 	{
 		global $wpdb;
-		$table = $wpdb->prefix . 'ca_submissions';
-
-		$table_esc = esc_sql($table);
+		$table = esc_sql($wpdb->prefix . 'ca_submissions');
 		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Table name comes from $wpdb->prefix; values are not interpolated.
-		return $wpdb->get_results("SELECT * FROM {$table_esc} ORDER BY created_at DESC");
+		return $wpdb->get_results("SELECT * FROM {$table} ORDER BY created_at DESC");
 	}
 
 	// -------------------------------------------------------------------------
@@ -209,7 +207,7 @@ class CA_Database
 	public static function save_answer($submission_id, $question_index, $answer)
 	{
 		global $wpdb;
-		$table = $wpdb->prefix . 'ca_answers';
+		$table = esc_sql($wpdb->prefix . 'ca_answers');
 
 		$wpdb->replace(
 			$table,
@@ -231,7 +229,7 @@ class CA_Database
 	public static function get_answers($submission_id)
 	{
 		global $wpdb;
-		$table = $wpdb->prefix . 'ca_answers';
+		$table = esc_sql($wpdb->prefix . 'ca_answers');
 
 		$rows = $wpdb->get_results(
 			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $table is derived from $wpdb->prefix and not user input.
@@ -283,7 +281,7 @@ class CA_Database
 	public static function save_category_scores($submission_id, $category_scores)
 	{
 		global $wpdb;
-		$table = $wpdb->prefix . 'ca_category_scores';
+		$table = esc_sql($wpdb->prefix . 'ca_category_scores');
 
 		// Delete existing first (in case of re-submit)
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Intentional write in data-access layer.
