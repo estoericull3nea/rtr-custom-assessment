@@ -9,6 +9,7 @@ if (!defined('ABSPATH')) {
 
 class CA_Database
 {
+	// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- This class is the plugin's data-access layer and intentionally performs direct database operations.
 
 	/**
 	 * Create plugin database tables on activation.
@@ -337,4 +338,5 @@ class CA_Database
 
 		return (bool) $deleted;
 	}
+	// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
 }
