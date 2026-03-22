@@ -3,11 +3,12 @@
  * Email handler for sending assessment results to users.
  */
 
-if ( ! defined( 'ABSPATH' ) ) {
+if (!defined('ABSPATH')) {
 	exit;
 }
 
-class CA_Mailer {
+class CA_Mailer
+{
 
 	/**
 	 * Send assessment results email to user.
@@ -15,33 +16,35 @@ class CA_Mailer {
 	 * @param int $submission_id
 	 * @return bool
 	 */
-	public static function send_results_email( $submission_id ) {
-		$submission = CA_Database::get_submission( $submission_id );
+	public static function send_results_email($submission_id)
+	{
+		$submission = CA_Database::get_submission($submission_id);
 
-		if ( ! $submission || 'completed' !== $submission->status ) {
+		if (!$submission || 'completed' !== $submission->status) {
 			return false;
 		}
 
-		$answers = CA_Database::get_answers( $submission_id );
-		$cat_scores = CA_Database::get_category_scores( $submission_id );
+		$answers = CA_Database::get_answers($submission_id);
+		$cat_scores = CA_Database::get_category_scores($submission_id);
 		$flat_q = CA_Questions::get_flat();
 
 		// Build email subject and body
 		$subject = sprintf(
-			__( 'Your Assessment Results - %s', CA_TEXT_DOMAIN ),
-			get_bloginfo( 'name' )
+			/* translators: %s: Site name. */
+			__('Your Assessment Results - %s', 'custom-assessment'),
+			get_bloginfo('name')
 		);
 
-		$body = self::build_email_body( $submission, $cat_scores );
+		$body = self::build_email_body($submission, $cat_scores);
 
 		// Setup email headers
 		$headers = array(
 			'Content-Type: text/html; charset=UTF-8',
-			'From: ' . get_bloginfo( 'name' ) . ' <' . get_option( 'admin_email' ) . '>',
+			'From: ' . get_bloginfo('name') . ' <' . get_option('admin_email') . '>',
 		);
 
 		// Send email
-		$sent = wp_mail( $submission->email, $subject, $body, $headers );
+		$sent = wp_mail($submission->email, $subject, $body, $headers);
 
 		return $sent;
 	}
@@ -53,11 +56,12 @@ class CA_Mailer {
 	 * @param array  $cat_scores Category scores
 	 * @return string HTML email body
 	 */
-	private static function build_email_body( $submission, $cat_scores ) {
-		$blog_name = get_bloginfo( 'name' );
+	private static function build_email_body($submission, $cat_scores)
+	{
+		$blog_name = get_bloginfo('name');
 		$total_questions = CA_Questions::get_total_count();
 		$max_score = $total_questions * 5;
-		$overall_profile = CA_Scoring::get_overall_profile( (float) $submission->average_score );
+		$overall_profile = CA_Scoring::get_overall_profile((float) $submission->average_score);
 
 		$body = '
 		<!DOCTYPE html>
@@ -246,7 +250,7 @@ class CA_Mailer {
 				<!-- Content -->
 				<div class="email-content">
 					<div class="intro-text">
-						<p>Dear <strong>' . esc_html( $submission->first_name . ' ' . $submission->last_name ) . '</strong>,</p>
+						<p>Dear <strong>' . esc_html($submission->first_name . ' ' . $submission->last_name) . '</strong>,</p>
 						<p style="margin-top: 10px;">Thank you for completing the assessment. Below is your detailed results summary.</p>
 					</div>
 
@@ -256,18 +260,18 @@ class CA_Mailer {
 						
 						<div class="overall-stats">
 							<div class="stat-box">
-								<div class="stat-value">' . esc_html( $submission->total_score ) . ' / ' . esc_html( $max_score ) . '</div>
+								<div class="stat-value">' . esc_html($submission->total_score) . ' / ' . esc_html($max_score) . '</div>
 								<div class="stat-label">Total Score</div>
 							</div>
 							<div class="stat-box">
-								<div class="stat-value">' . esc_html( number_format( $submission->average_score, 2 ) ) . ' / 5.00</div>
+								<div class="stat-value">' . esc_html(number_format($submission->average_score, 2)) . ' / 5.00</div>
 								<div class="stat-label">Average Score</div>
 							</div>
 						</div>
 
 						<div class="profile-box">
 							<div class="profile-label">Your Assessment Profile</div>
-							<div class="profile-value">' . esc_html( $overall_profile ) . '</div>
+							<div class="profile-value">' . esc_html($overall_profile) . '</div>
 						</div>
 					</div>
 
@@ -276,14 +280,14 @@ class CA_Mailer {
 						<div class="section-title">📈 Category Breakdown</div>
 						<div class="categories-list">';
 
-		foreach ( $cat_scores as $cat ) {
+		foreach ($cat_scores as $cat) {
 			$body .= '
 						<div class="category-item">
 							<div class="category-header">
-								<span class="category-name">' . esc_html( $cat->category_name ) . '</span>
-								<span class="category-score">' . esc_html( $cat->subtotal ) . ' / ' . esc_html( $cat->subtotal / $cat->average ) . '</span>
+								<span class="category-name">' . esc_html($cat->category_name) . '</span>
+								<span class="category-score">' . esc_html($cat->subtotal) . ' / ' . esc_html($cat->subtotal / $cat->average) . '</span>
 							</div>
-							<div class="score-summary">' . esc_html( CA_Scoring::get_category_summary( $cat->category_name, (float) $cat->average ) ) . '</div>
+							<div class="score-summary">' . esc_html(CA_Scoring::get_category_summary($cat->category_name, (float) $cat->average)) . '</div>
 						</div>';
 		}
 
@@ -297,15 +301,15 @@ class CA_Mailer {
 						<table style="width: 100%; font-size: 14px;">
 							<tr>
 								<td style="padding: 8px; color: #666;"><strong>Submission Date:</strong></td>
-								<td style="padding: 8px; color: #333;">' . esc_html( date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), strtotime( $submission->created_at ) ) ) . '</td>
+								<td style="padding: 8px; color: #333;">' . esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($submission->created_at))) . '</td>
 							</tr>
 							<tr style="background-color: #f9f9f9;">
 								<td style="padding: 8px; color: #666;"><strong>Email:</strong></td>
-								<td style="padding: 8px; color: #333;">' . esc_html( $submission->email ) . '</td>
+								<td style="padding: 8px; color: #333;">' . esc_html($submission->email) . '</td>
 							</tr>
 							<tr>
 								<td style="padding: 8px; color: #666;"><strong>Job Title:</strong></td>
-								<td style="padding: 8px; color: #333;">' . esc_html( $submission->job_title ) . '</td>
+								<td style="padding: 8px; color: #333;">' . esc_html($submission->job_title) . '</td>
 							</tr>
 						</table>
 					</div>
@@ -320,7 +324,7 @@ class CA_Mailer {
 
 				<!-- Footer -->
 				<div class="footer-section">
-					<p>&copy; ' . esc_html( $blog_name ) . ' ' . date( 'Y' ) . '. All rights reserved.</p>
+					<p>&copy; ' . esc_html($blog_name) . ' ' . date('Y') . '. All rights reserved.</p>
 					<p>This is an automated email. Please do not reply to this message.</p>
 				</div>
 			</div>
