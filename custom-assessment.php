@@ -5,7 +5,7 @@
  * Version:     3.1.0
  * Author:      Ericson Palisoc
  * License:     GPL-2.0+
- * Text Domain: custom-assessment
+ * Text Domain: rtr-custom-assessment
  */
 
 if (!defined('ABSPATH')) {
@@ -16,7 +16,7 @@ if (!defined('ABSPATH')) {
 define('CA_VERSION', '2.0.0');
 define('CA_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CA_PLUGIN_URL', plugin_dir_url(__FILE__));
-define('CA_TEXT_DOMAIN', 'custom-assessment');
+define('CA_TEXT_DOMAIN', 'rtr-custom-assessment');
 
 // Load includes
 require_once CA_PLUGIN_DIR . 'includes/class-ca-database.php';
@@ -31,11 +31,8 @@ require_once CA_PLUGIN_DIR . 'admin/class-ca-admin.php';
 register_activation_hook(__FILE__, array('CA_Database', 'create_tables'));
 
 // Boot the plugin
-add_action('plugins_loaded', 'ca_init');
-
-function ca_init()
-{
+add_action('plugins_loaded', static function () {
 	new CA_Ajax();
 	new CA_Shortcode();
 	new CA_Admin();
-}
+});
