@@ -132,7 +132,7 @@ class CA_Database
 	public static function set_in_progress($submission_id)
 	{
 		global $wpdb;
-		$table = $wpdb->prefix . 'ca_submissions';
+		$table = esc_sql($wpdb->prefix . 'ca_submissions');
 
 		$wpdb->update(
 			$table,
@@ -155,7 +155,7 @@ class CA_Database
 	public static function get_submission($submission_id)
 	{
 		global $wpdb;
-		$table = $wpdb->prefix . 'ca_submissions';
+		$table = esc_sql($wpdb->prefix . 'ca_submissions');
 
 		return $wpdb->get_row(
 			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $table is derived from $wpdb->prefix and not user input.
@@ -172,7 +172,7 @@ class CA_Database
 	public static function get_in_progress_submission_by_email($email)
 	{
 		global $wpdb;
-		$table = $wpdb->prefix . 'ca_submissions';
+		$table = esc_sql($wpdb->prefix . 'ca_submissions');
 
 		return $wpdb->get_row(
 			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $table is derived from $wpdb->prefix and not user input.
@@ -232,8 +232,8 @@ class CA_Database
 		$table = esc_sql($wpdb->prefix . 'ca_answers');
 
 		$rows = $wpdb->get_results(
-			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $table is derived from $wpdb->prefix and not user input.
 			$wpdb->prepare(
+				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Escaped table name from $wpdb->prefix.
 				"SELECT question_index, answer FROM {$table} WHERE submission_id = %d ORDER BY question_index ASC",
 				(int) $submission_id
 			)
@@ -255,11 +255,11 @@ class CA_Database
 	public static function get_answer($submission_id, $question_index)
 	{
 		global $wpdb;
-		$table = $wpdb->prefix . 'ca_answers';
+		$table = esc_sql($wpdb->prefix . 'ca_answers');
 
 		$answer = $wpdb->get_var(
-			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $table is derived from $wpdb->prefix and not user input.
 			$wpdb->prepare(
+				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Escaped table name from $wpdb->prefix.
 				"SELECT answer FROM {$table} WHERE submission_id = %d AND question_index = %d",
 				(int) $submission_id,
 				(int) $question_index
@@ -311,7 +311,7 @@ class CA_Database
 	public static function get_category_scores($submission_id)
 	{
 		global $wpdb;
-		$table = $wpdb->prefix . 'ca_category_scores';
+		$table = esc_sql($wpdb->prefix . 'ca_category_scores');
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Intentional read in data-access layer.
 		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $table is derived from $wpdb->prefix and not user input.

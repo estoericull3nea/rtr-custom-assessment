@@ -31,11 +31,8 @@ require_once CA_PLUGIN_DIR . 'admin/class-ca-admin.php';
 register_activation_hook(__FILE__, array('CA_Database', 'create_tables'));
 
 // Boot the plugin
-add_action('plugins_loaded', 'rtr_custom_assessment_init');
-
-function rtr_custom_assessment_init()
-{
+add_action('plugins_loaded', static function () {
 	new CA_Ajax();
 	new CA_Shortcode();
 	new CA_Admin();
-}
+});

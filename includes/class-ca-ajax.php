@@ -35,7 +35,7 @@ class CA_Ajax
 	private function verify_nonce()
 	{
 		if (!isset($_POST['nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'ca_nonce')) {
-			wp_send_json_error(array('message' => __('Security check failed.', 'custom-assessment')));
+			wp_send_json_error(array('message' => __('Security check failed.', 'rtr-custom-assessment')));
 		}
 	}
 
@@ -58,15 +58,15 @@ class CA_Ajax
 		// Validate
 		$errors = array();
 		if (empty($first_name))
-			$errors[] = __('First name is required.', 'custom-assessment');
+			$errors[] = __('First name is required.', 'rtr-custom-assessment');
 		if (empty($last_name))
-			$errors[] = __('Last name is required.', 'custom-assessment');
+			$errors[] = __('Last name is required.', 'rtr-custom-assessment');
 		if (empty($email) || !is_email($email))
-			$errors[] = __('A valid email is required.', 'custom-assessment');
+			$errors[] = __('A valid email is required.', 'rtr-custom-assessment');
 		if (empty($phone))
-			$errors[] = __('Phone number is required.', 'custom-assessment');
+			$errors[] = __('Phone number is required.', 'rtr-custom-assessment');
 		if (empty($job_title))
-			$errors[] = __('Job title is required.', 'custom-assessment');
+			$errors[] = __('Job title is required.', 'rtr-custom-assessment');
 
 		if (!empty($errors)) {
 			wp_send_json_error(array('message' => implode(' ', $errors)));
@@ -81,12 +81,12 @@ class CA_Ajax
 		));
 
 		if (!$submission_id) {
-			wp_send_json_error(array('message' => __('Could not save your information. Please try again.', 'custom-assessment')));
+			wp_send_json_error(array('message' => __('Could not save your information. Please try again.', 'rtr-custom-assessment')));
 		}
 
 		wp_send_json_success(array(
 			'submission_id' => $submission_id,
-			'message' => __('Information saved.', 'custom-assessment'),
+			'message' => __('Information saved.', 'rtr-custom-assessment'),
 		));
 	}
 
@@ -106,7 +106,7 @@ class CA_Ajax
 		$question = CA_Questions::get_question($index);
 
 		if (!$question) {
-			wp_send_json_error(array('message' => __('Question not found.', 'custom-assessment')));
+			wp_send_json_error(array('message' => __('Question not found.', 'rtr-custom-assessment')));
 		}
 
 		$saved_answer = $submission_id ? CA_Database::get_answer($submission_id, $index) : null;
@@ -138,10 +138,10 @@ class CA_Ajax
 
 		// Validate
 		if (!$submission_id) {
-			wp_send_json_error(array('message' => __('Invalid session. Please refresh and try again.', 'custom-assessment')));
+			wp_send_json_error(array('message' => __('Invalid session. Please refresh and try again.', 'rtr-custom-assessment')));
 		}
 		if ($answer < 1 || $answer > 5) {
-			wp_send_json_error(array('message' => __('Invalid answer. Please select a value between 1 and 5.', 'custom-assessment')));
+			wp_send_json_error(array('message' => __('Invalid answer. Please select a value between 1 and 5.', 'rtr-custom-assessment')));
 		}
 
 		CA_Database::save_answer($submission_id, $question_index, $answer);
@@ -171,12 +171,12 @@ class CA_Ajax
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
 		if (!$submission_id) {
-			wp_send_json_error(array('message' => __('Invalid session.', 'custom-assessment')));
+			wp_send_json_error(array('message' => __('Invalid session.', 'rtr-custom-assessment')));
 		}
 
 		$submission = CA_Database::get_submission($submission_id);
 		if (!$submission) {
-			wp_send_json_error(array('message' => __('Submission not found.', 'custom-assessment')));
+			wp_send_json_error(array('message' => __('Submission not found.', 'rtr-custom-assessment')));
 		}
 
 		$answers = CA_Database::get_answers($submission_id);
@@ -206,7 +206,7 @@ class CA_Ajax
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
 		if (empty($email) || !is_email($email)) {
-			wp_send_json_error(array('message' => __('A valid email is required.', 'custom-assessment')));
+			wp_send_json_error(array('message' => __('A valid email is required.', 'rtr-custom-assessment')));
 		}
 
 		$submission = CA_Database::get_in_progress_submission_by_email($email);
@@ -246,14 +246,14 @@ class CA_Ajax
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
 		if (!$submission_id) {
-			wp_send_json_error(array('message' => __('Invalid session.', 'custom-assessment')));
+			wp_send_json_error(array('message' => __('Invalid session.', 'rtr-custom-assessment')));
 		}
 
 		$answers = CA_Database::get_answers($submission_id);
 		$total_q = CA_Questions::get_total_count();
 
 		if (count($answers) < $total_q) {
-			wp_send_json_error(array('message' => __('Please answer all questions before submitting.', 'custom-assessment')));
+			wp_send_json_error(array('message' => __('Please answer all questions before submitting.', 'rtr-custom-assessment')));
 		}
 
 		$scoring = CA_Scoring::calculate($answers);
@@ -270,7 +270,7 @@ class CA_Ajax
 		CA_Mailer::send_results_email($submission_id);
 
 		wp_send_json_success(array(
-			'message' => __('Assessment submitted.', 'custom-assessment'),
+			'message' => __('Assessment submitted.', 'rtr-custom-assessment'),
 		));
 	}
 
@@ -287,14 +287,14 @@ class CA_Ajax
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
 		if (!$submission_id) {
-			wp_send_json_error(array('message' => __('Invalid session.', 'custom-assessment')));
+			wp_send_json_error(array('message' => __('Invalid session.', 'rtr-custom-assessment')));
 		}
 
 		$submission = CA_Database::get_submission($submission_id);
 		$cat_scores_raw = CA_Database::get_category_scores($submission_id);
 
 		if (!$submission) {
-			wp_send_json_error(array('message' => __('Submission not found.', 'custom-assessment')));
+			wp_send_json_error(array('message' => __('Submission not found.', 'rtr-custom-assessment')));
 		}
 
 		// Build category data with summaries
@@ -326,4 +326,5 @@ class CA_Ajax
 		));
 	}
 }
+
 

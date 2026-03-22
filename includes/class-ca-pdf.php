@@ -7,7 +7,8 @@ if (!defined('ABSPATH')) {
 	exit;
 }
 
-class RTR_Custom_Assessment_PDF
+// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedClassFound -- Class uses plugin-specific prefix.
+class Rtr_Custom_Assessment_Pdf
 {
 
 	/**

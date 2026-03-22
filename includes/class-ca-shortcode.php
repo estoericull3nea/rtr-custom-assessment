@@ -59,13 +59,13 @@ class CA_Shortcode
 				)
 			),
 			'labels' => array(
-				'next' => __('Next', 'custom-assessment'),
-				'back' => __('Back', 'custom-assessment'),
-				'submit' => __('Submit Assessment', 'custom-assessment'),
-				'start' => __('Start Assessment', 'custom-assessment'),
-				'loading' => __('Loading…', 'custom-assessment'),
-				'error_answer' => __('Please select an answer before continuing.', 'custom-assessment'),
-				'error_generic' => __('Something went wrong. Please try again.', 'custom-assessment'),
+				'next' => __('Next', 'rtr-custom-assessment'),
+				'back' => __('Back', 'rtr-custom-assessment'),
+				'submit' => __('Submit Assessment', 'rtr-custom-assessment'),
+				'start' => __('Start Assessment', 'rtr-custom-assessment'),
+				'loading' => __('Loading…', 'rtr-custom-assessment'),
+				'error_answer' => __('Please select an answer before continuing.', 'rtr-custom-assessment'),
+				'error_generic' => __('Something went wrong. Please try again.', 'rtr-custom-assessment'),
 			),
 		));
 	}
@@ -290,3 +290,4 @@ class CA_Shortcode
 		return ob_get_clean();
 	}
 }
+

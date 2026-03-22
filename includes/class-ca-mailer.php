@@ -31,7 +31,7 @@ class CA_Mailer
 		// Build email subject and body
 		$subject = sprintf(
 			/* translators: %s: Site name. */
-			__('Your Assessment Results - %s', 'custom-assessment'),
+			__('Your Assessment Results - %s', 'rtr-custom-assessment'),
 			get_bloginfo('name')
 		);
 

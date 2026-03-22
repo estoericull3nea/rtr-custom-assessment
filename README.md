@@ -2,7 +2,7 @@
 Contributors: ericsonpalisoc
 Tags: assessment, questionnaire, ajax, scoring
 Requires at least: 6.0
-Tested up to: 6.8
+Tested up to: 6.9
 Requires PHP: 7.4
 Stable Tag: 3.1.0
 License: GPLv2 or later
