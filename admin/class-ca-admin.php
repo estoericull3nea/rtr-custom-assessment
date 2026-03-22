@@ -111,7 +111,8 @@ class CA_Admin
 			}
 
 			CA_Database::delete_submission(absint($_GET['id']));
-			$redirect_url = remove_query_arg(array('action', 'id', '_wpnonce'), wp_unslash($_SERVER['REQUEST_URI']));
+			$current_request_uri = isset($_SERVER['REQUEST_URI']) ? sanitize_text_field(wp_unslash($_SERVER['REQUEST_URI'])) : '';
+			$redirect_url = remove_query_arg(array('action', 'id', '_wpnonce'), $current_request_uri);
 			$redirect_url = add_query_arg('message', 'deleted', $redirect_url);
 			wp_safe_redirect(esc_url_raw($redirect_url));
 			exit;
@@ -186,7 +187,8 @@ class CA_Admin
 			// Send the email using the existing mailer
 			$sent = CA_Mailer::send_results_email($submission_id);
 
-			$redirect_url = remove_query_arg(array('action', 'id', '_wpnonce'), wp_unslash($_SERVER['REQUEST_URI']));
+			$current_request_uri = isset($_SERVER['REQUEST_URI']) ? sanitize_text_field(wp_unslash($_SERVER['REQUEST_URI'])) : '';
+			$redirect_url = remove_query_arg(array('action', 'id', '_wpnonce'), $current_request_uri);
 			if ($sent) {
 				$redirect_url = add_query_arg('message', 'email_sent', $redirect_url);
 			} else {
@@ -210,7 +212,7 @@ class CA_Admin
 			return;
 		}
 
-		if (isset($_POST['ca_action']) && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'ca_categories_action')) {
+		if (isset($_POST['ca_action'], $_POST['_wpnonce']) && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'ca_categories_action')) {
 			if ('add_category' === $_POST['ca_action'] && !empty($_POST['new_category'])) {
 				$new_category = sanitize_text_field(wp_unslash($_POST['new_category']));
 				if (!empty($new_category)) {
@@ -252,7 +254,11 @@ class CA_Admin
 			return;
 		}
 
-		if (isset($_POST['ca_action']) && 'edit_category' === $_POST['ca_action'] && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'ca_edit_category_action')) {
+		if (
+			isset($_POST['ca_action'], $_POST['_wpnonce'], $_POST['old_category_name'], $_POST['new_category_name']) &&
+			'edit_category' === $_POST['ca_action'] &&
+			wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'ca_edit_category_action')
+		) {
 			$old_category = sanitize_text_field(wp_unslash($_POST['old_category_name']));
 			$new_category = sanitize_text_field(wp_unslash($_POST['new_category_name']));
 
@@ -280,7 +286,11 @@ class CA_Admin
 			return;
 		}
 
-		if (isset($_POST['ca_action']) && 'delete_question' === $_POST['ca_action'] && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'ca_delete_question_action')) {
+		if (
+			isset($_POST['ca_action'], $_POST['_wpnonce'], $_POST['question_index']) &&
+			'delete_question' === $_POST['ca_action'] &&
+			wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'ca_delete_question_action')
+		) {
 			$question_index = absint($_POST['question_index']);
 			if ($question_index >= 0) {
 				$this->delete_question($question_index);
@@ -292,7 +302,11 @@ class CA_Admin
 			}
 		}
 
-		if (isset($_POST['ca_action']) && 'edit_question' === $_POST['ca_action'] && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'ca_edit_question_action')) {
+		if (
+			isset($_POST['ca_action'], $_POST['_wpnonce'], $_POST['question_index']) &&
+			'edit_question' === $_POST['ca_action'] &&
+			wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'ca_edit_question_action')
+		) {
 			$question_index = absint($_POST['question_index']);
 			$new_category = isset($_POST['new_category']) ? sanitize_text_field(wp_unslash($_POST['new_category'])) : '';
 			$new_question_text = isset($_POST['new_question_text']) ? sanitize_text_field(wp_unslash($_POST['new_question_text'])) : '';
@@ -332,8 +346,12 @@ class CA_Admin
 			}
 		}
 
-		if (isset($_POST['ca_action']) && 'bulk_edit_questions' === $_POST['ca_action'] && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'ca_bulk_edit_question_action')) {
-			$indexes = isset($_POST['question_indexes']) ? (array) $_POST['question_indexes'] : array();
+		if (
+			isset($_POST['ca_action'], $_POST['_wpnonce']) &&
+			'bulk_edit_questions' === $_POST['ca_action'] &&
+			wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'ca_bulk_edit_question_action')
+		) {
+			$indexes = isset($_POST['question_indexes']) ? (array) wp_unslash($_POST['question_indexes']) : array();
 			$indexes = array_map('absint', $indexes);
 			$indexes = array_values(array_filter($indexes, fn($i) => $i >= 0));
 
@@ -579,6 +597,7 @@ class CA_Admin
 			fputcsv($output, array($q['text'], $answer ? $answer : 'No answer'));
 		}
 
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- Closing a stream opened on php://output.
 		fclose($output);
 	}
 
@@ -1133,7 +1152,8 @@ class CA_Admin
 				<div class="tablenav bottom">
 					<div class="tablenav-pages">
 						<span class="displaying-num">
-							<?php echo esc_html($total_submissions_count); ?> 			<?php esc_html_e('submissions', 'custom-assessment'); ?>
+							<?php echo esc_html($total_submissions_count); ?>
+							<?php esc_html_e('submissions', 'custom-assessment'); ?>
 						</span>
 
 						<?php if ($total_pages > 1): ?>
@@ -1542,7 +1562,8 @@ class CA_Admin
 							</div>
 
 							<div class="ca-bulk-field">
-								<label for="ca-bulk-question-text"><?php esc_html_e('Question Text', 'custom-assessment'); ?></label>
+								<label
+									for="ca-bulk-question-text"><?php esc_html_e('Question Text', 'custom-assessment'); ?></label>
 								<textarea id="ca-bulk-question-text" name="bulk_question_text" rows="3" maxlength="500"
 									placeholder="<?php esc_attr_e('Leave empty to keep current', 'custom-assessment'); ?>"></textarea>
 							</div>
