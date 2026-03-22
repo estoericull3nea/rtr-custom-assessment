@@ -324,7 +324,7 @@ class CA_Mailer
 
 				<!-- Footer -->
 				<div class="footer-section">
-					<p>&copy; ' . esc_html($blog_name) . ' ' . date('Y') . '. All rights reserved.</p>
+					<p>&copy; ' . esc_html($blog_name) . ' ' . gmdate('Y') . '. All rights reserved.</p>
 					<p>This is an automated email. Please do not reply to this message.</p>
 				</div>
 			</div>
