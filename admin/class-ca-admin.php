@@ -351,8 +351,11 @@ class CA_Admin
 			'bulk_edit_questions' === $_POST['ca_action'] &&
 			wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'ca_bulk_edit_question_action')
 		) {
-			$indexes = isset($_POST['question_indexes']) ? (array) wp_unslash($_POST['question_indexes']) : array();
-			$indexes = array_map('absint', $indexes);
+			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Sanitized immediately below via sanitize_text_field + absint.
+			$indexes_raw = isset($_POST['question_indexes']) ? wp_unslash($_POST['question_indexes']) : array();
+			$indexes_raw = is_array($indexes_raw) ? $indexes_raw : array($indexes_raw);
+			$indexes_raw = array_map('sanitize_text_field', $indexes_raw);
+			$indexes = array_map('absint', $indexes_raw);
 			$indexes = array_values(array_filter($indexes, fn($i) => $i >= 0));
 
 			$bulk_category = isset($_POST['bulk_category']) ? sanitize_text_field(wp_unslash($_POST['bulk_category'])) : '';
@@ -453,7 +456,11 @@ class CA_Admin
 			exit;
 		}
 
-		if (isset($_POST['ca_action']) && 'add_question' === $_POST['ca_action'] && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'ca_add_question_action')) {
+		if (
+			isset($_POST['ca_action'], $_POST['_wpnonce'], $_POST['question_text'], $_POST['question_category'], $_POST['question_priority']) &&
+			'add_question' === $_POST['ca_action'] &&
+			wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'ca_add_question_action')
+		) {
 			$question_text = sanitize_text_field(wp_unslash($_POST['question_text']));
 			$question_category = sanitize_text_field(wp_unslash($_POST['question_category']));
 			$question_priority = absint($_POST['question_priority']);
@@ -479,9 +486,6 @@ class CA_Admin
 					wp_safe_redirect(esc_url_raw($redirect_url));
 					exit;
 				}
-
-				// Debug: Log the question being added
-				error_log("Adding question: $question_text | Category: $question_category | Priority: $question_priority");
 
 				$this->add_question($question_text, $question_category, $question_priority);
 				$message = 'question_added';
@@ -936,11 +940,16 @@ class CA_Admin
 		// Check SMTP configuration - show error if no SMTP detected
 		// This ensures users are aware they need SMTP for email functionality
 		$smtp_configured = $this->is_smtp_configured();
+		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- Read-only use of sanitized query params for UI state.
+		$list_view = isset($_GET['view']) ? sanitize_key(wp_unslash($_GET['view'])) : '';
+		$list_id = isset($_GET['id']) ? absint($_GET['id']) : 0;
+		$list_message = isset($_GET['message']) ? sanitize_key(wp_unslash($_GET['message'])) : '';
+		$current_page = max(1, isset($_GET['paged']) ? absint($_GET['paged']) : 1);
+		// phpcs:enable WordPress.Security.NonceVerification.Recommended
 
 		// Detail view
-		if (isset($_GET['view']) && 'detail' === $_GET['view'] && !empty($_GET['id'])) {
-			$id = absint($_GET['id']);
-			$this->render_detail_page($id);
+		if ('detail' === $list_view && $list_id > 0) {
+			$this->render_detail_page($list_id);
 			return;
 		}
 
@@ -949,7 +958,6 @@ class CA_Admin
 
 		// Pagination setup
 		$per_page = 10;
-		$current_page = max(1, isset($_GET['paged']) ? absint($_GET['paged']) : 1);
 		$total_submissions_count = count($all_submissions);
 		$total_pages = max(1, (int) ceil($total_submissions_count / $per_page));
 		$offset = ($current_page - 1) * $per_page;
@@ -1003,19 +1011,19 @@ class CA_Admin
 				</div>
 			<?php endif; ?>
 
-			<?php if (isset($_GET['message']) && 'deleted' === $_GET['message']): ?>
+			<?php if ('deleted' === $list_message): ?>
 				<div class="notice notice-success is-dismissible">
 					<p><?php esc_html_e('Submission deleted successfully.', 'custom-assessment'); ?></p>
 				</div>
 			<?php endif; ?>
 
-			<?php if (isset($_GET['message']) && 'email_sent' === $_GET['message']): ?>
+			<?php if ('email_sent' === $list_message): ?>
 				<div class="notice notice-success is-dismissible">
 					<p><?php esc_html_e('Assessment results email sent successfully to the customer.', 'custom-assessment'); ?></p>
 				</div>
 			<?php endif; ?>
 
-			<?php if (isset($_GET['message']) && 'email_failed' === $_GET['message']): ?>
+			<?php if ('email_failed' === $list_message): ?>
 				<div class="notice notice-error is-dismissible">
 					<p><?php esc_html_e('Failed to send assessment results email. Please check your SMTP configuration.', 'custom-assessment'); ?>
 					</p>
@@ -1433,7 +1441,10 @@ class CA_Admin
 
 		// Pagination setup
 		$per_page = 10;
+		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- Read-only use of sanitized query params for pagination/notices.
 		$current_page = max(1, isset($_GET['paged']) ? absint($_GET['paged']) : 1);
+		$questions_message = isset($_GET['message']) ? sanitize_key(wp_unslash($_GET['message'])) : '';
+		// phpcs:enable WordPress.Security.NonceVerification.Recommended
 		$total_questions_count = count($questions);
 		$total_pages = ceil($total_questions_count / $per_page);
 		$offset = ($current_page - 1) * $per_page;
@@ -1585,45 +1596,45 @@ class CA_Admin
 
 			<br />
 
-			<?php if (isset($_GET['message']) && 'question_deleted' === $_GET['message']): ?>
+			<?php if ('question_deleted' === $questions_message): ?>
 				<div class="notice notice-success is-dismissible">
 					<p><?php esc_html_e('Question deleted successfully.', 'custom-assessment'); ?></p>
 				</div>
 			<?php endif; ?>
 
-			<?php if (isset($_GET['message']) && 'question_added' === $_GET['message']): ?>
+			<?php if ('question_added' === $questions_message): ?>
 				<div class="notice notice-success is-dismissible">
 					<p><?php esc_html_e('Question added successfully.', 'custom-assessment'); ?></p>
 				</div>
 			<?php endif; ?>
 
-			<?php if (isset($_GET['message']) && 'question_edited' === $_GET['message']): ?>
+			<?php if ('question_edited' === $questions_message): ?>
 				<div class="notice notice-success is-dismissible">
 					<p><?php esc_html_e('Question updated successfully.', 'custom-assessment'); ?></p>
 				</div>
 			<?php endif; ?>
 
-			<?php if (isset($_GET['message']) && 'question_edit_failed' === $_GET['message']): ?>
+			<?php if ('question_edit_failed' === $questions_message): ?>
 				<div class="notice notice-error is-dismissible">
 					<p><?php esc_html_e('Unable to update this question.', 'custom-assessment'); ?>
 					</p>
 				</div>
 			<?php endif; ?>
 
-			<?php if (isset($_GET['message']) && 'priority_exists' === $_GET['message']): ?>
+			<?php if ('priority_exists' === $questions_message): ?>
 				<div class="notice notice-error is-dismissible">
 					<p><?php esc_html_e('Priority already exists in this category. Please choose another number.', 'custom-assessment'); ?>
 					</p>
 				</div>
 			<?php endif; ?>
 
-			<?php if (isset($_GET['message']) && 'bulk_edit_success' === $_GET['message']): ?>
+			<?php if ('bulk_edit_success' === $questions_message): ?>
 				<div class="notice notice-success is-dismissible">
 					<p><?php esc_html_e('Bulk edit applied successfully.', 'custom-assessment'); ?></p>
 				</div>
 			<?php endif; ?>
 
-			<?php if (isset($_GET['message']) && 'bulk_edit_failed' === $_GET['message']): ?>
+			<?php if ('bulk_edit_failed' === $questions_message): ?>
 				<div class="notice notice-error is-dismissible">
 					<p><?php esc_html_e('Bulk edit failed. Please select questions and try again.', 'custom-assessment'); ?></p>
 				</div>
