@@ -32,7 +32,7 @@ class CA_Ajax {
 
 	private function verify_nonce() {
 		if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['nonce'] ) ), 'ca_nonce' ) ) {
-			wp_send_json_error( array( 'message' => __( 'Security check failed.', CA_TEXT_DOMAIN ) ) );
+			wp_send_json_error( array( 'message' => __( 'Security check failed.', 'custom-assessment' ) ) );
 		}
 	}
 
@@ -51,11 +51,11 @@ class CA_Ajax {
 
 		// Validate
 		$errors = array();
-		if ( empty( $first_name ) ) $errors[] = __( 'First name is required.', CA_TEXT_DOMAIN );
-		if ( empty( $last_name ) )  $errors[] = __( 'Last name is required.', CA_TEXT_DOMAIN );
-		if ( empty( $email ) || ! is_email( $email ) ) $errors[] = __( 'A valid email is required.', CA_TEXT_DOMAIN );
-		if ( empty( $phone ) )      $errors[] = __( 'Phone number is required.', CA_TEXT_DOMAIN );
-		if ( empty( $job_title ) )  $errors[] = __( 'Job title is required.', CA_TEXT_DOMAIN );
+		if ( empty( $first_name ) ) $errors[] = __( 'First name is required.', 'custom-assessment' );
+		if ( empty( $last_name ) )  $errors[] = __( 'Last name is required.', 'custom-assessment' );
+		if ( empty( $email ) || ! is_email( $email ) ) $errors[] = __( 'A valid email is required.', 'custom-assessment' );
+		if ( empty( $phone ) )      $errors[] = __( 'Phone number is required.', 'custom-assessment' );
+		if ( empty( $job_title ) )  $errors[] = __( 'Job title is required.', 'custom-assessment' );
 
 		if ( ! empty( $errors ) ) {
 			wp_send_json_error( array( 'message' => implode( ' ', $errors ) ) );
@@ -70,12 +70,12 @@ class CA_Ajax {
 		) );
 
 		if ( ! $submission_id ) {
-			wp_send_json_error( array( 'message' => __( 'Could not save your information. Please try again.', CA_TEXT_DOMAIN ) ) );
+			wp_send_json_error( array( 'message' => __( 'Could not save your information. Please try again.', 'custom-assessment' ) ) );
 		}
 
 		wp_send_json_success( array(
 			'submission_id' => $submission_id,
-			'message'       => __( 'Information saved.', CA_TEXT_DOMAIN ),
+			'message'       => __( 'Information saved.', 'custom-assessment' ),
 		) );
 	}
 
@@ -92,7 +92,7 @@ class CA_Ajax {
 		$question = CA_Questions::get_question( $index );
 
 		if ( ! $question ) {
-			wp_send_json_error( array( 'message' => __( 'Question not found.', CA_TEXT_DOMAIN ) ) );
+			wp_send_json_error( array( 'message' => __( 'Question not found.', 'custom-assessment' ) ) );
 		}
 
 		$saved_answer  = $submission_id ? CA_Database::get_answer( $submission_id, $index ) : null;
@@ -121,10 +121,10 @@ class CA_Ajax {
 
 		// Validate
 		if ( ! $submission_id ) {
-			wp_send_json_error( array( 'message' => __( 'Invalid session. Please refresh and try again.', CA_TEXT_DOMAIN ) ) );
+			wp_send_json_error( array( 'message' => __( 'Invalid session. Please refresh and try again.', 'custom-assessment' ) ) );
 		}
 		if ( $answer < 1 || $answer > 5 ) {
-			wp_send_json_error( array( 'message' => __( 'Invalid answer. Please select a value between 1 and 5.', CA_TEXT_DOMAIN ) ) );
+			wp_send_json_error( array( 'message' => __( 'Invalid answer. Please select a value between 1 and 5.', 'custom-assessment' ) ) );
 		}
 
 		CA_Database::save_answer( $submission_id, $question_index, $answer );
@@ -151,12 +151,12 @@ class CA_Ajax {
 		$submission_id = isset( $_POST['submission_id'] ) ? absint( $_POST['submission_id'] ) : 0;
 
 		if ( ! $submission_id ) {
-			wp_send_json_error( array( 'message' => __( 'Invalid session.', CA_TEXT_DOMAIN ) ) );
+			wp_send_json_error( array( 'message' => __( 'Invalid session.', 'custom-assessment' ) ) );
 		}
 
 		$submission = CA_Database::get_submission( $submission_id );
 		if ( ! $submission ) {
-			wp_send_json_error( array( 'message' => __( 'Submission not found.', CA_TEXT_DOMAIN ) ) );
+			wp_send_json_error( array( 'message' => __( 'Submission not found.', 'custom-assessment' ) ) );
 		}
 
 		$answers  = CA_Database::get_answers( $submission_id );
@@ -183,7 +183,7 @@ class CA_Ajax {
 		$email = isset( $_POST['email'] ) ? sanitize_email( wp_unslash( $_POST['email'] ) ) : '';
 
 		if ( empty( $email ) || ! is_email( $email ) ) {
-			wp_send_json_error( array( 'message' => __( 'A valid email is required.', CA_TEXT_DOMAIN ) ) );
+			wp_send_json_error( array( 'message' => __( 'A valid email is required.', 'custom-assessment' ) ) );
 		}
 
 		$submission = CA_Database::get_in_progress_submission_by_email( $email );
@@ -220,14 +220,14 @@ class CA_Ajax {
 		$submission_id = isset( $_POST['submission_id'] ) ? absint( $_POST['submission_id'] ) : 0;
 
 		if ( ! $submission_id ) {
-			wp_send_json_error( array( 'message' => __( 'Invalid session.', CA_TEXT_DOMAIN ) ) );
+			wp_send_json_error( array( 'message' => __( 'Invalid session.', 'custom-assessment' ) ) );
 		}
 
 		$answers  = CA_Database::get_answers( $submission_id );
 		$total_q  = CA_Questions::get_total_count();
 
 		if ( count( $answers ) < $total_q ) {
-			wp_send_json_error( array( 'message' => __( 'Please answer all questions before submitting.', CA_TEXT_DOMAIN ) ) );
+			wp_send_json_error( array( 'message' => __( 'Please answer all questions before submitting.', 'custom-assessment' ) ) );
 		}
 
 		$scoring = CA_Scoring::calculate( $answers );
@@ -244,7 +244,7 @@ class CA_Ajax {
 		CA_Mailer::send_results_email( $submission_id );
 
 		wp_send_json_success( array(
-			'message' => __( 'Assessment submitted.', CA_TEXT_DOMAIN ),
+			'message' => __( 'Assessment submitted.', 'custom-assessment' ),
 		) );
 	}
 
@@ -258,14 +258,14 @@ class CA_Ajax {
 		$submission_id = isset( $_POST['submission_id'] ) ? absint( $_POST['submission_id'] ) : 0;
 
 		if ( ! $submission_id ) {
-			wp_send_json_error( array( 'message' => __( 'Invalid session.', CA_TEXT_DOMAIN ) ) );
+			wp_send_json_error( array( 'message' => __( 'Invalid session.', 'custom-assessment' ) ) );
 		}
 
 		$submission     = CA_Database::get_submission( $submission_id );
 		$cat_scores_raw = CA_Database::get_category_scores( $submission_id );
 
 		if ( ! $submission ) {
-			wp_send_json_error( array( 'message' => __( 'Submission not found.', CA_TEXT_DOMAIN ) ) );
+			wp_send_json_error( array( 'message' => __( 'Submission not found.', 'custom-assessment' ) ) );
 		}
 
 		// Build category data with summaries
@@ -297,3 +297,4 @@ class CA_Ajax {
 		) );
 	}
 }
+
