@@ -3,22 +3,24 @@
  * Database handler: creates tables and provides data access methods.
  */
 
-if ( ! defined( 'ABSPATH' ) ) {
+if (!defined('ABSPATH')) {
 	exit;
 }
 
-class CA_Database {
+class CA_Database
+{
 
 	/**
 	 * Create plugin database tables on activation.
 	 */
-	public static function create_tables() {
+	public static function create_tables()
+	{
 		global $wpdb;
 		$charset_collate = $wpdb->get_charset_collate();
 
 		// Submissions table
 		$submissions_table = $wpdb->prefix . 'ca_submissions';
-		$sql_submissions   = "CREATE TABLE IF NOT EXISTS {$submissions_table} (
+		$sql_submissions = "CREATE TABLE IF NOT EXISTS {$submissions_table} (
 			id              BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
 			first_name      VARCHAR(100) NOT NULL DEFAULT '',
 			last_name       VARCHAR(100) NOT NULL DEFAULT '',
@@ -35,7 +37,7 @@ class CA_Database {
 
 		// Answers table
 		$answers_table = $wpdb->prefix . 'ca_answers';
-		$sql_answers   = "CREATE TABLE IF NOT EXISTS {$answers_table} (
+		$sql_answers = "CREATE TABLE IF NOT EXISTS {$answers_table} (
 			id              BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
 			submission_id   BIGINT(20) UNSIGNED NOT NULL,
 			question_index  TINYINT    NOT NULL DEFAULT 0,
@@ -46,7 +48,7 @@ class CA_Database {
 
 		// Category scores table
 		$cat_scores_table = $wpdb->prefix . 'ca_category_scores';
-		$sql_cat_scores   = "CREATE TABLE IF NOT EXISTS {$cat_scores_table} (
+		$sql_cat_scores = "CREATE TABLE IF NOT EXISTS {$cat_scores_table} (
 			id              BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
 			submission_id   BIGINT(20) UNSIGNED NOT NULL,
 			category_name   VARCHAR(100) NOT NULL DEFAULT '',
@@ -57,9 +59,9 @@ class CA_Database {
 		) {$charset_collate};";
 
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
-		dbDelta( $sql_submissions );
-		dbDelta( $sql_answers );
-		dbDelta( $sql_cat_scores );
+		dbDelta($sql_submissions);
+		dbDelta($sql_answers);
+		dbDelta($sql_cat_scores);
 	}
 
 	// -------------------------------------------------------------------------
@@ -72,7 +74,8 @@ class CA_Database {
 	 * @param array $data Sanitized user info.
 	 * @return int|false New submission ID or false on failure.
 	 */
-	public static function insert_submission( $data ) {
+	public static function insert_submission($data)
+	{
 		global $wpdb;
 		$table = $wpdb->prefix . 'ca_submissions';
 
@@ -80,15 +83,15 @@ class CA_Database {
 			$table,
 			array(
 				'first_name' => $data['first_name'],
-				'last_name'  => $data['last_name'],
-				'email'      => $data['email'],
-				'phone'      => $data['phone'],
-				'job_title'  => $data['job_title'],
-				'status'     => 'started',
-				'created_at' => current_time( 'mysql' ),
-				'updated_at' => current_time( 'mysql' ),
+				'last_name' => $data['last_name'],
+				'email' => $data['email'],
+				'phone' => $data['phone'],
+				'job_title' => $data['job_title'],
+				'status' => 'started',
+				'created_at' => current_time('mysql'),
+				'updated_at' => current_time('mysql'),
 			),
-			array( '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s' )
+			array('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s')
 		);
 
 		return $inserted ? $wpdb->insert_id : false;
@@ -101,21 +104,22 @@ class CA_Database {
 	 * @param int   $total_score
 	 * @param float $average_score
 	 */
-	public static function update_submission_scores( $submission_id, $total_score, $average_score ) {
+	public static function update_submission_scores($submission_id, $total_score, $average_score)
+	{
 		global $wpdb;
 		$table = $wpdb->prefix . 'ca_submissions';
 
 		$wpdb->update(
 			$table,
 			array(
-				'total_score'   => (int) $total_score,
+				'total_score' => (int) $total_score,
 				'average_score' => (float) $average_score,
-				'status'        => 'completed',
-				'updated_at'    => current_time( 'mysql' ),
+				'status' => 'completed',
+				'updated_at' => current_time('mysql'),
 			),
-			array( 'id' => (int) $submission_id ),
-			array( '%d', '%f', '%s', '%s' ),
-			array( '%d' )
+			array('id' => (int) $submission_id),
+			array('%d', '%f', '%s', '%s'),
+			array('%d')
 		);
 	}
 
@@ -124,19 +128,20 @@ class CA_Database {
 	 *
 	 * @param int $submission_id
 	 */
-	public static function set_in_progress( $submission_id ) {
+	public static function set_in_progress($submission_id)
+	{
 		global $wpdb;
 		$table = $wpdb->prefix . 'ca_submissions';
 
 		$wpdb->update(
 			$table,
 			array(
-				'status'     => 'in_progress',
-				'updated_at' => current_time( 'mysql' ),
+				'status' => 'in_progress',
+				'updated_at' => current_time('mysql'),
 			),
-			array( 'id' => (int) $submission_id ),
-			array( '%s', '%s' ),
-			array( '%d' )
+			array('id' => (int) $submission_id),
+			array('%s', '%s'),
+			array('%d')
 		);
 	}
 
@@ -146,12 +151,14 @@ class CA_Database {
 	 * @param int $submission_id
 	 * @return object|null
 	 */
-	public static function get_submission( $submission_id ) {
+	public static function get_submission($submission_id)
+	{
 		global $wpdb;
 		$table = $wpdb->prefix . 'ca_submissions';
 
 		return $wpdb->get_row(
-			$wpdb->prepare( "SELECT * FROM {$table} WHERE id = %d", (int) $submission_id )
+			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $table is derived from $wpdb->prefix and not user input.
+			$wpdb->prepare("SELECT * FROM {$table} WHERE id = %d", (int) $submission_id)
 		);
 	}
 
@@ -161,12 +168,14 @@ class CA_Database {
 	 * @param string $email
 	 * @return object|null
 	 */
-	public static function get_in_progress_submission_by_email( $email ) {
+	public static function get_in_progress_submission_by_email($email)
+	{
 		global $wpdb;
 		$table = $wpdb->prefix . 'ca_submissions';
 
 		return $wpdb->get_row(
-			$wpdb->prepare( "SELECT * FROM {$table} WHERE email = %s AND status IN ('in_progress','started') ORDER BY updated_at DESC LIMIT 1", $email )
+			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $table is derived from $wpdb->prefix and not user input.
+			$wpdb->prepare("SELECT * FROM {$table} WHERE email = %s AND status IN ('in_progress','started') ORDER BY updated_at DESC LIMIT 1", $email)
 		);
 	}
 
@@ -175,13 +184,14 @@ class CA_Database {
 	 *
 	 * @return array
 	 */
-	public static function get_all_submissions() {
+	public static function get_all_submissions()
+	{
 		global $wpdb;
 		$table = $wpdb->prefix . 'ca_submissions';
 
-		return $wpdb->get_results(
-			"SELECT * FROM {$table} ORDER BY created_at DESC"
-		);
+		$table_esc = esc_sql($table);
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Table name comes from $wpdb->prefix; values are not interpolated.
+		return $wpdb->get_results("SELECT * FROM {$table_esc} ORDER BY created_at DESC");
 	}
 
 	// -------------------------------------------------------------------------
@@ -195,18 +205,19 @@ class CA_Database {
 	 * @param int $question_index 0-based.
 	 * @param int $answer         1-5.
 	 */
-	public static function save_answer( $submission_id, $question_index, $answer ) {
+	public static function save_answer($submission_id, $question_index, $answer)
+	{
 		global $wpdb;
 		$table = $wpdb->prefix . 'ca_answers';
 
 		$wpdb->replace(
 			$table,
 			array(
-				'submission_id'  => (int) $submission_id,
+				'submission_id' => (int) $submission_id,
 				'question_index' => (int) $question_index,
-				'answer'         => (int) $answer,
+				'answer' => (int) $answer,
 			),
-			array( '%d', '%d', '%d' )
+			array('%d', '%d', '%d')
 		);
 	}
 
@@ -216,19 +227,21 @@ class CA_Database {
 	 * @param int $submission_id
 	 * @return array Keyed by question_index.
 	 */
-	public static function get_answers( $submission_id ) {
+	public static function get_answers($submission_id)
+	{
 		global $wpdb;
 		$table = $wpdb->prefix . 'ca_answers';
 
-		$rows    = $wpdb->get_results(
+		$rows = $wpdb->get_results(
+			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $table is derived from $wpdb->prefix and not user input.
 			$wpdb->prepare(
 				"SELECT question_index, answer FROM {$table} WHERE submission_id = %d ORDER BY question_index ASC",
 				(int) $submission_id
 			)
 		);
 		$answers = array();
-		foreach ( $rows as $row ) {
-			$answers[ (int) $row->question_index ] = (int) $row->answer;
+		foreach ($rows as $row) {
+			$answers[(int) $row->question_index] = (int) $row->answer;
 		}
 		return $answers;
 	}
@@ -240,18 +253,20 @@ class CA_Database {
 	 * @param int $question_index
 	 * @return int|null
 	 */
-	public static function get_answer( $submission_id, $question_index ) {
+	public static function get_answer($submission_id, $question_index)
+	{
 		global $wpdb;
 		$table = $wpdb->prefix . 'ca_answers';
 
 		$answer = $wpdb->get_var(
+			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $table is derived from $wpdb->prefix and not user input.
 			$wpdb->prepare(
 				"SELECT answer FROM {$table} WHERE submission_id = %d AND question_index = %d",
 				(int) $submission_id,
 				(int) $question_index
 			)
 		);
-		return ! is_null( $answer ) ? (int) $answer : null;
+		return !is_null($answer) ? (int) $answer : null;
 	}
 
 	// -------------------------------------------------------------------------
@@ -264,23 +279,24 @@ class CA_Database {
 	 * @param int   $submission_id
 	 * @param array $category_scores Array of [ 'name' => ..., 'subtotal' => ..., 'average' => ... ]
 	 */
-	public static function save_category_scores( $submission_id, $category_scores ) {
+	public static function save_category_scores($submission_id, $category_scores)
+	{
 		global $wpdb;
 		$table = $wpdb->prefix . 'ca_category_scores';
 
 		// Delete existing first (in case of re-submit)
-		$wpdb->delete( $table, array( 'submission_id' => (int) $submission_id ), array( '%d' ) );
+		$wpdb->delete($table, array('submission_id' => (int) $submission_id), array('%d'));
 
-		foreach ( $category_scores as $cat ) {
+		foreach ($category_scores as $cat) {
 			$wpdb->insert(
 				$table,
 				array(
 					'submission_id' => (int) $submission_id,
 					'category_name' => $cat['name'],
-					'subtotal'      => (int) $cat['subtotal'],
-					'average'       => (float) $cat['average'],
+					'subtotal' => (int) $cat['subtotal'],
+					'average' => (float) $cat['average'],
 				),
-				array( '%d', '%s', '%d', '%f' )
+				array('%d', '%s', '%d', '%f')
 			);
 		}
 	}
@@ -291,16 +307,13 @@ class CA_Database {
 	 * @param int $submission_id
 	 * @return array
 	 */
-	public static function get_category_scores( $submission_id ) {
+	public static function get_category_scores($submission_id)
+	{
 		global $wpdb;
 		$table = $wpdb->prefix . 'ca_category_scores';
 
-		return $wpdb->get_results(
-			$wpdb->prepare(
-				"SELECT * FROM {$table} WHERE submission_id = %d",
-				(int) $submission_id
-			)
-		);
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $table is derived from $wpdb->prefix and not user input.
+		return $wpdb->get_results($wpdb->prepare("SELECT * FROM {$table} WHERE submission_id = %d", (int) $submission_id));
 	}
 
 	/**
@@ -309,17 +322,18 @@ class CA_Database {
 	 * @param int $submission_id
 	 * @return bool True if deletion was successful.
 	 */
-	public static function delete_submission( $submission_id ) {
+	public static function delete_submission($submission_id)
+	{
 		global $wpdb;
 		$submission_id = (int) $submission_id;
 
 		$table_submissions = $wpdb->prefix . 'ca_submissions';
-		$table_answers     = $wpdb->prefix . 'ca_answers';
-		$table_cat_scores  = $wpdb->prefix . 'ca_category_scores';
+		$table_answers = $wpdb->prefix . 'ca_answers';
+		$table_cat_scores = $wpdb->prefix . 'ca_category_scores';
 
-		$deleted = $wpdb->delete( $table_submissions, array( 'id' => $submission_id ), array( '%d' ) );
-		$wpdb->delete( $table_answers, array( 'submission_id' => $submission_id ), array( '%d' ) );
-		$wpdb->delete( $table_cat_scores, array( 'submission_id' => $submission_id ), array( '%d' ) );
+		$deleted = $wpdb->delete($table_submissions, array('id' => $submission_id), array('%d'));
+		$wpdb->delete($table_answers, array('submission_id' => $submission_id), array('%d'));
+		$wpdb->delete($table_cat_scores, array('submission_id' => $submission_id), array('%d'));
 
 		return (bool) $deleted;
 	}
