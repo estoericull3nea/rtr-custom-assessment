@@ -7,7 +7,7 @@ if (!defined('ABSPATH')) {
 	exit;
 }
 
-class CA_PDF
+class RTR_Custom_Assessment_PDF
 {
 
 	/**

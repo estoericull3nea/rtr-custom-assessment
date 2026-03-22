@@ -690,7 +690,7 @@ class CA_Admin
 
 		$filename = 'submission_' . $submission_id . '_' . sanitize_file_name($submission->first_name . '_' . $submission->last_name) . '.pdf';
 		require_once CA_PLUGIN_DIR . 'includes/class-ca-pdf.php';
-		$pdf = new CA_PDF();
+		$pdf = new RTR_Custom_Assessment_PDF();
 		$pdf->export_pdf($html, $filename);
 	}
 
