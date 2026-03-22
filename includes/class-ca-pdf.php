@@ -3,23 +3,25 @@
  * PDF generation class for exporting submissions.
  */
 
-if ( ! defined( 'ABSPATH' ) ) {
+if (!defined('ABSPATH')) {
 	exit;
 }
 
-class CA_PDF {
+class CA_PDF
+{
 
 	/**
 	 * Generate PDF from HTML content.
 	 *
 	 * @param string $html
 	 */
-	public function generate( $html ) {
+	public function generate($html)
+	{
 		// Use TCPDF if available, otherwise use a simple approach
-		if ( class_exists( 'TCPDF' ) ) {
-			$this->generate_with_tcpdf( $html );
+		if (class_exists('TCPDF')) {
+			$this->generate_with_tcpdf($html);
 		} else {
-			$this->generate_simple( $html );
+			$this->generate_simple($html);
 		}
 	}
 
@@ -29,24 +31,25 @@ class CA_PDF {
 	 * @param string $html
 	 * @param string $filename
 	 */
-	public function export_pdf( $html, $filename ) {
+	public function export_pdf($html, $filename)
+	{
 		// Set headers for PDF download
-		header( 'Content-Type: application/pdf' );
-		header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
-		header( 'Cache-Control: no-cache, no-store, must-revalidate' );
-		header( 'Pragma: no-cache' );
-		header( 'Expires: 0' );
+		header('Content-Type: application/pdf');
+		header('Content-Disposition: attachment; filename="' . $filename . '"');
+		header('Cache-Control: no-cache, no-store, must-revalidate');
+		header('Pragma: no-cache');
+		header('Expires: 0');
 
 		// Try using TCPDF or DomPDF, fallback to HTML print
-		if ( class_exists( 'TCPDF' ) ) {
-			$this->generate_with_tcpdf( $html );
-		} elseif ( class_exists( 'Dompdf\Dompdf' ) ) {
-			$this->generate_with_dompdf( $html );
+		if (class_exists('TCPDF')) {
+			$this->generate_with_tcpdf($html);
+		} elseif (class_exists('Dompdf\Dompdf')) {
+			$this->generate_with_dompdf($html);
 		} else {
 			// Fallback: Output as HTML
-			header( 'Content-Type: text/html; charset=utf-8' );
-			header( 'Content-Disposition: inline' );
-			$this->generate_simple( $html );
+			header('Content-Type: text/html; charset=utf-8');
+			header('Content-Disposition: inline');
+			$this->generate_simple($html);
 		}
 	}
 
@@ -55,15 +58,16 @@ class CA_PDF {
 	 *
 	 * @param string $html
 	 */
-	private function generate_with_tcpdf( $html ) {
+	private function generate_with_tcpdf($html)
+	{
 		$pdf = new \TCPDF();
-		$pdf->SetDefaultMonospacedFont( PDF_FONT_MONOSPACED );
-		$pdf->SetMargins( 15, 15, 15 );
-		$pdf->SetAutoPageBreak( true, 15 );
+		$pdf->SetDefaultMonospacedFont(PDF_FONT_MONOSPACED);
+		$pdf->SetMargins(15, 15, 15);
+		$pdf->SetAutoPageBreak(true, 15);
 		$pdf->AddPage();
-		$pdf->SetFont( 'helvetica', '', 10 );
-		$pdf->writeHTML( $html, true, false, true, false, '' );
-		$pdf->Output( '', 'I' );
+		$pdf->SetFont('helvetica', '', 10);
+		$pdf->writeHTML($html, true, false, true, false, '');
+		$pdf->Output('', 'I');
 	}
 
 	/**
@@ -71,11 +75,13 @@ class CA_PDF {
 	 *
 	 * @param string $html
 	 */
-	private function generate_with_dompdf( $html ) {
+	private function generate_with_dompdf($html)
+	{
 		$dompdf = new \Dompdf\Dompdf();
-		$dompdf->loadHtml( $html );
-		$dompdf->setPaper( 'A4' );
+		$dompdf->loadHtml($html);
+		$dompdf->setPaper('A4');
 		$dompdf->render();
+		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Dompdf returns binary PDF content, not HTML output.
 		echo $dompdf->output();
 	}
 
@@ -84,10 +90,11 @@ class CA_PDF {
 	 *
 	 * @param string $html
 	 */
-	private function generate_simple( $html ) {
+	private function generate_simple($html)
+	{
 		// Try to use dompdf if composer installed it
-		if ( class_exists( 'Dompdf\Dompdf' ) ) {
-			$this->generate_with_dompdf( $html );
+		if (class_exists('Dompdf\Dompdf')) {
+			$this->generate_with_dompdf($html);
 			return;
 		}
 
@@ -110,7 +117,7 @@ class CA_PDF {
 		</head>
 		<body>
 			<button class="print-button no-print" onclick="window.print()">Print / Save as PDF</button>
-			' . $html . '
+			' . wp_kses_post($html) . '
 		</body>
 		</html>';
 	}
