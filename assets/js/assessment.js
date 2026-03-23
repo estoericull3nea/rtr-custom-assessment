@@ -325,7 +325,7 @@
   }
 
   function findInProgressByEmail(email, next) {
-    $.post(CA_Config.ajax_url, {
+    caPost({
       action: "ca_find_in_progress_by_email",
       nonce: CA_Config.nonce,
       email: email,
@@ -353,7 +353,7 @@
       job_title: $("#ca-job-title").val().trim(),
     };
 
-    $.post(CA_Config.ajax_url, data)
+    caPost(data)
       .done(function (response) {
         if (response.success) {
           state.submissionId = response.data.submission_id;
@@ -365,12 +365,33 @@
         } else {
           showError(
             $infoError,
-            response.data.message || CA_Config.labels.error_generic,
+            (response &&
+            response.data &&
+            typeof response.data === "string" &&
+            response.data) ||
+              (response &&
+                response.data &&
+                response.data.message) ||
+              CA_Config.labels.error_generic,
           );
         }
       })
-      .fail(function () {
-        showError($infoError, CA_Config.labels.error_generic);
+      .fail(function (xhr, textStatus, errorThrown) {
+        // eslint-disable-next-line no-console
+        console.error("CA AJAX ca_save_user_info failed:", {
+          textStatus: textStatus,
+          errorThrown: errorThrown,
+          status: xhr && xhr.status ? xhr.status : null,
+          responseText:
+            xhr && xhr.responseText ? xhr.responseText.slice(0, 500) : null,
+        });
+        var serverMsg =
+          (xhr &&
+            xhr.responseJSON &&
+            xhr.responseJSON.data &&
+            xhr.responseJSON.data.message) ||
+          null;
+        showError($infoError, serverMsg || CA_Config.labels.error_generic);
       })
       .always(function () {
         setBtnLoading($startBtn, false);
@@ -445,15 +466,30 @@
       submission_id: state.submissionId,
     };
 
-    $.post(CA_Config.ajax_url, data)
+    caPost(data)
       .done(function (response) {
         if (response.success) {
           renderQuestion(response.data, stepIndex, questionIndex);
         } else {
-          alert(response.data.message || CA_Config.labels.error_generic);
+          alert(
+            (response &&
+              response.data &&
+              typeof response.data === "string"
+              ? response.data
+              : response.data.message) ||
+              CA_Config.labels.error_generic,
+          );
         }
       })
-      .fail(function () {
+      .fail(function (xhr, textStatus, errorThrown) {
+        // eslint-disable-next-line no-console
+        console.error("CA AJAX ca_get_question failed:", {
+          textStatus: textStatus,
+          errorThrown: errorThrown,
+          status: xhr && xhr.status ? xhr.status : null,
+          responseText:
+            xhr && xhr.responseText ? xhr.responseText.slice(0, 500) : null,
+        });
         alert(CA_Config.labels.error_generic);
       });
   }
@@ -532,7 +568,7 @@
       answer: answer,
     };
 
-    $.post(CA_Config.ajax_url, data)
+    caPost(data)
       .done(function (response) {
         if (response.success) {
           var nextStep = stepIndex + 1;
@@ -547,11 +583,26 @@
         } else {
           showError(
             $questionError,
-            response.data.message || CA_Config.labels.error_generic,
+            (response &&
+            response.data &&
+            typeof response.data === "string" &&
+            response.data) ||
+              (response &&
+                response.data &&
+                response.data.message) ||
+              CA_Config.labels.error_generic,
           );
         }
       })
-      .fail(function () {
+      .fail(function (xhr, textStatus, errorThrown) {
+        // eslint-disable-next-line no-console
+        console.error("CA AJAX ca_save_answer failed:", {
+          textStatus: textStatus,
+          errorThrown: errorThrown,
+          status: xhr && xhr.status ? xhr.status : null,
+          responseText:
+            xhr && xhr.responseText ? xhr.responseText.slice(0, 500) : null,
+        });
         showError($questionError, CA_Config.labels.error_generic);
       })
       .always(function () {
@@ -579,17 +630,32 @@
       submission_id: state.submissionId,
     };
 
-    $.post(CA_Config.ajax_url, data)
+    caPost(data)
       .done(function (response) {
         if (response.success) {
           clearSavedSession();
           loadResultsPreview();
         } else {
-          alert(response.data.message || CA_Config.labels.error_generic);
+          alert(
+            (response &&
+              response.data &&
+              typeof response.data === "string"
+              ? response.data
+              : response.data.message) ||
+              CA_Config.labels.error_generic,
+          );
           showScreen("questions");
         }
       })
-      .fail(function () {
+      .fail(function (xhr, textStatus, errorThrown) {
+        // eslint-disable-next-line no-console
+        console.error("CA AJAX ca_submit_assessment failed:", {
+          textStatus: textStatus,
+          errorThrown: errorThrown,
+          status: xhr && xhr.status ? xhr.status : null,
+          responseText:
+            xhr && xhr.responseText ? xhr.responseText.slice(0, 500) : null,
+        });
         alert(CA_Config.labels.error_generic);
         showScreen("questions");
       });
@@ -605,15 +671,30 @@
       submission_id: state.submissionId,
     };
 
-    $.post(CA_Config.ajax_url, data)
+    caPost(data)
       .done(function (response) {
         if (response.success) {
           renderResults(response.data);
         } else {
-          alert(response.data.message || CA_Config.labels.error_generic);
+          alert(
+            (response &&
+              response.data &&
+              typeof response.data === "string"
+              ? response.data
+              : response.data.message) ||
+              CA_Config.labels.error_generic,
+          );
         }
       })
-      .fail(function () {
+      .fail(function (xhr, textStatus, errorThrown) {
+        // eslint-disable-next-line no-console
+        console.error("CA AJAX ca_get_results_preview failed:", {
+          textStatus: textStatus,
+          errorThrown: errorThrown,
+          status: xhr && xhr.status ? xhr.status : null,
+          responseText:
+            xhr && xhr.responseText ? xhr.responseText.slice(0, 500) : null,
+        });
         alert(CA_Config.labels.error_generic);
       });
   }
@@ -732,6 +813,51 @@
 
   function hideError($el) {
     $el.text("").removeClass("ca-visible");
+  }
+
+  /**
+   * Robust AJAX POST wrapper.
+   *
+   * On some mobile networks, proxies/CDNs/WAFs can inject extra content
+   * (whitespace, BOM, HTML notices) before the JSON body that WordPress
+   * returns from admin-ajax.php.  jQuery's default behaviour is to fail
+   * with "parsererror" when the response cannot be decoded as JSON, which
+   * surfaces as the generic "Something went wrong" message.
+   *
+   * caPost() forces dataType: 'json' and uses a dataFilter to strip any
+   * leading garbage before the first '{' so JSON.parse always receives a
+   * clean string.  It returns the same jQuery jqXHR/promise so callers
+   * can chain .done() / .fail() / .always() as usual.
+   */
+  function caPost(data) {
+    return $.ajax({
+      url: CA_Config.ajax_url,
+      type: "POST",
+      data: data,
+      dataType: "json",
+      dataFilter: function (raw) {
+        if (typeof raw === "string") {
+          // Attempt to isolate the JSON payload even if proxies inject
+          // extra HTML/text before/after the JSON.
+          raw = raw.trim();
+          var start = raw.indexOf("{");
+          var startAlt = raw.indexOf("[");
+          if (start < 0) start = startAlt;
+
+          if (start >= 0) {
+            var endObj = raw.lastIndexOf("}");
+            var endArr = raw.lastIndexOf("]");
+            var end = Math.max(endObj, endArr);
+            if (end > start) {
+              raw = raw.substring(start, end + 1);
+            } else {
+              raw = raw.substring(start);
+            }
+          }
+        }
+        return raw;
+      },
+    });
   }
 
   function setBtnLoading($btn, loading) {
