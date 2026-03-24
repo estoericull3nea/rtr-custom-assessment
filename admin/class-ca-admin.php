@@ -1578,11 +1578,50 @@ class CA_Admin
 			wp_die(esc_html__('You do not have permission to view this page.', 'rtr-custom-assessment'));
 		}
 
-		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- Read-only query param for status notice.
+		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- Read-only query params for UI state.
 		$message = isset($_GET['message']) ? sanitize_key(wp_unslash($_GET['message'])) : '';
+		$current_page = max(1, isset($_GET['paged']) ? absint($_GET['paged']) : 1);
+		$search_q = isset($_GET['log_search']) ? sanitize_text_field(wp_unslash($_GET['log_search'])) : '';
+		$filter_status = isset($_GET['log_status']) ? sanitize_key(wp_unslash($_GET['log_status'])) : '';
+		$filter_action = isset($_GET['log_action']) ? sanitize_text_field(wp_unslash($_GET['log_action'])) : '';
 		// phpcs:enable WordPress.Security.NonceVerification.Recommended
 
-		$logs = array_reverse(CA_Logger::get_logs());
+		$all_logs = array_reverse(CA_Logger::get_logs());
+
+		// Build unique actions list for filter dropdown.
+		$actions_list = array();
+		foreach ($all_logs as $entry) {
+			if (isset($entry['action']) && $entry['action'] !== '') {
+				$actions_list[$entry['action']] = true;
+			}
+		}
+		$actions_list = array_keys($actions_list);
+		sort($actions_list);
+
+		// Filter logs by status/action/search.
+		$logs = array_filter($all_logs, function ($entry) use ($filter_status, $filter_action, $search_q) {
+			if ($filter_status && isset($entry['status']) && (string) $entry['status'] !== (string) $filter_status) {
+				return false;
+			}
+			if ($filter_action && isset($entry['action']) && (string) $entry['action'] !== (string) $filter_action) {
+				return false;
+			}
+			if ($search_q !== '') {
+				$haystack = wp_json_encode($entry);
+				if (false === stripos((string) $haystack, (string) $search_q)) {
+					return false;
+				}
+			}
+			return true;
+		});
+
+		// Pagination
+		$per_page = 10;
+		$total_logs = count($logs);
+		$total_pages = max(1, (int) ceil($total_logs / $per_page));
+		$current_page = min($current_page, $total_pages);
+		$offset = ($current_page - 1) * $per_page;
+		$logs = array_slice(array_values($logs), $offset, $per_page);
 		?>
 		<div class="wrap ca-admin-wrap">
 			<h1 class="ca-admin-title">
@@ -1595,6 +1634,40 @@ class CA_Admin
 					<p><?php esc_html_e('Logs cleared successfully.', 'rtr-custom-assessment'); ?></p>
 				</div>
 			<?php endif; ?>
+
+			<form method="get" action="" style="margin-bottom: 12px;">
+				<input type="hidden" name="page" value="custom-assessment-logs">
+				<div class="ca-questions-stats-grid">
+					<div class="ca-search-field">
+						<label for="ca-log-search"><?php esc_html_e('Search Logs', 'rtr-custom-assessment'); ?></label>
+						<input type="text" id="ca-log-search" name="log_search" value="<?php echo esc_attr($search_q); ?>"
+							placeholder="<?php esc_attr_e('Search message, action, status, context…', 'rtr-custom-assessment'); ?>" autocomplete="off" />
+					</div>
+					<div class="ca-search-field">
+						<label for="ca-log-status"><?php esc_html_e('Status', 'rtr-custom-assessment'); ?></label>
+						<select id="ca-log-status" name="log_status">
+							<option value=""><?php esc_html_e('All', 'rtr-custom-assessment'); ?></option>
+							<option value="success" <?php selected($filter_status, 'success'); ?>><?php esc_html_e('Success', 'rtr-custom-assessment'); ?></option>
+							<option value="error" <?php selected($filter_status, 'error'); ?>><?php esc_html_e('Error', 'rtr-custom-assessment'); ?></option>
+						</select>
+					</div>
+					<div class="ca-search-field">
+						<label for="ca-log-action"><?php esc_html_e('Action', 'rtr-custom-assessment'); ?></label>
+						<select id="ca-log-action" name="log_action">
+							<option value=""><?php esc_html_e('All', 'rtr-custom-assessment'); ?></option>
+							<?php foreach ($actions_list as $act): ?>
+								<option value="<?php echo esc_attr($act); ?>" <?php selected($filter_action, $act); ?>>
+									<?php echo esc_html($act); ?>
+								</option>
+							<?php endforeach; ?>
+						</select>
+					</div>
+					<div class="ca-search-field" style="align-self: end;">
+						<button type="submit" class="button button-primary"><?php esc_html_e('Apply', 'rtr-custom-assessment'); ?></button>
+						<a href="<?php echo esc_url(admin_url('admin.php?page=custom-assessment-logs')); ?>" class="button"><?php esc_html_e('Reset', 'rtr-custom-assessment'); ?></a>
+					</div>
+				</div>
+			</form>
 
 			<form method="post" action="" style="margin-bottom: 12px;">
 				<?php wp_nonce_field('ca_clear_logs_action', '_wpnonce'); ?>
@@ -1643,6 +1716,49 @@ class CA_Admin
 						<?php endforeach; ?>
 					</tbody>
 				</table>
+				<div class="tablenav bottom">
+					<div class="tablenav-pages">
+						<span class="displaying-num">
+							<?php echo esc_html($total_logs); ?> <?php esc_html_e('entries', 'rtr-custom-assessment'); ?>
+						</span>
+						<?php if ($total_pages > 1): ?>
+							<span class="pagination-links">
+								<?php
+								$base_url = admin_url('admin.php?page=custom-assessment-logs');
+								$query_base = array(
+									'page' => 'custom-assessment-logs',
+									'log_search' => $search_q,
+									'log_status' => $filter_status,
+									'log_action' => $filter_action,
+								);
+								$prev_disabled = $current_page <= 1 ? 'disabled' : '';
+								$next_disabled = $current_page >= $total_pages ? 'disabled' : '';
+								echo '<a class="prev-page button ' . esc_attr($prev_disabled) . '" href="' . esc_url(add_query_arg(array_merge($query_base, array('paged' => max(1, $current_page - 1))), $base_url)) . '">&laquo;</a>';
+								$start_page = max(1, $current_page - 2);
+								$end_page = min($total_pages, $start_page + 4);
+								if ($start_page > 1) {
+									echo '<a class="page-numbers" href="' . esc_url(add_query_arg(array_merge($query_base, array('paged' => 1)), $base_url)) . '">1</a>';
+									if ($start_page > 2) {
+										echo '<span class="dots">…</span>';
+									}
+								}
+								for ($i = $start_page; $i <= $end_page; $i++) {
+									$active_class = ($i === $current_page) ? 'current' : '';
+									echo '<a class="page-numbers ' . esc_attr($active_class) . '" href="' . esc_url(add_query_arg(array_merge($query_base, array('paged' => $i)), $base_url)) . '">' . esc_html($i) . '</a>';
+								}
+								if ($end_page < $total_pages) {
+									if ($end_page < $total_pages - 1) {
+										echo '<span class="dots">…</span>';
+									}
+									echo '<a class="page-numbers" href="' . esc_url(add_query_arg(array_merge($query_base, array('paged' => $total_pages)), $base_url)) . '">' . esc_html($total_pages) . '</a>';
+								}
+								echo '<a class="next-page button ' . esc_attr($next_disabled) . '" href="' . esc_url(add_query_arg(array_merge($query_base, array('paged' => min($total_pages, $current_page + 1))), $base_url)) . '">&raquo;</a>';
+								?>
+							</span>
+						<?php endif; ?>
+					</div>
+					<br class="clear">
+				</div>
 			<?php endif; ?>
 		</div>
 		<?php
