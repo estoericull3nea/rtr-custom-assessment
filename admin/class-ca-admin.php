@@ -117,6 +117,56 @@ class CA_Admin
 			wp_safe_redirect(esc_url_raw($redirect_url));
 			exit;
 		}
+
+		if (
+			isset($_POST['ca_action'], $_POST['_wpnonce']) &&
+			'bulk_delete_submissions' === sanitize_text_field(wp_unslash($_POST['ca_action'])) &&
+			wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'ca_bulk_delete_submissions_action')
+		) {
+			$bulk_action_top = isset($_POST['bulk_action']) ? sanitize_text_field(wp_unslash($_POST['bulk_action'])) : '';
+			$bulk_action_bottom = isset($_POST['bulk_action_bottom']) ? sanitize_text_field(wp_unslash($_POST['bulk_action_bottom'])) : '';
+			$delete_selected = ('delete' === $bulk_action_top || 'delete' === $bulk_action_bottom);
+
+			if (!$delete_selected) {
+				$current_request_uri = isset($_SERVER['REQUEST_URI']) ? sanitize_text_field(wp_unslash($_SERVER['REQUEST_URI'])) : '';
+				$redirect_url = remove_query_arg(array('action', 'id', '_wpnonce'), $current_request_uri);
+				$redirect_url = add_query_arg('message', 'bulk_delete_none_selected', $redirect_url);
+				wp_safe_redirect(esc_url_raw($redirect_url));
+				exit;
+			}
+
+			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Sanitized immediately below.
+			$ids_raw = isset($_POST['submission_ids']) ? wp_unslash($_POST['submission_ids']) : array();
+			$ids_raw = is_array($ids_raw) ? $ids_raw : array($ids_raw);
+			$ids_raw = array_map('sanitize_text_field', $ids_raw);
+			$ids = array_map('absint', $ids_raw);
+			$ids = array_values(array_filter($ids, fn($id) => $id > 0));
+
+			if (empty($ids)) {
+				$current_request_uri = isset($_SERVER['REQUEST_URI']) ? sanitize_text_field(wp_unslash($_SERVER['REQUEST_URI'])) : '';
+				$redirect_url = remove_query_arg(array('action', 'id', '_wpnonce'), $current_request_uri);
+				$redirect_url = add_query_arg('message', 'bulk_delete_none_selected', $redirect_url);
+				wp_safe_redirect(esc_url_raw($redirect_url));
+				exit;
+			}
+
+			$deleted_count = 0;
+			foreach ($ids as $submission_id) {
+				$deleted = CA_Database::delete_submission($submission_id);
+				if ($deleted) {
+					$deleted_count++;
+				}
+			}
+
+			$current_request_uri = isset($_SERVER['REQUEST_URI']) ? sanitize_text_field(wp_unslash($_SERVER['REQUEST_URI'])) : '';
+			$redirect_url = remove_query_arg(array('action', 'id', '_wpnonce'), $current_request_uri);
+			$redirect_url = add_query_arg(array(
+				'message' => 'bulk_deleted',
+				'deleted_count' => $deleted_count,
+			), $redirect_url);
+			wp_safe_redirect(esc_url_raw($redirect_url));
+			exit;
+		}
 	}
 
 	/**
@@ -1020,6 +1070,37 @@ class CA_Admin
 				</div>
 			<?php endif; ?>
 
+			<?php if ('bulk_delete_none_selected' === $list_message): ?>
+				<div class="notice notice-warning is-dismissible">
+					<p><?php esc_html_e('No submissions selected for bulk delete.', 'rtr-custom-assessment'); ?></p>
+				</div>
+			<?php endif; ?>
+
+			<?php if ('bulk_deleted' === $list_message): ?>
+				<?php
+				// phpcs:disable WordPress.Security.NonceVerification.Recommended -- Read-only use of sanitized query arg for notice display.
+				$deleted_count_notice = isset($_GET['deleted_count']) ? absint($_GET['deleted_count']) : 0;
+				// phpcs:enable WordPress.Security.NonceVerification.Recommended
+				?>
+				<div class="notice notice-success is-dismissible">
+					<p>
+						<?php
+						printf(
+							esc_html(
+								_n(
+									'%d submission deleted successfully.',
+									'%d submissions deleted successfully.',
+									$deleted_count_notice,
+									'rtr-custom-assessment'
+								)
+							),
+							esc_html($deleted_count_notice)
+						);
+						?>
+					</p>
+				</div>
+			<?php endif; ?>
+
 			<?php if ('email_sent' === $list_message): ?>
 				<div class="notice notice-success is-dismissible">
 					<p><?php esc_html_e('Assessment results email sent successfully to the customer.', 'rtr-custom-assessment'); ?>
@@ -1084,9 +1165,30 @@ class CA_Admin
 
 				<br />
 
-				<table class="wp-list-table widefat fixed striped ca-admin-table">
+				<form method="post" action="">
+					<?php wp_nonce_field('ca_bulk_delete_submissions_action', '_wpnonce'); ?>
+					<input type="hidden" name="ca_action" value="bulk_delete_submissions">
+
+					<div class="tablenav top">
+						<div class="alignleft actions bulkactions">
+							<label for="bulk-action-selector-top" class="screen-reader-text"><?php esc_html_e('Select bulk action', 'rtr-custom-assessment'); ?></label>
+							<select name="bulk_action" id="bulk-action-selector-top">
+								<option value="-1"><?php esc_html_e('Bulk actions', 'rtr-custom-assessment'); ?></option>
+								<option value="delete"><?php esc_html_e('Delete', 'rtr-custom-assessment'); ?></option>
+							</select>
+							<input type="submit" class="button action" value="<?php esc_attr_e('Apply', 'rtr-custom-assessment'); ?>"
+								onclick="if(document.getElementById('bulk-action-selector-top').value !== 'delete'){return false;} return confirm('<?php echo esc_js(__('Are you sure you want to delete the selected submissions? This action cannot be undone.', 'rtr-custom-assessment')); ?>');">
+						</div>
+						<br class="clear">
+					</div>
+
+					<table class="wp-list-table widefat fixed striped ca-admin-table">
 					<thead>
 						<tr>
+							<td scope="col" class="manage-column column-cb check-column">
+								<label class="screen-reader-text" for="ca-submissions-select-all"><?php esc_html_e('Select all submissions', 'rtr-custom-assessment'); ?></label>
+								<input type="checkbox" id="ca-submissions-select-all">
+							</td>
 							<th scope="col" class="ca-col-id"><?php esc_html_e('#', 'rtr-custom-assessment'); ?></th>
 							<th scope="col"><?php esc_html_e('Name', 'rtr-custom-assessment'); ?></th>
 							<th scope="col"><?php esc_html_e('Email', 'rtr-custom-assessment'); ?></th>
@@ -1102,6 +1204,10 @@ class CA_Admin
 					<tbody>
 						<?php foreach ($submissions as $sub): ?>
 							<tr>
+								<th scope="row" class="check-column">
+									<input type="checkbox" class="ca-submission-checkbox" name="submission_ids[]"
+										value="<?php echo esc_attr($sub->id); ?>">
+								</th>
 								<td class="ca-col-id"><?php echo esc_html($sub->id); ?></td>
 								<td>
 									<strong><?php echo esc_html($sub->first_name . ' ' . $sub->last_name); ?></strong>
@@ -1160,7 +1266,21 @@ class CA_Admin
 							</tr>
 						<?php endforeach; ?>
 					</tbody>
-				</table>
+					</table>
+
+					<div class="tablenav bottom">
+						<div class="alignleft actions bulkactions">
+							<label for="bulk-action-selector-bottom" class="screen-reader-text"><?php esc_html_e('Select bulk action', 'rtr-custom-assessment'); ?></label>
+							<select name="bulk_action_bottom" id="bulk-action-selector-bottom">
+								<option value="-1"><?php esc_html_e('Bulk actions', 'rtr-custom-assessment'); ?></option>
+								<option value="delete"><?php esc_html_e('Delete', 'rtr-custom-assessment'); ?></option>
+							</select>
+							<input type="submit" class="button action" value="<?php esc_attr_e('Apply', 'rtr-custom-assessment'); ?>"
+								onclick="var top=document.getElementById('bulk-action-selector-top'); var bottom=document.getElementById('bulk-action-selector-bottom'); var selected=(top&&top.value==='delete')||(bottom&&bottom.value==='delete'); if(!selected){return false;} return confirm('<?php echo esc_js(__('Are you sure you want to delete the selected submissions? This action cannot be undone.', 'rtr-custom-assessment')); ?>');">
+						</div>
+						<br class="clear">
+					</div>
+				</form>
 
 				<div class="tablenav bottom">
 					<div class="tablenav-pages">
@@ -1207,6 +1327,19 @@ class CA_Admin
 					</div>
 					<br class="clear">
 				</div>
+
+				<script>
+					(function () {
+						var selectAll = document.getElementById('ca-submissions-select-all');
+						if (!selectAll) return;
+						selectAll.addEventListener('change', function () {
+							var items = document.querySelectorAll('.ca-submission-checkbox');
+							for (var i = 0; i < items.length; i++) {
+								items[i].checked = !!selectAll.checked;
+							}
+						});
+					})();
+				</script>
 			<?php endif; ?>
 		</div>
 		<?php
