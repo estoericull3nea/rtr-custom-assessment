@@ -684,8 +684,9 @@ class CA_Admin
 		header('Content-Type: text/csv; charset=utf-8');
 		header('Content-Disposition: attachment; filename="all_submissions_' . gmdate('Ymd_His') . '.csv"');
 
+		$flat_questions = CA_Questions::get_flat();
 		$output = fopen('php://output', 'w');
-		fputcsv($output, array(
+		$header = array(
 			'ID',
 			'First Name',
 			'Last Name',
@@ -697,10 +698,25 @@ class CA_Admin
 			'Average Score',
 			'Created At',
 			'Updated At',
-		));
+		);
+
+		// Add per-question answer columns so one CSV includes complete response details.
+		foreach ($flat_questions as $idx => $question) {
+			$header[] = sprintf(
+				'Q%d: %s',
+				$idx + 1,
+				isset($question['text']) ? (string) $question['text'] : ''
+			);
+		}
+
+		// Add category score summary columns.
+		$header[] = 'Category Scores (name:subtotal:average)';
+		$header[] = 'Category Summaries (name:summary)';
+
+		fputcsv($output, $header);
 
 		foreach ($submissions as $submission) {
-			fputcsv($output, array(
+			$row = array(
 				isset($submission->id) ? $submission->id : '',
 				isset($submission->first_name) ? $submission->first_name : '',
 				isset($submission->last_name) ? $submission->last_name : '',
@@ -712,7 +728,29 @@ class CA_Admin
 				isset($submission->average_score) ? $submission->average_score : '',
 				isset($submission->created_at) ? $submission->created_at : '',
 				isset($submission->updated_at) ? $submission->updated_at : '',
-			));
+			);
+
+			$submission_id = isset($submission->id) ? absint($submission->id) : 0;
+			$answers_map = $submission_id > 0 ? CA_Database::get_answers($submission_id) : array();
+			foreach ($flat_questions as $idx => $question) {
+				$answer = isset($answers_map[$idx]) ? $answers_map[$idx] : '';
+				$row[] = '' !== $answer ? $answer : 'No answer';
+			}
+
+			$category_scores = $submission_id > 0 ? CA_Database::get_category_scores($submission_id) : array();
+			$scores_summary = array();
+			$text_summary = array();
+			foreach ($category_scores as $cat) {
+				$cat_name = isset($cat->category_name) ? (string) $cat->category_name : '';
+				$cat_subtotal = isset($cat->subtotal) ? (int) $cat->subtotal : 0;
+				$cat_average = isset($cat->average) ? (float) $cat->average : 0.0;
+				$scores_summary[] = $cat_name . ':' . $cat_subtotal . ':' . number_format($cat_average, 2);
+				$text_summary[] = $cat_name . ':' . CA_Scoring::get_category_summary($cat_name, $cat_average);
+			}
+			$row[] = implode(' | ', $scores_summary);
+			$row[] = implode(' | ', $text_summary);
+
+			fputcsv($output, $row);
 		}
 
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- Closing a stream opened on php://output.
@@ -1285,111 +1323,118 @@ class CA_Admin
 
 					<div class="tablenav top">
 						<div class="alignleft actions bulkactions">
-							<label for="bulk-action-selector-top" class="screen-reader-text"><?php esc_html_e('Select bulk action', 'rtr-custom-assessment'); ?></label>
+							<label for="bulk-action-selector-top"
+								class="screen-reader-text"><?php esc_html_e('Select bulk action', 'rtr-custom-assessment'); ?></label>
 							<select name="bulk_action" id="bulk-action-selector-top">
 								<option value="-1"><?php esc_html_e('Bulk actions', 'rtr-custom-assessment'); ?></option>
 								<option value="delete"><?php esc_html_e('Delete', 'rtr-custom-assessment'); ?></option>
 							</select>
-							<input type="submit" class="button action" value="<?php esc_attr_e('Apply', 'rtr-custom-assessment'); ?>"
+							<input type="submit" class="button action"
+								value="<?php esc_attr_e('Apply', 'rtr-custom-assessment'); ?>"
 								onclick="if(document.getElementById('bulk-action-selector-top').value !== 'delete'){return false;} return confirm('<?php echo esc_js(__('Are you sure you want to delete the selected submissions? This action cannot be undone.', 'rtr-custom-assessment')); ?>');">
 						</div>
 						<br class="clear">
 					</div>
 
 					<table class="wp-list-table widefat fixed striped ca-admin-table">
-					<thead>
-						<tr>
-							<td scope="col" class="manage-column column-cb check-column">
-								<label class="screen-reader-text" for="ca-submissions-select-all"><?php esc_html_e('Select all submissions', 'rtr-custom-assessment'); ?></label>
-								<input type="checkbox" id="ca-submissions-select-all">
-							</td>
-							<th scope="col" class="ca-col-id"><?php esc_html_e('#', 'rtr-custom-assessment'); ?></th>
-							<th scope="col"><?php esc_html_e('Name', 'rtr-custom-assessment'); ?></th>
-							<th scope="col"><?php esc_html_e('Email', 'rtr-custom-assessment'); ?></th>
-							<th scope="col"><?php esc_html_e('Phone', 'rtr-custom-assessment'); ?></th>
-							<th scope="col"><?php esc_html_e('Job Title', 'rtr-custom-assessment'); ?></th>
-							<th scope="col" class="ca-col-score"><?php esc_html_e('Total Score', 'rtr-custom-assessment'); ?></th>
-							<th scope="col" class="ca-col-score"><?php esc_html_e('Average', 'rtr-custom-assessment'); ?></th>
-							<th scope="col" class="ca-col-status"><?php esc_html_e('Status', 'rtr-custom-assessment'); ?></th>
-							<th scope="col"><?php esc_html_e('Date', 'rtr-custom-assessment'); ?></th>
-							<th scope="col"><?php esc_html_e('Actions', 'rtr-custom-assessment'); ?></th>
-						</tr>
-					</thead>
-					<tbody>
-						<?php foreach ($submissions as $sub): ?>
+						<thead>
 							<tr>
-								<th scope="row" class="check-column">
-									<input type="checkbox" class="ca-submission-checkbox" name="submission_ids[]"
-										value="<?php echo esc_attr($sub->id); ?>">
+								<td scope="col" class="manage-column column-cb check-column">
+									<label class="screen-reader-text"
+										for="ca-submissions-select-all"><?php esc_html_e('Select all submissions', 'rtr-custom-assessment'); ?></label>
+									<input type="checkbox" id="ca-submissions-select-all">
+								</td>
+								<th scope="col" class="ca-col-id"><?php esc_html_e('#', 'rtr-custom-assessment'); ?></th>
+								<th scope="col"><?php esc_html_e('Name', 'rtr-custom-assessment'); ?></th>
+								<th scope="col"><?php esc_html_e('Email', 'rtr-custom-assessment'); ?></th>
+								<th scope="col"><?php esc_html_e('Phone', 'rtr-custom-assessment'); ?></th>
+								<th scope="col"><?php esc_html_e('Job Title', 'rtr-custom-assessment'); ?></th>
+								<th scope="col" class="ca-col-score"><?php esc_html_e('Total Score', 'rtr-custom-assessment'); ?>
 								</th>
-								<td class="ca-col-id"><?php echo esc_html($sub->id); ?></td>
-								<td>
-									<strong><?php echo esc_html($sub->first_name . ' ' . $sub->last_name); ?></strong>
-								</td>
-								<td><?php echo esc_html($sub->email); ?></td>
-								<td><?php echo esc_html($sub->phone); ?></td>
-								<td><?php echo esc_html($sub->job_title); ?></td>
-								<td class="ca-col-score">
-									<?php echo 'completed' === $sub->status ? esc_html($sub->total_score) : '—'; ?>
-								</td>
-								<td class="ca-col-score">
-									<?php echo 'completed' === $sub->status ? esc_html(number_format($sub->average_score, 2)) : '—'; ?>
-								</td>
-								<td class="ca-col-status">
-									<span class="ca-status-badge ca-status--<?php echo esc_attr($sub->status); ?>">
-										<?php echo esc_html(ucwords(str_replace('_', ' ', $sub->status))); ?>
-									</span>
-								</td>
-								<td><?php echo esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($sub->created_at))); ?>
-								</td>
-								<td>
-									<a href="<?php echo esc_url(add_query_arg(array('page' => 'custom-assessment-submissions', 'view' => 'detail', 'id' => $sub->id), admin_url('admin.php'))); ?>"
-										class="button button-small">
-										<?php esc_html_e('View', 'rtr-custom-assessment'); ?>
-									</a>
-									<?php if ('completed' === $sub->status): ?>
-										<div class="ca-export-dropdown-wrapper">
-											<div class="ca-export-menu ca-export-dropdown" id="export-<?php echo esc_attr($sub->id); ?>">
-												<?php $csv_url = add_query_arg(array('page' => 'custom-assessment-submissions', 'action' => 'export', 'format' => 'csv', 'id' => $sub->id, '_wpnonce' => wp_create_nonce('ca_export_submission_' . $sub->id)), admin_url('admin.php')); ?>
-												<a href="<?php echo esc_url($csv_url); ?>" class="ca-export-option">
-													CSV
-												</a>
-												<?php $pdf_url = add_query_arg(array('page' => 'custom-assessment-submissions', 'action' => 'export', 'format' => 'pdf', 'id' => $sub->id, '_wpnonce' => wp_create_nonce('ca_export_submission_' . $sub->id)), admin_url('admin.php')); ?>
-												<a href="<?php echo esc_url($pdf_url); ?>" class="ca-export-option">
-													PDF
-												</a>
-											</div>
-											<button type="button" class="button button-small ca-export-dropdown-btn"
-												data-id="<?php echo esc_attr($sub->id); ?>">
-												<?php esc_html_e('Export', 'rtr-custom-assessment'); ?> ▼
-											</button>
-										</div>
-
-										<?php $email_url = add_query_arg(array('page' => 'custom-assessment-submissions', 'action' => 'send_email', 'id' => $sub->id, '_wpnonce' => wp_create_nonce('ca_send_email_' . $sub->id)), admin_url('admin.php')); ?>
-										<a href="<?php echo esc_url($email_url); ?>" class="button button-small"
-											onclick="return confirm('<?php echo esc_js(__('Are you sure you want to resend the assessment results email to this customer?', 'rtr-custom-assessment')); ?>');">
-											<?php esc_html_e('Resend Email', 'rtr-custom-assessment'); ?>
-										</a>
-									<?php endif; ?>
-									<?php $delete_url = add_query_arg(array('page' => 'custom-assessment-submissions', 'action' => 'delete', 'id' => $sub->id, '_wpnonce' => wp_create_nonce('ca_delete_submission_' . $sub->id)), admin_url('admin.php')); ?>
-									<a href="<?php echo esc_url($delete_url); ?>" class="button button-small"
-										onclick="return confirm('<?php echo esc_js(__('Are you sure you want to delete this submission? This action cannot be undone.', 'rtr-custom-assessment')); ?>');">
-										<?php esc_html_e('Delete', 'rtr-custom-assessment'); ?>
-									</a>
-								</td>
+								<th scope="col" class="ca-col-score"><?php esc_html_e('Average', 'rtr-custom-assessment'); ?></th>
+								<th scope="col" class="ca-col-status"><?php esc_html_e('Status', 'rtr-custom-assessment'); ?></th>
+								<th scope="col"><?php esc_html_e('Date', 'rtr-custom-assessment'); ?></th>
+								<th scope="col"><?php esc_html_e('Actions', 'rtr-custom-assessment'); ?></th>
 							</tr>
-						<?php endforeach; ?>
-					</tbody>
+						</thead>
+						<tbody>
+							<?php foreach ($submissions as $sub): ?>
+								<tr>
+									<th scope="row" class="check-column">
+										<input type="checkbox" class="ca-submission-checkbox" name="submission_ids[]"
+											value="<?php echo esc_attr($sub->id); ?>">
+									</th>
+									<td class="ca-col-id"><?php echo esc_html($sub->id); ?></td>
+									<td>
+										<strong><?php echo esc_html($sub->first_name . ' ' . $sub->last_name); ?></strong>
+									</td>
+									<td><?php echo esc_html($sub->email); ?></td>
+									<td><?php echo esc_html($sub->phone); ?></td>
+									<td><?php echo esc_html($sub->job_title); ?></td>
+									<td class="ca-col-score">
+										<?php echo 'completed' === $sub->status ? esc_html($sub->total_score) : '—'; ?>
+									</td>
+									<td class="ca-col-score">
+										<?php echo 'completed' === $sub->status ? esc_html(number_format($sub->average_score, 2)) : '—'; ?>
+									</td>
+									<td class="ca-col-status">
+										<span class="ca-status-badge ca-status--<?php echo esc_attr($sub->status); ?>">
+											<?php echo esc_html(ucwords(str_replace('_', ' ', $sub->status))); ?>
+										</span>
+									</td>
+									<td><?php echo esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($sub->created_at))); ?>
+									</td>
+									<td>
+										<a href="<?php echo esc_url(add_query_arg(array('page' => 'custom-assessment-submissions', 'view' => 'detail', 'id' => $sub->id), admin_url('admin.php'))); ?>"
+											class="button button-small">
+											<?php esc_html_e('View', 'rtr-custom-assessment'); ?>
+										</a>
+										<?php if ('completed' === $sub->status): ?>
+											<div class="ca-export-dropdown-wrapper">
+												<div class="ca-export-menu ca-export-dropdown"
+													id="export-<?php echo esc_attr($sub->id); ?>">
+													<?php $csv_url = add_query_arg(array('page' => 'custom-assessment-submissions', 'action' => 'export', 'format' => 'csv', 'id' => $sub->id, '_wpnonce' => wp_create_nonce('ca_export_submission_' . $sub->id)), admin_url('admin.php')); ?>
+													<a href="<?php echo esc_url($csv_url); ?>" class="ca-export-option">
+														CSV
+													</a>
+													<?php $pdf_url = add_query_arg(array('page' => 'custom-assessment-submissions', 'action' => 'export', 'format' => 'pdf', 'id' => $sub->id, '_wpnonce' => wp_create_nonce('ca_export_submission_' . $sub->id)), admin_url('admin.php')); ?>
+													<a href="<?php echo esc_url($pdf_url); ?>" class="ca-export-option">
+														PDF
+													</a>
+												</div>
+												<button type="button" class="button button-small ca-export-dropdown-btn"
+													data-id="<?php echo esc_attr($sub->id); ?>">
+													<?php esc_html_e('Export', 'rtr-custom-assessment'); ?> ▼
+												</button>
+											</div>
+
+											<?php $email_url = add_query_arg(array('page' => 'custom-assessment-submissions', 'action' => 'send_email', 'id' => $sub->id, '_wpnonce' => wp_create_nonce('ca_send_email_' . $sub->id)), admin_url('admin.php')); ?>
+											<a href="<?php echo esc_url($email_url); ?>" class="button button-small"
+												onclick="return confirm('<?php echo esc_js(__('Are you sure you want to resend the assessment results email to this customer?', 'rtr-custom-assessment')); ?>');">
+												<?php esc_html_e('Resend Email', 'rtr-custom-assessment'); ?>
+											</a>
+										<?php endif; ?>
+										<?php $delete_url = add_query_arg(array('page' => 'custom-assessment-submissions', 'action' => 'delete', 'id' => $sub->id, '_wpnonce' => wp_create_nonce('ca_delete_submission_' . $sub->id)), admin_url('admin.php')); ?>
+										<a href="<?php echo esc_url($delete_url); ?>" class="button button-small"
+											onclick="return confirm('<?php echo esc_js(__('Are you sure you want to delete this submission? This action cannot be undone.', 'rtr-custom-assessment')); ?>');">
+											<?php esc_html_e('Delete', 'rtr-custom-assessment'); ?>
+										</a>
+									</td>
+								</tr>
+							<?php endforeach; ?>
+						</tbody>
 					</table>
 
 					<div class="tablenav bottom">
 						<div class="alignleft actions bulkactions">
-							<label for="bulk-action-selector-bottom" class="screen-reader-text"><?php esc_html_e('Select bulk action', 'rtr-custom-assessment'); ?></label>
+							<label for="bulk-action-selector-bottom"
+								class="screen-reader-text"><?php esc_html_e('Select bulk action', 'rtr-custom-assessment'); ?></label>
 							<select name="bulk_action_bottom" id="bulk-action-selector-bottom">
 								<option value="-1"><?php esc_html_e('Bulk actions', 'rtr-custom-assessment'); ?></option>
 								<option value="delete"><?php esc_html_e('Delete', 'rtr-custom-assessment'); ?></option>
 							</select>
-							<input type="submit" class="button action" value="<?php esc_attr_e('Apply', 'rtr-custom-assessment'); ?>"
+							<input type="submit" class="button action"
+								value="<?php esc_attr_e('Apply', 'rtr-custom-assessment'); ?>"
 								onclick="var top=document.getElementById('bulk-action-selector-top'); var bottom=document.getElementById('bulk-action-selector-bottom'); var selected=(top&&top.value==='delete')||(bottom&&bottom.value==='delete'); if(!selected){return false;} return confirm('<?php echo esc_js(__('Are you sure you want to delete the selected submissions? This action cannot be undone.', 'rtr-custom-assessment')); ?>');">
 						</div>
 						<br class="clear">
