@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Custom Assessment
  * Description: A full-screen AJAX-powered entrepreneurial mindset assessment with admin dashboard.
- * Version:     3.1.0
+ * Version:     3.2.0
  * Author:      Ericson Palisoc
  * License:     GPL-2.0+
  * Text Domain: rtr-custom-assessment
