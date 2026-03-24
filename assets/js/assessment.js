@@ -407,13 +407,7 @@
           responseText:
             xhr && xhr.responseText ? xhr.responseText.slice(0, 500) : null,
         });
-        var serverMsg =
-          (xhr &&
-            xhr.responseJSON &&
-            xhr.responseJSON.data &&
-            xhr.responseJSON.data.message) ||
-          null;
-        showError($infoError, serverMsg || CA_Config.labels.error_generic);
+        showError($infoError, getAjaxErrorMessage(xhr));
       })
       .always(function () {
         setBtnLoading($startBtn, false);
@@ -512,7 +506,7 @@
           responseText:
             xhr && xhr.responseText ? xhr.responseText.slice(0, 500) : null,
         });
-        alert(CA_Config.labels.error_generic);
+        alert(getAjaxErrorMessage(xhr));
       });
   }
 
@@ -625,7 +619,7 @@
           responseText:
             xhr && xhr.responseText ? xhr.responseText.slice(0, 500) : null,
         });
-        showError($questionError, CA_Config.labels.error_generic);
+        showError($questionError, getAjaxErrorMessage(xhr));
       })
       .always(function () {
         $nextBtn.prop("disabled", false);
@@ -678,7 +672,7 @@
           responseText:
             xhr && xhr.responseText ? xhr.responseText.slice(0, 500) : null,
         });
-        alert(CA_Config.labels.error_generic);
+        alert(getAjaxErrorMessage(xhr));
         showScreen("questions");
       });
   }
@@ -717,7 +711,7 @@
           responseText:
             xhr && xhr.responseText ? xhr.responseText.slice(0, 500) : null,
         });
-        alert(CA_Config.labels.error_generic);
+        alert(getAjaxErrorMessage(xhr));
       });
   }
 
@@ -835,6 +829,64 @@
 
   function hideError($el) {
     $el.text("").removeClass("ca-visible");
+  }
+
+  function decodeHtmlEntities(str) {
+    var txt = document.createElement("textarea");
+    txt.innerHTML = str;
+    return txt.value;
+  }
+
+  function stripHtml(str) {
+    return String(str || "")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  // Extract the most useful server-side message from failed AJAX responses.
+  function getAjaxErrorMessage(xhr) {
+    var fallback = CA_Config.labels.error_generic;
+    if (!xhr) return fallback;
+
+    if (
+      xhr.responseJSON &&
+      xhr.responseJSON.data &&
+      xhr.responseJSON.data.message
+    ) {
+      return String(xhr.responseJSON.data.message);
+    }
+
+    if (xhr.responseJSON && xhr.responseJSON.message) {
+      return String(xhr.responseJSON.message);
+    }
+
+    var raw = xhr.responseText ? String(xhr.responseText).trim() : "";
+    if (!raw) {
+      return xhr.status ? "Request failed (HTTP " + xhr.status + ")." : fallback;
+    }
+
+    try {
+      var parsed = JSON.parse(raw);
+      if (parsed && parsed.data && parsed.data.message) {
+        return String(parsed.data.message);
+      }
+      if (parsed && parsed.message) {
+        return String(parsed.message);
+      }
+    } catch (e) {
+      // Not JSON; continue with HTML/plain-text extraction below.
+    }
+
+    // WordPress wp_die pages often include the message in <p> or body text.
+    var text = stripHtml(decodeHtmlEntities(raw));
+    if (text) {
+      return text.slice(0, 240);
+    }
+
+    return xhr.status ? "Request failed (HTTP " + xhr.status + ")." : fallback;
   }
 
   /**
