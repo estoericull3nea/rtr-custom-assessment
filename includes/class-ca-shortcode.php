@@ -53,6 +53,7 @@ class CA_Shortcode
 						return array(
 							'index' => isset($q['index']) ? (int) $q['index'] : 0,
 							'priority' => isset($q['priority']) ? (int) $q['priority'] : 0,
+							'category' => isset($q['category']) ? (string) $q['category'] : '',
 						);
 					},
 					CA_Questions::get_flat()

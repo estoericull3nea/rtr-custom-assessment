@@ -205,11 +205,33 @@
       : [];
 
     if (list.length > 0) {
-      // Smallest -> largest priority, stable tie-breaker by original index.
+      // Priority is managed per category in admin, so keep category groups
+      // in their original order and sort only within each category.
+      var categoryOrder = {};
+      var categoryPos = 0;
+      list.forEach(function (item) {
+        var cat = item && item.category ? String(item.category) : "";
+        if (!Object.prototype.hasOwnProperty.call(categoryOrder, cat)) {
+          categoryOrder[cat] = categoryPos;
+          categoryPos++;
+        }
+      });
+
       list = list.slice().sort(function (a, b) {
+        var ac = a && a.category ? String(a.category) : "";
+        var bc = b && b.category ? String(b.category) : "";
+        var acPos = Object.prototype.hasOwnProperty.call(categoryOrder, ac)
+          ? categoryOrder[ac]
+          : Number.MAX_SAFE_INTEGER;
+        var bcPos = Object.prototype.hasOwnProperty.call(categoryOrder, bc)
+          ? categoryOrder[bc]
+          : Number.MAX_SAFE_INTEGER;
+        if (acPos !== bcPos) return acPos - bcPos;
+
         var ap = parseInt(a.priority, 10) || 0;
         var bp = parseInt(b.priority, 10) || 0;
         if (ap !== bp) return ap - bp;
+
         var ai = parseInt(a.index, 10) || 0;
         var bi = parseInt(b.index, 10) || 0;
         return ai - bi;
