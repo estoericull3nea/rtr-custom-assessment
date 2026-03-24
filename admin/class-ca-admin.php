@@ -182,6 +182,25 @@ class CA_Admin
 			return;
 		}
 
+		if (isset($_GET['action']) && 'export_all' === $_GET['action'] && !empty($_GET['format'])) {
+			if (!isset($_GET['_wpnonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'])), 'ca_export_all_submissions')) {
+				wp_die(esc_html__('Security check failed.', 'rtr-custom-assessment'));
+			}
+
+			$format = sanitize_text_field(wp_unslash($_GET['format']));
+			$all_submissions = CA_Database::get_all_submissions();
+
+			if ('csv' === $format) {
+				$this->export_all_as_csv($all_submissions);
+			} elseif ('json' === $format) {
+				$this->export_all_as_json($all_submissions);
+			} else {
+				wp_die(esc_html__('Invalid export format.', 'rtr-custom-assessment'));
+			}
+
+			exit;
+		}
+
 		if (isset($_GET['action']) && 'export' === $_GET['action'] && !empty($_GET['id']) && !empty($_GET['format'])) {
 			if (!isset($_GET['_wpnonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'])), 'ca_export_submission_' . absint($_GET['id']))) {
 				wp_die(esc_html__('Security check failed.', 'rtr-custom-assessment'));
@@ -653,6 +672,90 @@ class CA_Admin
 
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- Closing a stream opened on php://output.
 		fclose($output);
+	}
+
+	/**
+	 * Export all submissions as CSV.
+	 *
+	 * @param array $submissions List of submission objects.
+	 */
+	private function export_all_as_csv($submissions)
+	{
+		header('Content-Type: text/csv; charset=utf-8');
+		header('Content-Disposition: attachment; filename="all_submissions_' . gmdate('Ymd_His') . '.csv"');
+
+		$output = fopen('php://output', 'w');
+		fputcsv($output, array(
+			'ID',
+			'First Name',
+			'Last Name',
+			'Email',
+			'Phone',
+			'Job Title',
+			'Status',
+			'Total Score',
+			'Average Score',
+			'Created At',
+			'Updated At',
+		));
+
+		foreach ($submissions as $submission) {
+			fputcsv($output, array(
+				isset($submission->id) ? $submission->id : '',
+				isset($submission->first_name) ? $submission->first_name : '',
+				isset($submission->last_name) ? $submission->last_name : '',
+				isset($submission->email) ? $submission->email : '',
+				isset($submission->phone) ? $submission->phone : '',
+				isset($submission->job_title) ? $submission->job_title : '',
+				isset($submission->status) ? $submission->status : '',
+				isset($submission->total_score) ? $submission->total_score : '',
+				isset($submission->average_score) ? $submission->average_score : '',
+				isset($submission->created_at) ? $submission->created_at : '',
+				isset($submission->updated_at) ? $submission->updated_at : '',
+			));
+		}
+
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- Closing a stream opened on php://output.
+		fclose($output);
+	}
+
+	/**
+	 * Export all submissions as JSON, including answers and category scores.
+	 *
+	 * @param array $submissions List of submission objects.
+	 */
+	private function export_all_as_json($submissions)
+	{
+		$payload = array(
+			'exported_at' => gmdate('c'),
+			'total_submissions' => is_array($submissions) ? count($submissions) : 0,
+			'submissions' => array(),
+		);
+
+		if (is_array($submissions)) {
+			foreach ($submissions as $submission) {
+				$submission_id = isset($submission->id) ? absint($submission->id) : 0;
+				$payload['submissions'][] = array(
+					'id' => $submission_id,
+					'first_name' => isset($submission->first_name) ? (string) $submission->first_name : '',
+					'last_name' => isset($submission->last_name) ? (string) $submission->last_name : '',
+					'email' => isset($submission->email) ? (string) $submission->email : '',
+					'phone' => isset($submission->phone) ? (string) $submission->phone : '',
+					'job_title' => isset($submission->job_title) ? (string) $submission->job_title : '',
+					'status' => isset($submission->status) ? (string) $submission->status : '',
+					'total_score' => isset($submission->total_score) ? (int) $submission->total_score : 0,
+					'average_score' => isset($submission->average_score) ? (float) $submission->average_score : 0,
+					'created_at' => isset($submission->created_at) ? (string) $submission->created_at : '',
+					'updated_at' => isset($submission->updated_at) ? (string) $submission->updated_at : '',
+					'answers' => $submission_id > 0 ? CA_Database::get_answers($submission_id) : array(),
+					'category_scores' => $submission_id > 0 ? CA_Database::get_category_scores($submission_id) : array(),
+				);
+			}
+		}
+
+		header('Content-Type: application/json; charset=utf-8');
+		header('Content-Disposition: attachment; filename="all_submissions_' . gmdate('Ymd_His') . '.json"');
+		echo wp_json_encode($payload, JSON_PRETTY_PRINT);
 	}
 
 	/**
@@ -1151,6 +1254,17 @@ class CA_Admin
 				</div>
 
 				<div class="ca-questions-search" style="text-align: end;">
+					<div style="margin-bottom: 10px;">
+						<?php $export_all_csv_url = add_query_arg(array('page' => 'custom-assessment-submissions', 'action' => 'export_all', 'format' => 'csv', '_wpnonce' => wp_create_nonce('ca_export_all_submissions')), admin_url('admin.php')); ?>
+						<a href="<?php echo esc_url($export_all_csv_url); ?>" class="button button-secondary">
+							<?php esc_html_e('Export All CSV', 'rtr-custom-assessment'); ?>
+						</a>
+						<?php $export_all_json_url = add_query_arg(array('page' => 'custom-assessment-submissions', 'action' => 'export_all', 'format' => 'json', '_wpnonce' => wp_create_nonce('ca_export_all_submissions')), admin_url('admin.php')); ?>
+						<a href="<?php echo esc_url($export_all_json_url); ?>" class="button button-secondary">
+							<?php esc_html_e('Export All JSON', 'rtr-custom-assessment'); ?>
+						</a>
+					</div>
+
 					<div class="ca-search-field">
 						<label
 							for="ca-search-submissions"><?php esc_html_e('Search Submissions', 'rtr-custom-assessment'); ?></label>
