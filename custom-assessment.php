@@ -24,6 +24,7 @@ define('CA_TEXT_DOMAIN', 'rtr-custom-assessment');
 require_once CA_PLUGIN_DIR . 'includes/class-ca-database.php';
 require_once CA_PLUGIN_DIR . 'includes/class-ca-questions.php';
 require_once CA_PLUGIN_DIR . 'includes/class-ca-scoring.php';
+require_once CA_PLUGIN_DIR . 'includes/class-ca-logger.php';
 require_once CA_PLUGIN_DIR . 'includes/class-ca-ajax.php';
 require_once CA_PLUGIN_DIR . 'includes/class-ca-shortcode.php';
 require_once CA_PLUGIN_DIR . 'includes/class-ca-mailer.php';

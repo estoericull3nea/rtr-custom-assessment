@@ -15,6 +15,7 @@ class CA_Admin
 		add_action('admin_init', array($this, 'handle_delete_action'));
 		add_action('admin_init', array($this, 'handle_export_action'));
 		add_action('admin_init', array($this, 'handle_send_email_action'));
+		add_action('admin_init', array($this, 'handle_logs_action'));
 		add_action('admin_init', array($this, 'handle_categories_action'));
 		add_action('admin_init', array($this, 'handle_edit_category_action'));
 		add_action('admin_init', array($this, 'handle_questions_action'));
@@ -70,6 +71,41 @@ class CA_Admin
 			'custom-assessment-categories',
 			array($this, 'render_categories_page')
 		);
+
+		add_submenu_page(
+			'custom-assessment-dashboard',
+			__('Logs', 'rtr-custom-assessment'),
+			__('Logs', 'rtr-custom-assessment'),
+			'manage_options',
+			'custom-assessment-logs',
+			array($this, 'render_logs_page')
+		);
+	}
+
+	/**
+	 * Handle logs actions.
+	 */
+	public function handle_logs_action()
+	{
+		if (!isset($_GET['page']) || 'custom-assessment-logs' !== $_GET['page']) {
+			return;
+		}
+
+		if (!current_user_can('manage_options')) {
+			return;
+		}
+
+		if (
+			isset($_POST['ca_action'], $_POST['_wpnonce']) &&
+			'clear_logs' === sanitize_text_field(wp_unslash($_POST['ca_action'])) &&
+			wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'ca_clear_logs_action')
+		) {
+			CA_Logger::clear_logs();
+			CA_Logger::log('admin_clear_logs', 'success', 'Logs cleared by admin.');
+			$redirect_url = add_query_arg('message', 'logs_cleared', admin_url('admin.php?page=custom-assessment-logs'));
+			wp_safe_redirect(esc_url_raw($redirect_url));
+			exit;
+		}
 	}
 
 	public function enqueue_admin_assets($hook)
@@ -106,11 +142,19 @@ class CA_Admin
 		}
 
 		if (isset($_GET['action']) && 'delete' === $_GET['action'] && !empty($_GET['id'])) {
+			$delete_id = absint($_GET['id']);
 			if (!isset($_GET['_wpnonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'])), 'ca_delete_submission_' . absint($_GET['id']))) {
+				CA_Logger::log('admin_delete_submission', 'error', 'Security check failed.', array('submission_id' => $delete_id));
 				wp_die(esc_html__('Security check failed.', 'rtr-custom-assessment'));
 			}
 
-			CA_Database::delete_submission(absint($_GET['id']));
+			$deleted = CA_Database::delete_submission($delete_id);
+			CA_Logger::log(
+				'admin_delete_submission',
+				$deleted ? 'success' : 'error',
+				$deleted ? 'Submission deleted.' : 'Failed to delete submission.',
+				array('submission_id' => $delete_id)
+			);
 			$current_request_uri = isset($_SERVER['REQUEST_URI']) ? sanitize_text_field(wp_unslash($_SERVER['REQUEST_URI'])) : '';
 			$redirect_url = remove_query_arg(array('action', 'id', '_wpnonce'), $current_request_uri);
 			$redirect_url = add_query_arg('message', 'deleted', $redirect_url);
@@ -128,6 +172,7 @@ class CA_Admin
 			$delete_selected = ('delete' === $bulk_action_top || 'delete' === $bulk_action_bottom);
 
 			if (!$delete_selected) {
+				CA_Logger::log('admin_bulk_delete_submissions', 'error', 'No bulk delete action selected.');
 				$current_request_uri = isset($_SERVER['REQUEST_URI']) ? sanitize_text_field(wp_unslash($_SERVER['REQUEST_URI'])) : '';
 				$redirect_url = remove_query_arg(array('action', 'id', '_wpnonce'), $current_request_uri);
 				$redirect_url = add_query_arg('message', 'bulk_delete_none_selected', $redirect_url);
@@ -143,6 +188,7 @@ class CA_Admin
 			$ids = array_values(array_filter($ids, fn($id) => $id > 0));
 
 			if (empty($ids)) {
+				CA_Logger::log('admin_bulk_delete_submissions', 'error', 'No submissions selected.');
 				$current_request_uri = isset($_SERVER['REQUEST_URI']) ? sanitize_text_field(wp_unslash($_SERVER['REQUEST_URI'])) : '';
 				$redirect_url = remove_query_arg(array('action', 'id', '_wpnonce'), $current_request_uri);
 				$redirect_url = add_query_arg('message', 'bulk_delete_none_selected', $redirect_url);
@@ -157,6 +203,12 @@ class CA_Admin
 					$deleted_count++;
 				}
 			}
+			CA_Logger::log(
+				'admin_bulk_delete_submissions',
+				$deleted_count > 0 ? 'success' : 'error',
+				$deleted_count > 0 ? 'Bulk delete completed.' : 'Bulk delete removed 0 submissions.',
+				array('selected_count' => count($ids), 'deleted_count' => $deleted_count)
+			);
 
 			$current_request_uri = isset($_SERVER['REQUEST_URI']) ? sanitize_text_field(wp_unslash($_SERVER['REQUEST_URI'])) : '';
 			$redirect_url = remove_query_arg(array('action', 'id', '_wpnonce'), $current_request_uri);
@@ -184,6 +236,7 @@ class CA_Admin
 
 		if (isset($_GET['action']) && 'export_all' === $_GET['action'] && !empty($_GET['format'])) {
 			if (!isset($_GET['_wpnonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'])), 'ca_export_all_submissions')) {
+				CA_Logger::log('admin_export_all', 'error', 'Security check failed.');
 				wp_die(esc_html__('Security check failed.', 'rtr-custom-assessment'));
 			}
 
@@ -191,10 +244,13 @@ class CA_Admin
 			$all_submissions = CA_Database::get_all_submissions();
 
 			if ('csv' === $format) {
+				CA_Logger::log('admin_export_all', 'success', 'Export all CSV requested.');
 				$this->export_all_as_csv($all_submissions);
 			} elseif ('json' === $format) {
+				CA_Logger::log('admin_export_all', 'success', 'Export all JSON requested.');
 				$this->export_all_as_json($all_submissions);
 			} else {
+				CA_Logger::log('admin_export_all', 'error', 'Invalid export format.', array('format' => $format));
 				wp_die(esc_html__('Invalid export format.', 'rtr-custom-assessment'));
 			}
 
@@ -203,6 +259,7 @@ class CA_Admin
 
 		if (isset($_GET['action']) && 'export' === $_GET['action'] && !empty($_GET['id']) && !empty($_GET['format'])) {
 			if (!isset($_GET['_wpnonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'])), 'ca_export_submission_' . absint($_GET['id']))) {
+				CA_Logger::log('admin_export_submission', 'error', 'Security check failed.', array('submission_id' => absint($_GET['id'])));
 				wp_die(esc_html__('Security check failed.', 'rtr-custom-assessment'));
 			}
 
@@ -211,12 +268,15 @@ class CA_Admin
 			$submission = CA_Database::get_submission($submission_id);
 
 			if (!$submission || 'completed' !== $submission->status) {
+				CA_Logger::log('admin_export_submission', 'error', 'Submission not exportable.', array('submission_id' => $submission_id));
 				wp_die(esc_html__('Only completed submissions can be exported.', 'rtr-custom-assessment'));
 			}
 
 			if ('csv' === $format) {
+				CA_Logger::log('admin_export_submission', 'success', 'CSV export requested.', array('submission_id' => $submission_id));
 				$this->export_as_csv($submission_id, $submission);
 			} elseif ('pdf' === $format) {
+				CA_Logger::log('admin_export_submission', 'success', 'PDF export requested.', array('submission_id' => $submission_id));
 				$this->export_as_pdf($submission_id, $submission);
 			}
 
@@ -239,6 +299,7 @@ class CA_Admin
 
 		if (isset($_GET['action']) && 'send_email' === $_GET['action'] && !empty($_GET['id'])) {
 			if (!isset($_GET['_wpnonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['_wpnonce'])), 'ca_send_email_' . absint($_GET['id']))) {
+				CA_Logger::log('admin_send_email', 'error', 'Security check failed.', array('submission_id' => absint($_GET['id'])));
 				wp_die(esc_html__('Security check failed.', 'rtr-custom-assessment'));
 			}
 
@@ -246,10 +307,12 @@ class CA_Admin
 			$submission = CA_Database::get_submission($submission_id);
 
 			if (!$submission) {
+				CA_Logger::log('admin_send_email', 'error', 'Submission not found.', array('submission_id' => $submission_id));
 				wp_die(esc_html__('Submission not found.', 'rtr-custom-assessment'));
 			}
 
 			if ('completed' !== $submission->status) {
+				CA_Logger::log('admin_send_email', 'error', 'Submission is not completed.', array('submission_id' => $submission_id));
 				wp_die(esc_html__('Only completed submissions can have emails sent.', 'rtr-custom-assessment'));
 			}
 
@@ -259,8 +322,10 @@ class CA_Admin
 			$current_request_uri = isset($_SERVER['REQUEST_URI']) ? sanitize_text_field(wp_unslash($_SERVER['REQUEST_URI'])) : '';
 			$redirect_url = remove_query_arg(array('action', 'id', '_wpnonce'), $current_request_uri);
 			if ($sent) {
+				CA_Logger::log('admin_send_email', 'success', 'Email sent.', array('submission_id' => $submission_id));
 				$redirect_url = add_query_arg('message', 'email_sent', $redirect_url);
 			} else {
+				CA_Logger::log('admin_send_email', 'error', 'Failed to send email.', array('submission_id' => $submission_id));
 				$redirect_url = add_query_arg('message', 'email_failed', $redirect_url);
 			}
 			wp_safe_redirect(esc_url_raw($redirect_url));
@@ -1499,6 +1564,85 @@ class CA_Admin
 						});
 					})();
 				</script>
+			<?php endif; ?>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Render logs page.
+	 */
+	public function render_logs_page()
+	{
+		if (!current_user_can('manage_options')) {
+			wp_die(esc_html__('You do not have permission to view this page.', 'rtr-custom-assessment'));
+		}
+
+		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- Read-only query param for status notice.
+		$message = isset($_GET['message']) ? sanitize_key(wp_unslash($_GET['message'])) : '';
+		// phpcs:enable WordPress.Security.NonceVerification.Recommended
+
+		$logs = array_reverse(CA_Logger::get_logs());
+		?>
+		<div class="wrap ca-admin-wrap">
+			<h1 class="ca-admin-title">
+				<span class="ca-admin-title-icon dashicons dashicons-list-view"></span>
+				<?php esc_html_e('Assessment Logs', 'rtr-custom-assessment'); ?>
+			</h1>
+
+			<?php if ('logs_cleared' === $message): ?>
+				<div class="notice notice-success is-dismissible">
+					<p><?php esc_html_e('Logs cleared successfully.', 'rtr-custom-assessment'); ?></p>
+				</div>
+			<?php endif; ?>
+
+			<form method="post" action="" style="margin-bottom: 12px;">
+				<?php wp_nonce_field('ca_clear_logs_action', '_wpnonce'); ?>
+				<input type="hidden" name="ca_action" value="clear_logs">
+				<button type="submit" class="button button-secondary"
+					onclick="return confirm('<?php echo esc_js(__('Clear all logs? This cannot be undone.', 'rtr-custom-assessment')); ?>');">
+					<?php esc_html_e('Clear Logs', 'rtr-custom-assessment'); ?>
+				</button>
+			</form>
+
+			<?php if (empty($logs)): ?>
+				<div class="ca-admin-empty">
+					<span class="dashicons dashicons-info-outline" aria-hidden="true"></span>
+					<p><?php esc_html_e('No logs yet.', 'rtr-custom-assessment'); ?></p>
+				</div>
+			<?php else: ?>
+				<table class="wp-list-table widefat fixed striped ca-admin-table">
+					<thead>
+						<tr>
+							<th scope="col"><?php esc_html_e('Time', 'rtr-custom-assessment'); ?></th>
+							<th scope="col"><?php esc_html_e('Action', 'rtr-custom-assessment'); ?></th>
+							<th scope="col"><?php esc_html_e('Status', 'rtr-custom-assessment'); ?></th>
+							<th scope="col"><?php esc_html_e('Message', 'rtr-custom-assessment'); ?></th>
+							<th scope="col"><?php esc_html_e('Context', 'rtr-custom-assessment'); ?></th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php foreach ($logs as $entry): ?>
+							<tr>
+								<td><?php echo isset($entry['time']) ? esc_html($entry['time']) : ''; ?></td>
+								<td><?php echo isset($entry['action']) ? esc_html($entry['action']) : ''; ?></td>
+								<td>
+									<?php
+									$status = isset($entry['status']) ? (string) $entry['status'] : '';
+									$status_class = 'success' === $status ? 'ca-status--completed' : 'ca-status--failed';
+									?>
+									<span class="ca-status-badge <?php echo esc_attr($status_class); ?>">
+										<?php echo esc_html(strtoupper($status)); ?>
+									</span>
+								</td>
+								<td><?php echo isset($entry['message']) ? esc_html($entry['message']) : ''; ?></td>
+								<td>
+									<code><?php echo esc_html(wp_json_encode(isset($entry['context']) ? $entry['context'] : array())); ?></code>
+								</td>
+							</tr>
+						<?php endforeach; ?>
+					</tbody>
+				</table>
 			<?php endif; ?>
 		</div>
 		<?php

@@ -9,6 +9,17 @@ if (!defined('ABSPATH')) {
 
 class CA_Ajax
 {
+	private function send_error($action, $message, $context = array())
+	{
+		CA_Logger::log($action, 'error', $message, $context);
+		wp_send_json_error(array('message' => $message));
+	}
+
+	private function send_success($action, $data = array(), $message = '', $context = array())
+	{
+		CA_Logger::log($action, 'success', $message, $context);
+		wp_send_json_success($data);
+	}
 
 	public function __construct()
 	{
@@ -32,10 +43,10 @@ class CA_Ajax
 	// Nonce helper
 	// -------------------------------------------------------------------------
 
-	private function verify_nonce()
+	private function verify_nonce($action = 'unknown')
 	{
 		if (!isset($_POST['nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['nonce'])), 'ca_nonce')) {
-			wp_send_json_error(array('message' => __('Security check failed.', 'rtr-custom-assessment')));
+			$this->send_error($action, __('Security check failed.', 'rtr-custom-assessment'));
 		}
 	}
 
@@ -45,7 +56,7 @@ class CA_Ajax
 
 	public function ca_save_user_info()
 	{
-		$this->verify_nonce();
+		$this->verify_nonce('ca_save_user_info');
 
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- Nonce already verified via $this->verify_nonce().
 		$first_name = isset($_POST['first_name']) ? sanitize_text_field(wp_unslash($_POST['first_name'])) : '';
@@ -69,7 +80,7 @@ class CA_Ajax
 			$errors[] = __('Job title is required.', 'rtr-custom-assessment');
 
 		if (!empty($errors)) {
-			wp_send_json_error(array('message' => implode(' ', $errors)));
+			$this->send_error('ca_save_user_info', implode(' ', $errors));
 		}
 
 		$submission_id = CA_Database::insert_submission(array(
@@ -81,13 +92,18 @@ class CA_Ajax
 		));
 
 		if (!$submission_id) {
-			wp_send_json_error(array('message' => __('Could not save your information. Please try again.', 'rtr-custom-assessment')));
+			$this->send_error('ca_save_user_info', __('Could not save your information. Please try again.', 'rtr-custom-assessment'));
 		}
 
-		wp_send_json_success(array(
+		$this->send_success(
+			'ca_save_user_info',
+			array(
 			'submission_id' => $submission_id,
 			'message' => __('Information saved.', 'rtr-custom-assessment'),
-		));
+			),
+			'Information saved.',
+			array('submission_id' => $submission_id)
+		);
 	}
 
 	// -------------------------------------------------------------------------
@@ -96,7 +112,7 @@ class CA_Ajax
 
 	public function ca_get_question()
 	{
-		$this->verify_nonce();
+		$this->verify_nonce('ca_get_question');
 
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- Nonce already verified via $this->verify_nonce().
 		$index = isset($_POST['question_index']) ? absint($_POST['question_index']) : 0;
@@ -106,20 +122,20 @@ class CA_Ajax
 		$question = CA_Questions::get_question($index);
 
 		if (!$question) {
-			wp_send_json_error(array('message' => __('Question not found.', 'rtr-custom-assessment')));
+			$this->send_error('ca_get_question', __('Question not found.', 'rtr-custom-assessment'), array('question_index' => $index));
 		}
 
 		$saved_answer = $submission_id ? CA_Database::get_answer($submission_id, $index) : null;
 		$total = CA_Questions::get_total_count();
 		$progress = $total > 0 ? round(($index / $total) * 100) : 0;
 
-		wp_send_json_success(array(
+		$this->send_success('ca_get_question', array(
 			'question' => $question,
 			'saved_answer' => $saved_answer,
 			'total' => $total,
 			'progress' => $progress,
 			'is_last' => ($index === $total - 1),
-		));
+		), '', array('submission_id' => $submission_id, 'question_index' => $index));
 	}
 
 	// -------------------------------------------------------------------------
@@ -128,7 +144,7 @@ class CA_Ajax
 
 	public function ca_save_answer()
 	{
-		$this->verify_nonce();
+		$this->verify_nonce('ca_save_answer');
 
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- Nonce already verified via $this->verify_nonce().
 		$submission_id = isset($_POST['submission_id']) ? absint($_POST['submission_id']) : 0;
@@ -138,10 +154,10 @@ class CA_Ajax
 
 		// Validate
 		if (!$submission_id) {
-			wp_send_json_error(array('message' => __('Invalid session. Please refresh and try again.', 'rtr-custom-assessment')));
+			$this->send_error('ca_save_answer', __('Invalid session. Please refresh and try again.', 'rtr-custom-assessment'));
 		}
 		if ($answer < 1 || $answer > 5) {
-			wp_send_json_error(array('message' => __('Invalid answer. Please select a value between 1 and 5.', 'rtr-custom-assessment')));
+			$this->send_error('ca_save_answer', __('Invalid answer. Please select a value between 1 and 5.', 'rtr-custom-assessment'));
 		}
 
 		CA_Database::save_answer($submission_id, $question_index, $answer);
@@ -151,11 +167,11 @@ class CA_Ajax
 		$next = $question_index + 1;
 		$progress = $total > 0 ? round(($next / $total) * 100) : 0;
 
-		wp_send_json_success(array(
+		$this->send_success('ca_save_answer', array(
 			'next_index' => $next,
 			'progress' => $progress,
 			'is_last' => ($next >= $total),
-		));
+		), '', array('submission_id' => $submission_id, 'question_index' => $question_index, 'answer' => $answer));
 	}
 
 	// -------------------------------------------------------------------------
@@ -164,19 +180,19 @@ class CA_Ajax
 
 	public function ca_get_progress()
 	{
-		$this->verify_nonce();
+		$this->verify_nonce('ca_get_progress');
 
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- Nonce already verified via $this->verify_nonce().
 		$submission_id = isset($_POST['submission_id']) ? absint($_POST['submission_id']) : 0;
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
 		if (!$submission_id) {
-			wp_send_json_error(array('message' => __('Invalid session.', 'rtr-custom-assessment')));
+			$this->send_error('ca_get_progress', __('Invalid session.', 'rtr-custom-assessment'));
 		}
 
 		$submission = CA_Database::get_submission($submission_id);
 		if (!$submission) {
-			wp_send_json_error(array('message' => __('Submission not found.', 'rtr-custom-assessment')));
+			$this->send_error('ca_get_progress', __('Submission not found.', 'rtr-custom-assessment'), array('submission_id' => $submission_id));
 		}
 
 		$answers = CA_Database::get_answers($submission_id);
@@ -184,13 +200,13 @@ class CA_Ajax
 		$answered = count($answers);
 		$progress = $total > 0 ? round(($answered / $total) * 100) : 0;
 
-		wp_send_json_success(array(
+		$this->send_success('ca_get_progress', array(
 			'answered' => $answered,
 			'total' => $total,
 			'progress' => $progress,
 			'status' => $submission->status,
 			'email' => $submission->email,
-		));
+		), '', array('submission_id' => $submission_id));
 	}
 
 	// -------------------------------------------------------------------------
@@ -199,20 +215,20 @@ class CA_Ajax
 
 	public function ca_find_in_progress_by_email()
 	{
-		$this->verify_nonce();
+		$this->verify_nonce('ca_find_in_progress_by_email');
 
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- Nonce already verified via $this->verify_nonce().
 		$email = isset($_POST['email']) ? sanitize_email(wp_unslash($_POST['email'])) : '';
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
 		if (empty($email) || !is_email($email)) {
-			wp_send_json_error(array('message' => __('A valid email is required.', 'rtr-custom-assessment')));
+			$this->send_error('ca_find_in_progress_by_email', __('A valid email is required.', 'rtr-custom-assessment'));
 		}
 
 		$submission = CA_Database::get_in_progress_submission_by_email($email);
 
 		if (!$submission) {
-			wp_send_json_success(array('found' => false));
+			$this->send_success('ca_find_in_progress_by_email', array('found' => false), '', array('email' => $email));
 		}
 
 		$answers = CA_Database::get_answers($submission->id);
@@ -220,7 +236,7 @@ class CA_Ajax
 		$answered = count($answers);
 		$progress = $total > 0 ? round(($answered / $total) * 100) : 0;
 
-		wp_send_json_success(array(
+		$this->send_success('ca_find_in_progress_by_email', array(
 			'found' => true,
 			'submission_id' => $submission->id,
 			'email' => $submission->email,
@@ -230,7 +246,7 @@ class CA_Ajax
 			'status' => $submission->status,
 			// Used by the frontend to continue in the correct priority-based order.
 			'answers_map' => $answers,
-		));
+		), '', array('submission_id' => $submission->id, 'email' => $submission->email));
 	}
 
 	// -------------------------------------------------------------------------
@@ -239,21 +255,21 @@ class CA_Ajax
 
 	public function ca_submit_assessment()
 	{
-		$this->verify_nonce();
+		$this->verify_nonce('ca_submit_assessment');
 
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- Nonce already verified via $this->verify_nonce().
 		$submission_id = isset($_POST['submission_id']) ? absint($_POST['submission_id']) : 0;
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
 		if (!$submission_id) {
-			wp_send_json_error(array('message' => __('Invalid session.', 'rtr-custom-assessment')));
+			$this->send_error('ca_submit_assessment', __('Invalid session.', 'rtr-custom-assessment'));
 		}
 
 		$answers = CA_Database::get_answers($submission_id);
 		$total_q = CA_Questions::get_total_count();
 
 		if (count($answers) < $total_q) {
-			wp_send_json_error(array('message' => __('Please answer all questions before submitting.', 'rtr-custom-assessment')));
+			$this->send_error('ca_submit_assessment', __('Please answer all questions before submitting.', 'rtr-custom-assessment'), array('submission_id' => $submission_id));
 		}
 
 		$scoring = CA_Scoring::calculate($answers);
@@ -269,9 +285,9 @@ class CA_Ajax
 		// Send completion email to user
 		CA_Mailer::send_results_email($submission_id);
 
-		wp_send_json_success(array(
+		$this->send_success('ca_submit_assessment', array(
 			'message' => __('Assessment submitted.', 'rtr-custom-assessment'),
-		));
+		), 'Assessment submitted.', array('submission_id' => $submission_id));
 	}
 
 	// -------------------------------------------------------------------------
@@ -280,21 +296,21 @@ class CA_Ajax
 
 	public function ca_get_results_preview()
 	{
-		$this->verify_nonce();
+		$this->verify_nonce('ca_get_results_preview');
 
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- Nonce already verified via $this->verify_nonce().
 		$submission_id = isset($_POST['submission_id']) ? absint($_POST['submission_id']) : 0;
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
 		if (!$submission_id) {
-			wp_send_json_error(array('message' => __('Invalid session.', 'rtr-custom-assessment')));
+			$this->send_error('ca_get_results_preview', __('Invalid session.', 'rtr-custom-assessment'));
 		}
 
 		$submission = CA_Database::get_submission($submission_id);
 		$cat_scores_raw = CA_Database::get_category_scores($submission_id);
 
 		if (!$submission) {
-			wp_send_json_error(array('message' => __('Submission not found.', 'rtr-custom-assessment')));
+			$this->send_error('ca_get_results_preview', __('Submission not found.', 'rtr-custom-assessment'), array('submission_id' => $submission_id));
 		}
 
 		// Build category data with summaries
@@ -310,7 +326,7 @@ class CA_Ajax
 
 		$overall_profile = CA_Scoring::get_overall_profile((float) $submission->average_score);
 
-		wp_send_json_success(array(
+		$this->send_success('ca_get_results_preview', array(
 			'user' => array(
 				'first_name' => esc_html($submission->first_name),
 				'last_name' => esc_html($submission->last_name),
@@ -323,7 +339,7 @@ class CA_Ajax
 			'overall_profile' => $overall_profile,
 			'category_scores' => $category_scores,
 			'max_score' => CA_Questions::get_total_count() * 5,
-		));
+		), '', array('submission_id' => $submission_id));
 	}
 }
 
