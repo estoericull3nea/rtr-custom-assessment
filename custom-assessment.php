@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Custom Assessment
  * Description: A full-screen AJAX-powered entrepreneurial mindset assessment with admin dashboard.
- * Version:     3.5.0
+ * Version:     1.0.0
  * Author:      Ericson Palisoc
  * Requires at least: 6.0
  * Requires PHP: 7.4
