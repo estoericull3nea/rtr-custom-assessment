@@ -42,6 +42,6 @@ Go to the plugin's admin dashboard in WordPress admin.
 
 == Changelog ==
 
-= 3.1.0 =
-* Current stable release.
+= 1.0.0 =
 
+- Initial release.
