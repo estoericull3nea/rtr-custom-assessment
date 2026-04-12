@@ -11,6 +11,10 @@ class CA_Assessment_Types {
 
 	public const MINDSET          = 'mindset';
 	public const SOCIAL_FLUENCY   = 'social_fluency';
+
+	/**
+	 * Natural Attributes Cataloging (Yes/No). Stored in DB as inner_dimensions for compatibility.
+	 */
 	public const INNER_DIMENSIONS = 'inner_dimensions';
 
 	/**

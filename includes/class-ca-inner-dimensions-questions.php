@@ -1,6 +1,7 @@
 <?php
 /**
- * Inner Dimensions — Yes / No self-assessment (plugin-defined content).
+ * Natural Attributes Cataloging — Yes / No self-assessment (plugin-defined content).
+ * Internal assessment type: inner_dimensions.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {

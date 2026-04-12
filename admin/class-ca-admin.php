@@ -66,8 +66,8 @@ class CA_Admin
 
 		add_submenu_page(
 			'custom-assessment-hub',
-			__('Inner Dimensions', 'rtr-custom-assessment'),
-			__('Inner Dimensions', 'rtr-custom-assessment'),
+			__('Natural Attributes Cataloging', 'rtr-custom-assessment'),
+			__('Natural Attributes Cataloging', 'rtr-custom-assessment'),
 			'manage_options',
 			'custom-assessment-inner',
 			array($this, 'render_inner_section_page')
@@ -154,7 +154,7 @@ class CA_Admin
 	}
 
 	/**
-	 * Overview: links into Mindset and Social Fluency.
+	 * Overview: links into Mindset, Social Fluency, and Natural Attributes Cataloging.
 	 */
 	public function render_hub_page()
 	{
@@ -200,8 +200,8 @@ class CA_Admin
 					<p><?php esc_html_e('Social Fluency assessment', 'rtr-custom-assessment'); ?></p>
 				</a>
 				<a class="ca-dashboard-hub-card" href="<?php echo esc_url($inner_url); ?>">
-					<h2><?php esc_html_e('Inner Dimensions', 'rtr-custom-assessment'); ?></h2>
-					<p><?php esc_html_e('Yes / No multidimensional profile', 'rtr-custom-assessment'); ?></p>
+					<h2><?php esc_html_e('Natural Attributes Cataloging', 'rtr-custom-assessment'); ?></h2>
+					<p><?php esc_html_e('Yes / No natural attributes catalog', 'rtr-custom-assessment'); ?></p>
 				</a>
 			</div>
 		</div>
@@ -261,7 +261,7 @@ class CA_Admin
 	}
 
 	/**
-	 * Inner Dimensions section: routes by ca_tab.
+	 * Natural Attributes Cataloging section: routes by ca_tab.
 	 */
 	public function render_inner_section_page()
 	{
@@ -287,7 +287,7 @@ class CA_Admin
 	}
 
 	/**
-	 * Inner Dimensions dashboard.
+	 * Natural Attributes Cataloging dashboard.
 	 */
 	public function render_inner_dashboard_page()
 	{
@@ -295,7 +295,7 @@ class CA_Admin
 	}
 
 	/**
-	 * Inner Dimensions submissions.
+	 * Natural Attributes Cataloging submissions.
 	 */
 	public function render_inner_list_page()
 	{
@@ -1570,7 +1570,7 @@ class CA_Admin
 		if (CA_Assessment_Types::SOCIAL_FLUENCY === $assessment_type) {
 			$dashboard_title = __('Social Fluency — Dashboard', 'rtr-custom-assessment');
 		} elseif (CA_Assessment_Types::INNER_DIMENSIONS === $assessment_type) {
-			$dashboard_title = __('Inner Dimensions — Dashboard', 'rtr-custom-assessment');
+			$dashboard_title = __('Natural Attributes Cataloging — Dashboard', 'rtr-custom-assessment');
 		} else {
 			$dashboard_title = __('Entrepreneurial Mindset — Dashboard', 'rtr-custom-assessment');
 		}
@@ -1661,7 +1661,7 @@ class CA_Admin
 						if (CA_Assessment_Types::SOCIAL_FLUENCY === $assessment_type) {
 							esc_html_e('No Social Fluency submissions yet. Use the shortcode [social_fluency_assessment] on a page.', 'rtr-custom-assessment');
 						} elseif (CA_Assessment_Types::INNER_DIMENSIONS === $assessment_type) {
-							esc_html_e('No Inner Dimensions submissions yet. Use the shortcode [inner_dimensions_assessment] on a page.', 'rtr-custom-assessment');
+							esc_html_e('No Natural Attributes Cataloging submissions yet. Use the shortcode [natural_attributes_cataloging_assessment] on a page. The shortcode [inner_dimensions_assessment] still works.', 'rtr-custom-assessment');
 						} else {
 							esc_html_e('No submissions yet. Share the shortcode [custom_assessment] on any page.', 'rtr-custom-assessment');
 						}
@@ -1754,7 +1754,7 @@ class CA_Admin
 			return __('Social Fluency', 'rtr-custom-assessment');
 		}
 		if (CA_Assessment_Types::INNER_DIMENSIONS === $t) {
-			return __('Inner Dimensions', 'rtr-custom-assessment');
+			return __('Natural Attributes Cataloging', 'rtr-custom-assessment');
 		}
 		return __('Entrepreneurial Mindset', 'rtr-custom-assessment');
 	}
@@ -1778,7 +1778,7 @@ class CA_Admin
 			if (CA_Assessment_Types::SOCIAL_FLUENCY === $assessment_type) {
 				$list_heading = __('Social Fluency — Submissions', 'rtr-custom-assessment');
 			} elseif (CA_Assessment_Types::INNER_DIMENSIONS === $assessment_type) {
-				$list_heading = __('Inner Dimensions — Submissions', 'rtr-custom-assessment');
+				$list_heading = __('Natural Attributes Cataloging — Submissions', 'rtr-custom-assessment');
 			} else {
 				$list_heading = __('Entrepreneurial Mindset — Submissions', 'rtr-custom-assessment');
 			}
@@ -1925,7 +1925,7 @@ class CA_Admin
 						} elseif (CA_Assessment_Types::SOCIAL_FLUENCY === $assessment_type) {
 							esc_html_e('No Social Fluency submissions yet. Use the shortcode [social_fluency_assessment] on a page.', 'rtr-custom-assessment');
 						} elseif (CA_Assessment_Types::INNER_DIMENSIONS === $assessment_type) {
-							esc_html_e('No Inner Dimensions submissions yet. Use the shortcode [inner_dimensions_assessment] on a page.', 'rtr-custom-assessment');
+							esc_html_e('No Natural Attributes Cataloging submissions yet. Use the shortcode [natural_attributes_cataloging_assessment] on a page. The shortcode [inner_dimensions_assessment] still works.', 'rtr-custom-assessment');
 						} else {
 							esc_html_e('No submissions yet. Share the shortcode [custom_assessment] on any page.', 'rtr-custom-assessment');
 						}
@@ -3412,7 +3412,7 @@ class CA_Admin
 	}
 
 	/**
-	 * Inner Dimensions questions (read-only; Yes/No).
+	 * Natural Attributes Cataloging questions (read-only; Yes/No).
 	 */
 	public function render_inner_questions_page()
 	{
@@ -3429,7 +3429,7 @@ class CA_Admin
 			<?php endif; ?>
 			<h1 class="ca-admin-title">
 				<span class="ca-admin-title-icon dashicons dashicons-format-chat"></span>
-				<?php esc_html_e('Inner Dimensions — Questions', 'rtr-custom-assessment'); ?>
+				<?php esc_html_e('Natural Attributes Cataloging — Questions', 'rtr-custom-assessment'); ?>
 			</h1>
 
 			<div class="notice notice-info inline">
@@ -3477,7 +3477,7 @@ class CA_Admin
 	}
 
 	/**
-	 * Inner Dimensions categories (read-only).
+	 * Natural Attributes Cataloging categories (read-only).
 	 */
 	public function render_inner_categories_page()
 	{
@@ -3493,12 +3493,12 @@ class CA_Admin
 			<?php endif; ?>
 			<h1 class="ca-admin-title">
 				<span class="ca-admin-title-icon dashicons dashicons-category"></span>
-				<?php esc_html_e('Inner Dimensions — Categories', 'rtr-custom-assessment'); ?>
+				<?php esc_html_e('Natural Attributes Cataloging — Categories', 'rtr-custom-assessment'); ?>
 			</h1>
 
 			<div class="notice notice-info inline">
 				<p>
-					<?php esc_html_e('Categories for Inner Dimensions are fixed in the plugin.', 'rtr-custom-assessment'); ?>
+					<?php esc_html_e('Categories for Natural Attributes Cataloging are fixed in the plugin.', 'rtr-custom-assessment'); ?>
 				</p>
 			</div>
 

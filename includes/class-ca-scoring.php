@@ -163,7 +163,7 @@ class CA_Scoring {
 	}
 
 	/**
-	 * Inner Dimensions — averages are share of “Yes” per category (0–1).
+	 * Natural Attributes Cataloging (inner_dimensions) — averages are share of “Yes” per category (0–1).
 	 *
 	 * @param string $category Category name.
 	 * @param float  $average  Category average (0–1).
