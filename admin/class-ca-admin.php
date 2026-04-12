@@ -12,6 +12,7 @@ class CA_Admin
 
 	public function __construct()
 	{
+		add_action('admin_init', array($this, 'maybe_redirect_legacy_admin_pages'), 0);
 		add_action('admin_init', array($this, 'handle_delete_action'));
 		add_action('admin_init', array($this, 'handle_export_action'));
 		add_action('admin_init', array($this, 'handle_send_email_action'));
@@ -27,59 +28,319 @@ class CA_Admin
 	public function register_menu()
 	{
 		add_menu_page(
-			__('Assessment Dashboard', 'rtr-custom-assessment'),
-			__('Assessment', 'rtr-custom-assessment'),
+			__('Assessments', 'rtr-custom-assessment'),
+			__('Assessments', 'rtr-custom-assessment'),
 			'manage_options',
-			'custom-assessment-dashboard',
-			array($this, 'render_dashboard_page'),
+			'custom-assessment-hub',
+			array($this, 'render_hub_page'),
 			'dashicons-chart-bar',
 			56
 		);
 
 		add_submenu_page(
-			'custom-assessment-dashboard',
+			'custom-assessment-hub',
 			__('Dashboard', 'rtr-custom-assessment'),
 			__('Dashboard', 'rtr-custom-assessment'),
 			'manage_options',
-			'custom-assessment-dashboard',
-			array($this, 'render_dashboard_page')
+			'custom-assessment-hub',
+			array($this, 'render_hub_page')
 		);
 
 		add_submenu_page(
-			'custom-assessment-dashboard',
-			__('Submissions', 'rtr-custom-assessment'),
-			__('Submissions', 'rtr-custom-assessment'),
+			'custom-assessment-hub',
+			__('Mindset', 'rtr-custom-assessment'),
+			__('Mindset', 'rtr-custom-assessment'),
 			'manage_options',
-			'custom-assessment-submissions',
-			array($this, 'render_list_page')
+			'custom-assessment-mindset',
+			array($this, 'render_mindset_section_page')
 		);
 
 		add_submenu_page(
-			'custom-assessment-dashboard',
-			__('Questions', 'rtr-custom-assessment'),
-			__('Questions', 'rtr-custom-assessment'),
+			'custom-assessment-hub',
+			__('Social Fluency', 'rtr-custom-assessment'),
+			__('Social Fluency', 'rtr-custom-assessment'),
 			'manage_options',
-			'custom-assessment-questions',
-			array($this, 'render_questions_page')
+			'custom-assessment-social',
+			array($this, 'render_social_fluency_section_page')
 		);
 
 		add_submenu_page(
-			'custom-assessment-dashboard',
-			__('Categories', 'rtr-custom-assessment'),
-			__('Categories', 'rtr-custom-assessment'),
+			'custom-assessment-hub',
+			__('All Submissions', 'rtr-custom-assessment'),
+			__('All Submissions', 'rtr-custom-assessment'),
 			'manage_options',
-			'custom-assessment-categories',
-			array($this, 'render_categories_page')
+			'custom-assessment-submissions-all',
+			array($this, 'render_all_submissions_page')
 		);
 
 		add_submenu_page(
-			'custom-assessment-dashboard',
+			'custom-assessment-hub',
 			__('Logs', 'rtr-custom-assessment'),
 			__('Logs', 'rtr-custom-assessment'),
 			'manage_options',
 			'custom-assessment-logs',
 			array($this, 'render_logs_page')
 		);
+	}
+
+	/**
+	 * Redirect old ?page= slugs to section screens (Mindset / Social) with ca_tab.
+	 */
+	public function maybe_redirect_legacy_admin_pages()
+	{
+		if (!is_admin() || !current_user_can('manage_options')) {
+			return;
+		}
+		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- Read-only routing.
+		if (!isset($_GET['page'])) {
+			return;
+		}
+		$page = sanitize_key(wp_unslash($_GET['page']));
+		// phpcs:enable WordPress.Security.NonceVerification.Recommended
+
+		$legacy = array(
+			'custom-assessment-dashboard' => array(
+				'page' => 'custom-assessment-mindset',
+				'ca_tab' => 'dashboard',
+			),
+			'custom-assessment-submissions' => array(
+				'page' => 'custom-assessment-mindset',
+				'ca_tab' => 'submissions',
+			),
+			'custom-assessment-questions' => array(
+				'page' => 'custom-assessment-mindset',
+				'ca_tab' => 'questions',
+			),
+			'custom-assessment-categories' => array(
+				'page' => 'custom-assessment-mindset',
+				'ca_tab' => 'categories',
+			),
+			'custom-assessment-sf-dashboard' => array(
+				'page' => 'custom-assessment-social',
+				'ca_tab' => 'dashboard',
+			),
+			'custom-assessment-sf-submissions' => array(
+				'page' => 'custom-assessment-social',
+				'ca_tab' => 'submissions',
+			),
+			'custom-assessment-sf-questions' => array(
+				'page' => 'custom-assessment-social',
+				'ca_tab' => 'questions',
+			),
+			'custom-assessment-sf-categories' => array(
+				'page' => 'custom-assessment-social',
+				'ca_tab' => 'categories',
+			),
+		);
+
+		if (!isset($legacy[$page])) {
+			return;
+		}
+
+		$query = isset($_GET) ? wp_unslash($_GET) : array();
+		unset($query['page']);
+		$query = array_merge($query, $legacy[$page]);
+		wp_safe_redirect(add_query_arg($query, admin_url('admin.php')));
+		exit;
+	}
+
+	/**
+	 * Overview: links into Mindset and Social Fluency.
+	 */
+	public function render_hub_page()
+	{
+		if (!current_user_can('manage_options')) {
+			wp_die(esc_html__('You do not have permission to view this page.', 'rtr-custom-assessment'));
+		}
+
+		$mindset_url = add_query_arg(
+			array(
+				'page' => 'custom-assessment-mindset',
+				'ca_tab' => 'dashboard',
+			),
+			admin_url('admin.php')
+		);
+		$social_url = add_query_arg(
+			array(
+				'page' => 'custom-assessment-social',
+				'ca_tab' => 'dashboard',
+			),
+			admin_url('admin.php')
+		);
+		?>
+		<div class="wrap ca-admin-wrap ca-assessment-hub-wrap">
+			<h1 class="ca-admin-title">
+				<span class="ca-admin-title-icon dashicons dashicons-chart-bar"></span>
+				<?php esc_html_e('Dashboard', 'rtr-custom-assessment'); ?>
+			</h1>
+			<p class="description"><?php esc_html_e('Open an assessment to view its dashboard, submissions, questions, and categories.', 'rtr-custom-assessment'); ?></p>
+			<div class="ca-dashboard-hub-grid">
+				<a class="ca-dashboard-hub-card" href="<?php echo esc_url($mindset_url); ?>">
+					<h2><?php esc_html_e('Mindset', 'rtr-custom-assessment'); ?></h2>
+					<p><?php esc_html_e('Entrepreneurial Mindset assessment', 'rtr-custom-assessment'); ?></p>
+				</a>
+				<a class="ca-dashboard-hub-card" href="<?php echo esc_url($social_url); ?>">
+					<h2><?php esc_html_e('Social Fluency', 'rtr-custom-assessment'); ?></h2>
+					<p><?php esc_html_e('Social Fluency assessment', 'rtr-custom-assessment'); ?></p>
+				</a>
+			</div>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Mindset section: routes by ca_tab.
+	 */
+	public function render_mindset_section_page()
+	{
+		if (!current_user_can('manage_options')) {
+			wp_die(esc_html__('You do not have permission to view this page.', 'rtr-custom-assessment'));
+		}
+
+		$tab = $this->get_current_ca_tab();
+		switch ($tab) {
+			case 'submissions':
+				$this->render_list_page();
+				return;
+			case 'questions':
+				$this->render_questions_page();
+				return;
+			case 'categories':
+				$this->render_categories_page();
+				return;
+			default:
+				$this->render_dashboard_page();
+				return;
+		}
+	}
+
+	/**
+	 * Social Fluency section: routes by ca_tab.
+	 */
+	public function render_social_fluency_section_page()
+	{
+		if (!current_user_can('manage_options')) {
+			wp_die(esc_html__('You do not have permission to view this page.', 'rtr-custom-assessment'));
+		}
+
+		$tab = $this->get_current_ca_tab();
+		switch ($tab) {
+			case 'submissions':
+				$this->render_sf_list_page();
+				return;
+			case 'questions':
+				$this->render_sf_questions_page();
+				return;
+			case 'categories':
+				$this->render_sf_categories_page();
+				return;
+			default:
+				$this->render_sf_dashboard_page();
+				return;
+		}
+	}
+
+	/**
+	 * Current tab for section screens (custom-assessment-mindset / custom-assessment-social).
+	 *
+	 * @return string dashboard|submissions|questions|categories
+	 */
+	private function get_current_ca_tab()
+	{
+		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- Read-only routing.
+		$tab = isset($_GET['ca_tab']) ? sanitize_key(wp_unslash($_GET['ca_tab'])) : 'dashboard';
+		// phpcs:enable WordPress.Security.NonceVerification.Recommended
+		$allowed = array('dashboard', 'submissions', 'questions', 'categories');
+		return in_array($tab, $allowed, true) ? $tab : 'dashboard';
+	}
+
+	/**
+	 * Whether we are on a tabbed assessment section admin screen.
+	 */
+	private function is_assessment_section_screen()
+	{
+		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- Read-only routing.
+		$page = isset($_GET['page']) ? sanitize_key(wp_unslash($_GET['page'])) : '';
+		// phpcs:enable WordPress.Security.NonceVerification.Recommended
+		return in_array($page, array('custom-assessment-mindset', 'custom-assessment-social'), true);
+	}
+
+	/**
+	 * Horizontal tabs for Mindset / Social Fluency section screens.
+	 *
+	 * @param string $assessment_type Normalized assessment type.
+	 * @param string $current_tab     Active tab slug.
+	 */
+	private function render_assessment_section_nav_tabs($assessment_type, $current_tab)
+	{
+		$t = CA_Assessment_Types::normalize($assessment_type);
+		$section_page = (CA_Assessment_Types::SOCIAL_FLUENCY === $t)
+			? 'custom-assessment-social'
+			: 'custom-assessment-mindset';
+
+		$tabs = array(
+			'dashboard' => __('Dashboard', 'rtr-custom-assessment'),
+			'submissions' => __('Submissions', 'rtr-custom-assessment'),
+			'questions' => __('Questions', 'rtr-custom-assessment'),
+			'categories' => __('Categories', 'rtr-custom-assessment'),
+		);
+
+		echo '<nav class="nav-tab-wrapper ca-assessment-nav-tabs" aria-label="' . esc_attr__('Assessment sections', 'rtr-custom-assessment') . '">';
+		foreach ($tabs as $slug => $label) {
+			$url = add_query_arg(
+				array(
+					'page' => $section_page,
+					'ca_tab' => $slug,
+				),
+				admin_url('admin.php')
+			);
+			$classes = 'nav-tab' . ($slug === $current_tab ? ' nav-tab-active' : '');
+			printf(
+				'<a href="%1$s" class="%2$s">%3$s</a>',
+				esc_url($url),
+				esc_attr($classes),
+				esc_html($label)
+			);
+		}
+		echo '</nav>';
+	}
+
+	/**
+	 * Query args for a screen inside Mindset or Social Fluency (page + ca_tab).
+	 *
+	 * @param string $screen          dashboard|submissions|questions|categories
+	 * @param string $assessment_type Normalized type.
+	 * @return array<string, string>
+	 */
+	private function admin_screen_query_args($screen, $assessment_type)
+	{
+		$t = CA_Assessment_Types::normalize($assessment_type);
+		$section_page = (CA_Assessment_Types::SOCIAL_FLUENCY === $t)
+			? 'custom-assessment-social'
+			: 'custom-assessment-mindset';
+		$tab_map = array(
+			'dashboard' => 'dashboard',
+			'submissions' => 'submissions',
+			'questions' => 'questions',
+			'categories' => 'categories',
+		);
+		$tab = isset($tab_map[$screen]) ? $tab_map[$screen] : 'dashboard';
+		return array(
+			'page' => $section_page,
+			'ca_tab' => $tab,
+		);
+	}
+
+	/**
+	 * Full admin URL for a Mindset / Social Fluency screen.
+	 *
+	 * @param string $screen          dashboard|submissions|questions|categories
+	 * @param string $assessment_type Normalized type.
+	 * @return string
+	 */
+	private function admin_screen_url($screen, $assessment_type)
+	{
+		return add_query_arg($this->admin_screen_query_args($screen, $assessment_type), admin_url('admin.php'));
 	}
 
 	/**
@@ -129,11 +390,84 @@ class CA_Admin
 	}
 
 	/**
+	 * Assessment type implied by the current admin ?page=.
+	 *
+	 * @return string|null Normalized type, or null for all-submissions list.
+	 */
+	private function admin_current_assessment_type()
+	{
+		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- Read-only routing.
+		$page = isset($_GET['page']) ? sanitize_key(wp_unslash($_GET['page'])) : '';
+		// phpcs:enable WordPress.Security.NonceVerification.Recommended
+		if ('custom-assessment-submissions-all' === $page) {
+			return null;
+		}
+		if ('custom-assessment-social' === $page) {
+			return CA_Assessment_Types::SOCIAL_FLUENCY;
+		}
+		if ('custom-assessment-mindset' === $page) {
+			return CA_Assessment_Types::MINDSET;
+		}
+		if (0 === strpos($page, 'custom-assessment-sf-')) {
+			return CA_Assessment_Types::SOCIAL_FLUENCY;
+		}
+		return CA_Assessment_Types::MINDSET;
+	}
+
+	/**
+	 * Mindset categories screen (legacy slug or section + tab).
+	 */
+	private function is_mindset_categories_admin_page()
+	{
+		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- Read-only routing.
+		$page = isset($_GET['page']) ? sanitize_key(wp_unslash($_GET['page'])) : '';
+		$tab = isset($_GET['ca_tab']) ? sanitize_key(wp_unslash($_GET['ca_tab'])) : '';
+		// phpcs:enable WordPress.Security.NonceVerification.Recommended
+		if ('custom-assessment-categories' === $page) {
+			return true;
+		}
+		return ('custom-assessment-mindset' === $page && 'categories' === $tab);
+	}
+
+	/**
+	 * Mindset questions screen (legacy slug or section + tab).
+	 */
+	private function is_mindset_questions_admin_page()
+	{
+		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- Read-only routing.
+		$page = isset($_GET['page']) ? sanitize_key(wp_unslash($_GET['page'])) : '';
+		$tab = isset($_GET['ca_tab']) ? sanitize_key(wp_unslash($_GET['ca_tab'])) : '';
+		// phpcs:enable WordPress.Security.NonceVerification.Recommended
+		if ('custom-assessment-questions' === $page) {
+			return true;
+		}
+		return ('custom-assessment-mindset' === $page && 'questions' === $tab);
+	}
+
+	/**
+	 * Allowed admin pages for submission delete / export / email actions.
+	 *
+	 * @return string[]
+	 */
+	private function admin_submission_action_pages()
+	{
+		return array(
+			'custom-assessment-mindset',
+			'custom-assessment-social',
+			'custom-assessment-submissions-all',
+			'custom-assessment-dashboard',
+			'custom-assessment-submissions',
+			'custom-assessment-sf-dashboard',
+			'custom-assessment-sf-submissions',
+		);
+	}
+
+	/**
 	 * Handle delete action early on admin_init before any output.
 	 */
 	public function handle_delete_action()
 	{
-		if (!isset($_GET['page']) || !in_array($_GET['page'], array('custom-assessment-dashboard', 'custom-assessment-submissions'), true)) {
+		if (!isset($_GET['page']) || !in_array($_GET['page'], $this->admin_submission_action_pages(), true)) {
 			return;
 		}
 
@@ -226,7 +560,7 @@ class CA_Admin
 	 */
 	public function handle_export_action()
 	{
-		if (!isset($_GET['page']) || !in_array($_GET['page'], array('custom-assessment-dashboard', 'custom-assessment-submissions'), true)) {
+		if (!isset($_GET['page']) || !in_array($_GET['page'], $this->admin_submission_action_pages(), true)) {
 			return;
 		}
 
@@ -241,11 +575,14 @@ class CA_Admin
 			}
 
 			$format = sanitize_text_field(wp_unslash($_GET['format']));
-			$all_submissions = CA_Database::get_all_submissions();
+			$export_scope = $this->admin_current_assessment_type();
+			$all_submissions = null === $export_scope
+				? CA_Database::get_all_submissions()
+				: CA_Database::get_all_submissions($export_scope);
 
 			if ('csv' === $format) {
 				CA_Logger::log('admin_export_all', 'success', 'Export all CSV requested.');
-				$this->export_all_as_csv($all_submissions);
+				$this->export_all_as_csv($all_submissions, $export_scope, null === $export_scope);
 			} elseif ('json' === $format) {
 				CA_Logger::log('admin_export_all', 'success', 'Export all JSON requested.');
 				$this->export_all_as_json($all_submissions);
@@ -289,7 +626,7 @@ class CA_Admin
 	 */
 	public function handle_send_email_action()
 	{
-		if (!isset($_GET['page']) || !in_array($_GET['page'], array('custom-assessment-dashboard', 'custom-assessment-submissions'), true)) {
+		if (!isset($_GET['page']) || !in_array($_GET['page'], $this->admin_submission_action_pages(), true)) {
 			return;
 		}
 
@@ -338,7 +675,7 @@ class CA_Admin
 	 */
 	public function handle_categories_action()
 	{
-		if (!isset($_GET['page']) || 'custom-assessment-categories' !== $_GET['page']) {
+		if (!$this->is_mindset_categories_admin_page()) {
 			return;
 		}
 
@@ -368,7 +705,7 @@ class CA_Admin
 			}
 
 			if (isset($message)) {
-				$redirect_url = add_query_arg('message', $message, admin_url('admin.php?page=custom-assessment-categories'));
+				$redirect_url = add_query_arg('message', $message, $this->admin_screen_url('categories', CA_Assessment_Types::MINDSET));
 				wp_safe_redirect(esc_url_raw($redirect_url));
 				exit;
 			}
@@ -380,7 +717,7 @@ class CA_Admin
 	 */
 	public function handle_edit_category_action()
 	{
-		if (!isset($_GET['page']) || 'custom-assessment-categories' !== $_GET['page']) {
+		if (!$this->is_mindset_categories_admin_page()) {
 			return;
 		}
 
@@ -400,7 +737,7 @@ class CA_Admin
 				$this->edit_category($old_category, $new_category);
 				$message = 'edited';
 
-				$redirect_url = add_query_arg('message', $message, admin_url('admin.php?page=custom-assessment-categories'));
+				$redirect_url = add_query_arg('message', $message, $this->admin_screen_url('categories', CA_Assessment_Types::MINDSET));
 				wp_safe_redirect(esc_url_raw($redirect_url));
 				exit;
 			}
@@ -412,7 +749,7 @@ class CA_Admin
 	 */
 	public function handle_questions_action()
 	{
-		if (!isset($_GET['page']) || 'custom-assessment-questions' !== $_GET['page']) {
+		if (!$this->is_mindset_questions_admin_page()) {
 			return;
 		}
 
@@ -430,7 +767,7 @@ class CA_Admin
 				$this->delete_question($question_index);
 				$message = 'question_deleted';
 
-				$redirect_url = add_query_arg('message', $message, admin_url('admin.php?page=custom-assessment-questions'));
+				$redirect_url = add_query_arg('message', $message, $this->admin_screen_url('questions', CA_Assessment_Types::MINDSET));
 				wp_safe_redirect(esc_url_raw($redirect_url));
 				exit;
 			}
@@ -466,7 +803,7 @@ class CA_Admin
 
 				if ($priority_exists) {
 					$message = 'priority_exists';
-					$redirect_url = add_query_arg('message', $message, admin_url('admin.php?page=custom-assessment-questions'));
+					$redirect_url = add_query_arg('message', $message, $this->admin_screen_url('questions', CA_Assessment_Types::MINDSET));
 					wp_safe_redirect(esc_url_raw($redirect_url));
 					exit;
 				}
@@ -474,7 +811,7 @@ class CA_Admin
 				$edited = $this->edit_question($question_index, $new_category, $new_question_text, $new_priority);
 				$message = $edited ? 'question_edited' : 'question_edit_failed';
 
-				$redirect_url = add_query_arg('message', $message, admin_url('admin.php?page=custom-assessment-questions'));
+				$redirect_url = add_query_arg('message', $message, $this->admin_screen_url('questions', CA_Assessment_Types::MINDSET));
 				wp_safe_redirect(esc_url_raw($redirect_url));
 				exit;
 			}
@@ -502,7 +839,7 @@ class CA_Admin
 
 			if (empty($indexes)) {
 				$message = 'bulk_edit_failed';
-				$redirect_url = add_query_arg('message', $message, admin_url('admin.php?page=custom-assessment-questions'));
+				$redirect_url = add_query_arg('message', $message, $this->admin_screen_url('questions', CA_Assessment_Types::MINDSET));
 				wp_safe_redirect(esc_url_raw($redirect_url));
 				exit;
 			}
@@ -533,7 +870,7 @@ class CA_Admin
 
 			if (empty($targets)) {
 				$message = 'bulk_edit_failed';
-				$redirect_url = add_query_arg('message', $message, admin_url('admin.php?page=custom-assessment-questions'));
+				$redirect_url = add_query_arg('message', $message, $this->admin_screen_url('questions', CA_Assessment_Types::MINDSET));
 				wp_safe_redirect(esc_url_raw($redirect_url));
 				exit;
 			}
@@ -571,7 +908,7 @@ class CA_Admin
 
 			if ($priority_collision) {
 				$message = 'priority_exists';
-				$redirect_url = add_query_arg('message', $message, admin_url('admin.php?page=custom-assessment-questions'));
+				$redirect_url = add_query_arg('message', $message, $this->admin_screen_url('questions', CA_Assessment_Types::MINDSET));
 				wp_safe_redirect(esc_url_raw($redirect_url));
 				exit;
 			}
@@ -585,7 +922,7 @@ class CA_Admin
 			}
 
 			$message = $updated_any ? 'bulk_edit_success' : 'bulk_edit_failed';
-			$redirect_url = add_query_arg('message', $message, admin_url('admin.php?page=custom-assessment-questions'));
+			$redirect_url = add_query_arg('message', $message, $this->admin_screen_url('questions', CA_Assessment_Types::MINDSET));
 			wp_safe_redirect(esc_url_raw($redirect_url));
 			exit;
 		}
@@ -616,7 +953,7 @@ class CA_Admin
 
 				if ($priority_exists) {
 					$message = 'priority_exists';
-					$redirect_url = add_query_arg('message', $message, admin_url('admin.php?page=custom-assessment-questions'));
+					$redirect_url = add_query_arg('message', $message, $this->admin_screen_url('questions', CA_Assessment_Types::MINDSET));
 					wp_safe_redirect(esc_url_raw($redirect_url));
 					exit;
 				}
@@ -624,7 +961,7 @@ class CA_Admin
 				$this->add_question($question_text, $question_category, $question_priority);
 				$message = 'question_added';
 
-				$redirect_url = add_query_arg('message', $message, admin_url('admin.php?page=custom-assessment-questions'));
+				$redirect_url = add_query_arg('message', $message, $this->admin_screen_url('questions', CA_Assessment_Types::MINDSET));
 				wp_safe_redirect(esc_url_raw($redirect_url));
 				exit;
 			}
@@ -747,15 +1084,79 @@ class CA_Admin
 	/**
 	 * Export all submissions as CSV.
 	 *
-	 * @param array $submissions List of submission objects.
+	 * @param array       $submissions                    List of submission objects.
+	 * @param string|null $question_column_assessment_type When not mixed, question columns use this set.
+	 * @param bool        $mixed_types                    True when rows may mix mindset + social (no per-question columns).
 	 */
-	private function export_all_as_csv($submissions)
+	private function export_all_as_csv($submissions, $question_column_assessment_type = null, $mixed_types = false)
 	{
 		header('Content-Type: text/csv; charset=utf-8');
 		header('Content-Disposition: attachment; filename="all_submissions_' . gmdate('Ymd_His') . '.csv"');
 
-		$flat_questions = CA_Questions::get_flat();
 		$output = fopen('php://output', 'w');
+
+		if ($mixed_types) {
+			$header = array(
+				'ID',
+				'First Name',
+				'Last Name',
+				'Email',
+				'Phone',
+				'Job Title',
+				'Assessment Type',
+				'Status',
+				'Total Score',
+				'Average Score',
+				'Created At',
+				'Updated At',
+				'Answers (JSON)',
+				'Category Scores (name:subtotal:average)',
+				'Category Summaries (name:summary)',
+			);
+			fputcsv($output, $header);
+
+			foreach ($submissions as $submission) {
+				$row_sub_type = CA_Assessment_Types::from_submission($submission);
+				$submission_id = isset($submission->id) ? absint($submission->id) : 0;
+				$answers_map = $submission_id > 0 ? CA_Database::get_answers($submission_id) : array();
+				$row = array(
+					$submission_id,
+					isset($submission->first_name) ? $submission->first_name : '',
+					isset($submission->last_name) ? $submission->last_name : '',
+					isset($submission->email) ? $submission->email : '',
+					isset($submission->phone) ? $submission->phone : '',
+					isset($submission->job_title) ? $submission->job_title : '',
+					$row_sub_type,
+					isset($submission->status) ? $submission->status : '',
+					isset($submission->total_score) ? $submission->total_score : '',
+					isset($submission->average_score) ? $submission->average_score : '',
+					isset($submission->created_at) ? $submission->created_at : '',
+					isset($submission->updated_at) ? $submission->updated_at : '',
+					wp_json_encode($answers_map),
+				);
+				$category_scores = $submission_id > 0 ? CA_Database::get_category_scores($submission_id) : array();
+				$scores_summary = array();
+				$text_summary = array();
+				foreach ($category_scores as $cat) {
+					$cat_name = isset($cat->category_name) ? (string) $cat->category_name : '';
+					$cat_subtotal = isset($cat->subtotal) ? (int) $cat->subtotal : 0;
+					$cat_average = isset($cat->average) ? (float) $cat->average : 0.0;
+					$scores_summary[] = $cat_name . ':' . $cat_subtotal . ':' . number_format($cat_average, 2);
+					$text_summary[] = $cat_name . ':' . CA_Scoring::get_category_summary($cat_name, $cat_average, $row_sub_type);
+				}
+				$row[] = implode(' | ', $scores_summary);
+				$row[] = implode(' | ', $text_summary);
+				fputcsv($output, $row);
+			}
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- Closing a stream opened on php://output.
+			fclose($output);
+			return;
+		}
+
+		$q_type = null !== $question_column_assessment_type
+			? CA_Assessment_Types::normalize($question_column_assessment_type)
+			: CA_Assessment_Types::MINDSET;
+		$flat_questions = CA_Assessment_Registry::get_flat($q_type);
 		$header = array(
 			'ID',
 			'First Name',
@@ -763,6 +1164,7 @@ class CA_Admin
 			'Email',
 			'Phone',
 			'Job Title',
+			'Assessment Type',
 			'Status',
 			'Total Score',
 			'Average Score',
@@ -770,7 +1172,6 @@ class CA_Admin
 			'Updated At',
 		);
 
-		// Add per-question answer columns so one CSV includes complete response details.
 		foreach ($flat_questions as $idx => $question) {
 			$header[] = sprintf(
 				'Q%d: %s',
@@ -779,13 +1180,13 @@ class CA_Admin
 			);
 		}
 
-		// Add category score summary columns.
 		$header[] = 'Category Scores (name:subtotal:average)';
 		$header[] = 'Category Summaries (name:summary)';
 
 		fputcsv($output, $header);
 
 		foreach ($submissions as $submission) {
+			$row_sub_type = CA_Assessment_Types::from_submission($submission);
 			$row = array(
 				isset($submission->id) ? $submission->id : '',
 				isset($submission->first_name) ? $submission->first_name : '',
@@ -793,6 +1194,7 @@ class CA_Admin
 				isset($submission->email) ? $submission->email : '',
 				isset($submission->phone) ? $submission->phone : '',
 				isset($submission->job_title) ? $submission->job_title : '',
+				$row_sub_type,
 				isset($submission->status) ? $submission->status : '',
 				isset($submission->total_score) ? $submission->total_score : '',
 				isset($submission->average_score) ? $submission->average_score : '',
@@ -802,15 +1204,15 @@ class CA_Admin
 
 			$submission_id = isset($submission->id) ? absint($submission->id) : 0;
 			$answers_map = $submission_id > 0 ? CA_Database::get_answers($submission_id) : array();
-			foreach ($flat_questions as $idx => $question) {
-				$answer = isset($answers_map[$idx]) ? $answers_map[$idx] : '';
-				$row[] = '' !== $answer ? $answer : 'No answer';
+			foreach ($flat_questions as $question) {
+				$q_index = isset($question['index']) ? (int) $question['index'] : 0;
+				$answer = isset($answers_map[$q_index]) ? $answers_map[$q_index] : '';
+				$row[] = ('' !== $answer && null !== $answer) ? $answer : 'No answer';
 			}
 
 			$category_scores = $submission_id > 0 ? CA_Database::get_category_scores($submission_id) : array();
 			$scores_summary = array();
 			$text_summary = array();
-			$row_sub_type = CA_Assessment_Types::from_submission($submission);
 			foreach ($category_scores as $cat) {
 				$cat_name = isset($cat->category_name) ? (string) $cat->category_name : '';
 				$cat_subtotal = isset($cat->subtotal) ? (int) $cat->subtotal : 0;
@@ -846,6 +1248,7 @@ class CA_Admin
 				$submission_id = isset($submission->id) ? absint($submission->id) : 0;
 				$payload['submissions'][] = array(
 					'id' => $submission_id,
+					'assessment_type' => CA_Assessment_Types::from_submission($submission),
 					'first_name' => isset($submission->first_name) ? (string) $submission->first_name : '',
 					'last_name' => isset($submission->last_name) ? (string) $submission->last_name : '',
 					'email' => isset($submission->email) ? (string) $submission->email : '',
@@ -1055,9 +1458,25 @@ class CA_Admin
 	}
 
 	/**
-	 * Render assessment dashboard.
+	 * Mindset assessment dashboard.
 	 */
 	public function render_dashboard_page()
+	{
+		$this->render_dashboard_for_assessment(CA_Assessment_Types::MINDSET);
+	}
+
+	/**
+	 * Social Fluency assessment dashboard.
+	 */
+	public function render_sf_dashboard_page()
+	{
+		$this->render_dashboard_for_assessment(CA_Assessment_Types::SOCIAL_FLUENCY);
+	}
+
+	/**
+	 * @param string $assessment_type Normalized type.
+	 */
+	private function render_dashboard_for_assessment($assessment_type)
 	{
 		if (!current_user_can('manage_options')) {
 			wp_die(esc_html__('You do not have permission to view this page.', 'rtr-custom-assessment'));
@@ -1067,7 +1486,14 @@ class CA_Admin
 		// This ensures users are aware they need SMTP for email functionality
 		$smtp_configured = $this->is_smtp_configured();
 
-		$submissions = CA_Database::get_all_submissions();
+		$assessment_type = CA_Assessment_Types::normalize($assessment_type);
+		$scale_max = CA_Assessment_Types::get_scale_max($assessment_type);
+		$submissions_list_args = $this->admin_screen_query_args('submissions', $assessment_type);
+		$dashboard_title = (CA_Assessment_Types::SOCIAL_FLUENCY === $assessment_type)
+			? __('Social Fluency — Dashboard', 'rtr-custom-assessment')
+			: __('Entrepreneurial Mindset — Dashboard', 'rtr-custom-assessment');
+
+		$submissions = CA_Database::get_all_submissions($assessment_type);
 		$completed = array_filter($submissions, fn($s) => $s->status === 'completed');
 		$in_progress = array_filter($submissions, fn($s) => $s->status === 'in_progress');
 
@@ -1091,9 +1517,12 @@ class CA_Admin
 		$recent_submissions = array_slice($submissions, 0, 5);
 		?>
 		<div class="wrap ca-admin-wrap">
+			<?php if ($this->is_assessment_section_screen()) : ?>
+				<?php $this->render_assessment_section_nav_tabs($assessment_type, 'dashboard'); ?>
+			<?php endif; ?>
 			<h1 class="ca-admin-title">
 				<span class="ca-admin-title-icon dashicons dashicons-chart-bar"></span>
-				<?php esc_html_e('Assessment Dashboard', 'rtr-custom-assessment'); ?>
+				<?php echo esc_html($dashboard_title); ?>
 			</h1>
 
 			<?php if (!$smtp_configured): ?>
@@ -1135,7 +1564,7 @@ class CA_Admin
 				</div>
 
 				<div class="ca-dashboard-card">
-					<div class="ca-dashboard-card-value"><?php echo esc_html(number_format($avg_average_score, 2)); ?>/5
+					<div class="ca-dashboard-card-value"><?php echo esc_html(number_format($avg_average_score, 2)); ?>/<?php echo esc_html((string) $scale_max); ?>
 					</div>
 					<div class="ca-dashboard-card-label"><?php esc_html_e('Avg Score Per Q', 'rtr-custom-assessment'); ?></div>
 				</div>
@@ -1145,7 +1574,15 @@ class CA_Admin
 				<h2><?php esc_html_e('Recent Submissions', 'rtr-custom-assessment'); ?></h2>
 
 				<?php if (empty($recent_submissions)): ?>
-					<p><?php esc_html_e('No submissions yet.', 'rtr-custom-assessment'); ?></p>
+					<p>
+						<?php
+						if (CA_Assessment_Types::SOCIAL_FLUENCY === $assessment_type) {
+							esc_html_e('No Social Fluency submissions yet. Use the shortcode [social_fluency_assessment] on a page.', 'rtr-custom-assessment');
+						} else {
+							esc_html_e('No submissions yet. Share the shortcode [custom_assessment] on any page.', 'rtr-custom-assessment');
+						}
+						?>
+					</p>
 				<?php else: ?>
 					<table class="wp-list-table widefat fixed striped ca-admin-table">
 						<thead>
@@ -1174,7 +1611,7 @@ class CA_Admin
 									<td><?php echo esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($sub->created_at))); ?>
 									</td>
 									<td>
-										<a href="<?php echo esc_url(add_query_arg(array('page' => 'custom-assessment-submissions', 'view' => 'detail', 'id' => $sub->id), admin_url('admin.php'))); ?>"
+										<a href="<?php echo esc_url(add_query_arg(array_merge($submissions_list_args, array('view' => 'detail', 'id' => $sub->id)), admin_url('admin.php'))); ?>"
 											class="button button-small">
 											<?php esc_html_e('View', 'rtr-custom-assessment'); ?>
 										</a>
@@ -1184,7 +1621,7 @@ class CA_Admin
 						</tbody>
 					</table>
 					<p>
-						<a href="<?php echo esc_url(add_query_arg(array('page' => 'custom-assessment-submissions'), admin_url('admin.php'))); ?>"
+						<a href="<?php echo esc_url(add_query_arg($submissions_list_args, admin_url('admin.php'))); ?>"
 							class="button button-primary">
 							<?php esc_html_e('View All Submissions', 'rtr-custom-assessment'); ?>
 						</a>
@@ -1197,12 +1634,62 @@ class CA_Admin
 
 
 	/**
-	 * Render list page or detail view.
+	 * Mindset submissions list / detail.
 	 */
 	public function render_list_page()
 	{
+		$this->render_submissions_list_for_type(CA_Assessment_Types::MINDSET);
+	}
+
+	/**
+	 * Social Fluency submissions list / detail.
+	 */
+	public function render_sf_list_page()
+	{
+		$this->render_submissions_list_for_type(CA_Assessment_Types::SOCIAL_FLUENCY);
+	}
+
+	/**
+	 * Combined list of every submission (mindset + social fluency).
+	 */
+	public function render_all_submissions_page()
+	{
+		$this->render_submissions_list_for_type(null);
+	}
+
+	/**
+	 * Human-readable assessment label for a submission row.
+	 *
+	 * @param object $submission DB row.
+	 * @return string
+	 */
+	private function admin_submission_assessment_label($submission)
+	{
+		$t = CA_Assessment_Types::from_submission($submission);
+		return CA_Assessment_Types::SOCIAL_FLUENCY === $t
+			? __('Social Fluency', 'rtr-custom-assessment')
+			: __('Entrepreneurial Mindset', 'rtr-custom-assessment');
+	}
+
+	/**
+	 * @param string|null $assessment_type Normalized type, or null for all assessments.
+	 */
+	private function render_submissions_list_for_type($assessment_type)
+	{
 		if (!current_user_can('manage_options')) {
 			wp_die(esc_html__('You do not have permission to view this page.', 'rtr-custom-assessment'));
+		}
+
+		$list_all_types = null === $assessment_type;
+		if ($list_all_types) {
+			$list_page_args = array('page' => 'custom-assessment-submissions-all');
+			$list_heading = __('All Submissions', 'rtr-custom-assessment');
+		} else {
+			$assessment_type = CA_Assessment_Types::normalize($assessment_type);
+			$list_page_args = $this->admin_screen_query_args('submissions', $assessment_type);
+			$list_heading = (CA_Assessment_Types::SOCIAL_FLUENCY === $assessment_type)
+				? __('Social Fluency — Submissions', 'rtr-custom-assessment')
+				: __('Entrepreneurial Mindset — Submissions', 'rtr-custom-assessment');
 		}
 
 		// Check SMTP configuration - show error if no SMTP detected
@@ -1217,12 +1704,14 @@ class CA_Admin
 
 		// Detail view
 		if ('detail' === $list_view && $list_id > 0) {
-			$this->render_detail_page($list_id);
+			$this->render_detail_page($list_id, $list_page_args);
 			return;
 		}
 
 		// List view
-		$all_submissions = CA_Database::get_all_submissions();
+		$all_submissions = $list_all_types
+			? CA_Database::get_all_submissions()
+			: CA_Database::get_all_submissions($assessment_type);
 
 		// Pagination setup
 		$per_page = 10;
@@ -1264,9 +1753,12 @@ class CA_Admin
 		$latest_created_display = $latest_created_at ? date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($latest_created_at)) : '—';
 		?>
 		<div class="wrap ca-admin-wrap">
+			<?php if (!$list_all_types && $this->is_assessment_section_screen()) : ?>
+				<?php $this->render_assessment_section_nav_tabs($assessment_type, 'submissions'); ?>
+			<?php endif; ?>
 			<h1 class="ca-admin-title">
 				<span class="ca-admin-title-icon dashicons dashicons-chart-bar"></span>
-				<?php esc_html_e('Assessment Submissions', 'rtr-custom-assessment'); ?>
+				<?php echo esc_html($list_heading); ?>
 			</h1>
 
 			<?php if (!$smtp_configured): ?>
@@ -1334,7 +1826,16 @@ class CA_Admin
 			<?php if (empty($all_submissions)): ?>
 				<div class="ca-admin-empty">
 					<span class="dashicons dashicons-clipboard" aria-hidden="true"></span>
-					<p><?php esc_html_e('No submissions yet. Share the assessment shortcode [custom_assessment] on any page.', 'rtr-custom-assessment'); ?>
+					<p>
+						<?php
+						if ($list_all_types) {
+							esc_html_e('No submissions yet.', 'rtr-custom-assessment');
+						} elseif (CA_Assessment_Types::SOCIAL_FLUENCY === $assessment_type) {
+							esc_html_e('No Social Fluency submissions yet. Use the shortcode [social_fluency_assessment] on a page.', 'rtr-custom-assessment');
+						} else {
+							esc_html_e('No submissions yet. Share the shortcode [custom_assessment] on any page.', 'rtr-custom-assessment');
+						}
+						?>
 					</p>
 				</div>
 			<?php else: ?>
@@ -1368,11 +1869,11 @@ class CA_Admin
 
 				<div class="ca-questions-search" style="text-align: end;">
 					<div style="margin-bottom: 10px;">
-						<?php $export_all_csv_url = add_query_arg(array('page' => 'custom-assessment-submissions', 'action' => 'export_all', 'format' => 'csv', '_wpnonce' => wp_create_nonce('ca_export_all_submissions')), admin_url('admin.php')); ?>
+						<?php $export_all_csv_url = add_query_arg(array_merge($list_page_args, array('action' => 'export_all', 'format' => 'csv', '_wpnonce' => wp_create_nonce('ca_export_all_submissions'))), admin_url('admin.php')); ?>
 						<a href="<?php echo esc_url($export_all_csv_url); ?>" class="button button-secondary">
 							<?php esc_html_e('Export All CSV', 'rtr-custom-assessment'); ?>
 						</a>
-						<?php $export_all_json_url = add_query_arg(array('page' => 'custom-assessment-submissions', 'action' => 'export_all', 'format' => 'json', '_wpnonce' => wp_create_nonce('ca_export_all_submissions')), admin_url('admin.php')); ?>
+						<?php $export_all_json_url = add_query_arg(array_merge($list_page_args, array('action' => 'export_all', 'format' => 'json', '_wpnonce' => wp_create_nonce('ca_export_all_submissions'))), admin_url('admin.php')); ?>
 						<a href="<?php echo esc_url($export_all_json_url); ?>" class="button button-secondary">
 							<?php esc_html_e('Export All JSON', 'rtr-custom-assessment'); ?>
 						</a>
@@ -1424,6 +1925,9 @@ class CA_Admin
 								<th scope="col"><?php esc_html_e('Email', 'rtr-custom-assessment'); ?></th>
 								<th scope="col"><?php esc_html_e('Phone', 'rtr-custom-assessment'); ?></th>
 								<th scope="col"><?php esc_html_e('Job Title', 'rtr-custom-assessment'); ?></th>
+								<?php if ($list_all_types) : ?>
+									<th scope="col"><?php esc_html_e('Assessment', 'rtr-custom-assessment'); ?></th>
+								<?php endif; ?>
 								<th scope="col" class="ca-col-score"><?php esc_html_e('Total Score', 'rtr-custom-assessment'); ?>
 								</th>
 								<th scope="col" class="ca-col-score"><?php esc_html_e('Average', 'rtr-custom-assessment'); ?></th>
@@ -1440,12 +1944,15 @@ class CA_Admin
 											value="<?php echo esc_attr($sub->id); ?>">
 									</th>
 									<td class="ca-col-id"><?php echo esc_html($sub->id); ?></td>
-									<td>
+									<td class="ca-sub-name">
 										<strong><?php echo esc_html($sub->first_name . ' ' . $sub->last_name); ?></strong>
 									</td>
-									<td><?php echo esc_html($sub->email); ?></td>
-									<td><?php echo esc_html($sub->phone); ?></td>
-									<td><?php echo esc_html($sub->job_title); ?></td>
+									<td class="ca-sub-email"><?php echo esc_html($sub->email); ?></td>
+									<td class="ca-sub-phone"><?php echo esc_html($sub->phone); ?></td>
+									<td class="ca-sub-job"><?php echo esc_html($sub->job_title); ?></td>
+									<?php if ($list_all_types) : ?>
+										<td class="ca-sub-assessment"><?php echo esc_html($this->admin_submission_assessment_label($sub)); ?></td>
+									<?php endif; ?>
 									<td class="ca-col-score">
 										<?php echo 'completed' === $sub->status ? esc_html($sub->total_score) : '—'; ?>
 									</td>
@@ -1460,7 +1967,7 @@ class CA_Admin
 									<td><?php echo esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($sub->created_at))); ?>
 									</td>
 									<td>
-										<a href="<?php echo esc_url(add_query_arg(array('page' => 'custom-assessment-submissions', 'view' => 'detail', 'id' => $sub->id), admin_url('admin.php'))); ?>"
+										<a href="<?php echo esc_url(add_query_arg(array_merge($list_page_args, array('view' => 'detail', 'id' => $sub->id)), admin_url('admin.php'))); ?>"
 											class="button button-small">
 											<?php esc_html_e('View', 'rtr-custom-assessment'); ?>
 										</a>
@@ -1468,11 +1975,11 @@ class CA_Admin
 											<div class="ca-export-dropdown-wrapper">
 												<div class="ca-export-menu ca-export-dropdown"
 													id="export-<?php echo esc_attr($sub->id); ?>">
-													<?php $csv_url = add_query_arg(array('page' => 'custom-assessment-submissions', 'action' => 'export', 'format' => 'csv', 'id' => $sub->id, '_wpnonce' => wp_create_nonce('ca_export_submission_' . $sub->id)), admin_url('admin.php')); ?>
+													<?php $csv_url = add_query_arg(array_merge($list_page_args, array('action' => 'export', 'format' => 'csv', 'id' => $sub->id, '_wpnonce' => wp_create_nonce('ca_export_submission_' . $sub->id))), admin_url('admin.php')); ?>
 													<a href="<?php echo esc_url($csv_url); ?>" class="ca-export-option">
 														CSV
 													</a>
-													<?php $pdf_url = add_query_arg(array('page' => 'custom-assessment-submissions', 'action' => 'export', 'format' => 'pdf', 'id' => $sub->id, '_wpnonce' => wp_create_nonce('ca_export_submission_' . $sub->id)), admin_url('admin.php')); ?>
+													<?php $pdf_url = add_query_arg(array_merge($list_page_args, array('action' => 'export', 'format' => 'pdf', 'id' => $sub->id, '_wpnonce' => wp_create_nonce('ca_export_submission_' . $sub->id))), admin_url('admin.php')); ?>
 													<a href="<?php echo esc_url($pdf_url); ?>" class="ca-export-option">
 														PDF
 													</a>
@@ -1483,13 +1990,13 @@ class CA_Admin
 												</button>
 											</div>
 
-											<?php $email_url = add_query_arg(array('page' => 'custom-assessment-submissions', 'action' => 'send_email', 'id' => $sub->id, '_wpnonce' => wp_create_nonce('ca_send_email_' . $sub->id)), admin_url('admin.php')); ?>
+											<?php $email_url = add_query_arg(array_merge($list_page_args, array('action' => 'send_email', 'id' => $sub->id, '_wpnonce' => wp_create_nonce('ca_send_email_' . $sub->id))), admin_url('admin.php')); ?>
 											<a href="<?php echo esc_url($email_url); ?>" class="button button-small"
 												onclick="return confirm('<?php echo esc_js(__('Are you sure you want to resend the assessment results email to this customer?', 'rtr-custom-assessment')); ?>');">
 												<?php esc_html_e('Resend Email', 'rtr-custom-assessment'); ?>
 											</a>
 										<?php endif; ?>
-										<?php $delete_url = add_query_arg(array('page' => 'custom-assessment-submissions', 'action' => 'delete', 'id' => $sub->id, '_wpnonce' => wp_create_nonce('ca_delete_submission_' . $sub->id)), admin_url('admin.php')); ?>
+										<?php $delete_url = add_query_arg(array_merge($list_page_args, array('action' => 'delete', 'id' => $sub->id, '_wpnonce' => wp_create_nonce('ca_delete_submission_' . $sub->id))), admin_url('admin.php')); ?>
 										<a href="<?php echo esc_url($delete_url); ?>" class="button button-small"
 											onclick="return confirm('<?php echo esc_js(__('Are you sure you want to delete this submission? This action cannot be undone.', 'rtr-custom-assessment')); ?>');">
 											<?php esc_html_e('Delete', 'rtr-custom-assessment'); ?>
@@ -1526,7 +2033,7 @@ class CA_Admin
 						<?php if ($total_pages > 1): ?>
 							<span class="pagination-links">
 								<?php
-								$base_url = admin_url('admin.php?page=custom-assessment-submissions');
+								$base_url = add_query_arg($list_page_args, admin_url('admin.php'));
 								$prev_disabled = $current_page <= 1 ? 'disabled' : '';
 								$next_disabled = $current_page >= $total_pages ? 'disabled' : '';
 
@@ -1777,9 +2284,10 @@ class CA_Admin
 	/**
 	 * Render the detail view for a single submission.
 	 *
-	 * @param int $submission_id
+	 * @param int         $submission_id   Submission ID.
+	 * @param array<string, string>|null $list_page_args Query args for list back link (page, ca_tab, …); defaults from submission type.
 	 */
-	private function render_detail_page($submission_id)
+	private function render_detail_page($submission_id, $list_page_args = null)
 	{
 		$submission = CA_Database::get_submission($submission_id);
 		$answers = CA_Database::get_answers($submission_id);
@@ -1794,10 +2302,13 @@ class CA_Admin
 		$scale_max = CA_Assessment_Types::get_scale_max($sub_type);
 		$flat_q = CA_Assessment_Registry::get_flat($sub_type);
 		$total_q = CA_Assessment_Registry::get_total_count($sub_type);
+		if (!is_array($list_page_args) || array() === $list_page_args) {
+			$list_page_args = $this->admin_screen_query_args('submissions', $sub_type);
+		}
 		?>
 		<div class="wrap ca-admin-wrap">
 			<h1 class="ca-admin-title">
-				<a href="<?php echo esc_url(admin_url('admin.php?page=custom-assessment-submissions')); ?>"
+				<a href="<?php echo esc_url(add_query_arg($list_page_args, admin_url('admin.php'))); ?>"
 					class="ca-admin-back">
 					<span class="dashicons dashicons-arrow-left-alt"></span>
 				</a>
@@ -2027,6 +2538,9 @@ class CA_Admin
 
 		?>
 		<div class="wrap ca-admin-wrap">
+			<?php if ($this->is_assessment_section_screen()) : ?>
+				<?php $this->render_assessment_section_nav_tabs(CA_Assessment_Types::MINDSET, 'questions'); ?>
+			<?php endif; ?>
 			<script type="text/javascript">
 				window.CA_ADMIN_QUESTIONS_ALL = <?php echo wp_json_encode($all_questions_js); ?>;
 				window.CA_ADMIN_AJAX_URL = <?php echo wp_json_encode(admin_url('admin-ajax.php')); ?>;
@@ -2038,7 +2552,7 @@ class CA_Admin
 			</script>
 			<h1 class="ca-admin-title">
 				<span class="ca-admin-title-icon dashicons dashicons-format-chat"></span>
-				<?php esc_html_e('Assessment Questions', 'rtr-custom-assessment'); ?>
+				<?php esc_html_e('Entrepreneurial Mindset — Questions', 'rtr-custom-assessment'); ?>
 			</h1>
 
 			<!-- Basic Statistics -->
@@ -2319,7 +2833,7 @@ class CA_Admin
 						<?php if ($total_pages > 1): ?>
 							<span class="pagination-links">
 								<?php
-								$base_url = admin_url('admin.php?page=custom-assessment-questions');
+								$base_url = $this->admin_screen_url('questions', CA_Assessment_Types::MINDSET);
 								$prev_disabled = $current_page <= 1 ? 'disabled' : '';
 								$next_disabled = $current_page >= $total_pages ? 'disabled' : '';
 
@@ -2394,7 +2908,7 @@ class CA_Admin
 			}
 
 			if (isset($message)) {
-				$redirect_url = add_query_arg('message', $message, admin_url('admin.php?page=custom-assessment-categories'));
+				$redirect_url = add_query_arg('message', $message, $this->admin_screen_url('categories', CA_Assessment_Types::MINDSET));
 				wp_safe_redirect(esc_url_raw($redirect_url));
 				exit;
 			}
@@ -2412,9 +2926,12 @@ class CA_Admin
 
 		?>
 		<div class="wrap ca-admin-wrap">
+			<?php if ($this->is_assessment_section_screen()) : ?>
+				<?php $this->render_assessment_section_nav_tabs(CA_Assessment_Types::MINDSET, 'categories'); ?>
+			<?php endif; ?>
 			<h1 class="ca-admin-title">
 				<span class="ca-admin-title-icon dashicons dashicons-category"></span>
-				<?php esc_html_e('Assessment Categories', 'rtr-custom-assessment'); ?>
+				<?php esc_html_e('Entrepreneurial Mindset — Categories', 'rtr-custom-assessment'); ?>
 			</h1>
 
 			<script type="text/javascript">
@@ -2533,7 +3050,7 @@ class CA_Admin
 						<?php if ($total_pages > 1): ?>
 							<span class="pagination-links">
 								<?php
-								$base_url = admin_url('admin.php?page=custom-assessment-categories');
+								$base_url = $this->admin_screen_url('categories', CA_Assessment_Types::MINDSET);
 								$prev_disabled = $current_page <= 1 ? 'disabled' : '';
 								$next_disabled = $current_page >= $total_pages ? 'disabled' : '';
 
@@ -2675,6 +3192,126 @@ class CA_Admin
 					</div>
 					<br class="clear">
 				</div>
+			<?php endif; ?>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Social Fluency assessment questions (read-only; shipped in plugin code).
+	 */
+	public function render_sf_questions_page()
+	{
+		if (!current_user_can('manage_options')) {
+			wp_die(esc_html__('You do not have permission to view this page.', 'rtr-custom-assessment'));
+		}
+
+		$questions = CA_Social_Fluency_Questions::get_flat();
+		$total = count($questions);
+		?>
+		<div class="wrap ca-admin-wrap">
+			<?php if ($this->is_assessment_section_screen()) : ?>
+				<?php $this->render_assessment_section_nav_tabs(CA_Assessment_Types::SOCIAL_FLUENCY, 'questions'); ?>
+			<?php endif; ?>
+			<h1 class="ca-admin-title">
+				<span class="ca-admin-title-icon dashicons dashicons-format-chat"></span>
+				<?php esc_html_e('Social Fluency — Questions', 'rtr-custom-assessment'); ?>
+			</h1>
+
+			<div class="notice notice-info inline">
+				<p>
+					<?php esc_html_e('These questions are defined in the plugin and are not editable from the admin screen. To change them, update the plugin file that registers the Social Fluency question set.', 'rtr-custom-assessment'); ?>
+				</p>
+			</div>
+
+			<p>
+				<?php
+				printf(
+					/* translators: %d: question count */
+					esc_html(_n('%d question', '%d questions', $total, 'rtr-custom-assessment')),
+					(int) $total
+				);
+				?>
+				<?php esc_html_e(' · 1–10 scale per question', 'rtr-custom-assessment'); ?>
+			</p>
+
+			<?php if (empty($questions)) : ?>
+				<p><?php esc_html_e('No questions found.', 'rtr-custom-assessment'); ?></p>
+			<?php else : ?>
+				<table class="wp-list-table widefat fixed striped ca-admin-table">
+					<thead>
+						<tr>
+							<th class="ca-col-id"><?php esc_html_e('#', 'rtr-custom-assessment'); ?></th>
+							<th><?php esc_html_e('Category', 'rtr-custom-assessment'); ?></th>
+							<th><?php esc_html_e('Priority', 'rtr-custom-assessment'); ?></th>
+							<th><?php esc_html_e('Question', 'rtr-custom-assessment'); ?></th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php foreach ($questions as $q) : ?>
+							<tr>
+								<td class="ca-col-id"><?php echo esc_html((int) $q['index'] + 1); ?></td>
+								<td><?php echo esc_html(isset($q['category']) ? $q['category'] : ''); ?></td>
+								<td><?php echo esc_html(isset($q['priority']) ? (string) $q['priority'] : ''); ?></td>
+								<td><?php echo esc_html(isset($q['text']) ? $q['text'] : ''); ?></td>
+							</tr>
+						<?php endforeach; ?>
+					</tbody>
+				</table>
+			<?php endif; ?>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Social Fluency categories (read-only).
+	 */
+	public function render_sf_categories_page()
+	{
+		if (!current_user_can('manage_options')) {
+			wp_die(esc_html__('You do not have permission to view this page.', 'rtr-custom-assessment'));
+		}
+
+		$blocks = CA_Social_Fluency_Questions::get_all();
+		?>
+		<div class="wrap ca-admin-wrap">
+			<?php if ($this->is_assessment_section_screen()) : ?>
+				<?php $this->render_assessment_section_nav_tabs(CA_Assessment_Types::SOCIAL_FLUENCY, 'categories'); ?>
+			<?php endif; ?>
+			<h1 class="ca-admin-title">
+				<span class="ca-admin-title-icon dashicons dashicons-category"></span>
+				<?php esc_html_e('Social Fluency — Categories', 'rtr-custom-assessment'); ?>
+			</h1>
+
+			<div class="notice notice-info inline">
+				<p>
+					<?php esc_html_e('Categories for the Social Fluency assessment are fixed in the plugin. Use Mindset — Categories to manage the entrepreneurial mindset assessment only.', 'rtr-custom-assessment'); ?>
+				</p>
+			</div>
+
+			<?php if (empty($blocks)) : ?>
+				<p><?php esc_html_e('No categories found.', 'rtr-custom-assessment'); ?></p>
+			<?php else : ?>
+				<table class="wp-list-table widefat fixed striped ca-admin-table">
+					<thead>
+						<tr>
+							<th><?php esc_html_e('Category', 'rtr-custom-assessment'); ?></th>
+							<th><?php esc_html_e('Questions', 'rtr-custom-assessment'); ?></th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php foreach ($blocks as $block) : ?>
+							<?php
+							$cat_name = isset($block['category']) ? (string) $block['category'] : '';
+							$qcount = isset($block['questions']) && is_array($block['questions']) ? count($block['questions']) : 0;
+							?>
+							<tr>
+								<td><strong><?php echo esc_html($cat_name); ?></strong></td>
+								<td><?php echo esc_html((string) $qcount); ?></td>
+							</tr>
+						<?php endforeach; ?>
+					</tbody>
+				</table>
 			<?php endif; ?>
 		</div>
 		<?php

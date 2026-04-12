@@ -216,12 +216,25 @@ class CA_Database
 	/**
 	 * Get all submissions for admin listing.
 	 *
+	 * @param string|null $assessment_type Optional. When set, only rows for that assessment (normalized).
 	 * @return array
 	 */
-	public static function get_all_submissions()
+	public static function get_all_submissions($assessment_type = null)
 	{
 		global $wpdb;
 		$table = esc_sql($wpdb->prefix . 'ca_submissions');
+
+		if (null !== $assessment_type && '' !== $assessment_type) {
+			$type = CA_Assessment_Types::normalize($assessment_type);
+			return $wpdb->get_results(
+				$wpdb->prepare(
+					// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $table is prefix-derived.
+					"SELECT * FROM {$table} WHERE assessment_type = %s ORDER BY created_at DESC",
+					$type
+				)
+			);
+		}
+
 		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Table name comes from $wpdb->prefix; values are not interpolated.
 		return $wpdb->get_results("SELECT * FROM {$table} ORDER BY created_at DESC");
 	}

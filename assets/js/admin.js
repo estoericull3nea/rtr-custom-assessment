@@ -404,14 +404,29 @@ jQuery(document).ready(function ($) {
 
     // Determine what type of page we're on
     function getCurrentPageType() {
-      if (window.location.href.includes("custom-assessment-questions")) {
+      var href = window.location.href;
+      if (
+        href.includes("custom-assessment-questions") ||
+        (href.includes("custom-assessment-mindset") &&
+          href.includes("ca_tab=questions"))
+      ) {
         return "questions";
-      } else if (
-        window.location.href.includes("custom-assessment-categories")
+      }
+      if (
+        href.includes("custom-assessment-categories") ||
+        (href.includes("custom-assessment-mindset") &&
+          href.includes("ca_tab=categories"))
       ) {
         return "categories";
-      } else if (
-        window.location.href.includes("custom-assessment-submissions")
+      }
+      if (
+        href.includes("custom-assessment-sf-submissions") ||
+        href.includes("custom-assessment-submissions-all") ||
+        href.includes("custom-assessment-submissions") ||
+        (href.includes("custom-assessment-mindset") &&
+          href.includes("ca_tab=submissions")) ||
+        (href.includes("custom-assessment-social") &&
+          href.includes("ca_tab=submissions"))
       ) {
         return "submissions";
       }
@@ -458,14 +473,19 @@ jQuery(document).ready(function ($) {
             count: $row.find("td:nth-child(3)").text().trim(),
           };
         } else if (currentPageType === "submissions") {
+          var scoreParts = [];
+          $row.find(".ca-col-score").each(function () {
+            scoreParts.push($(this).text().trim());
+          });
           rowData = {
             row: $row.clone(),
-            id: $row.find(".ca-col-id").text().trim(),
-            name: $row.find("td:nth-child(2)").text().trim(),
-            email: $row.find("td:nth-child(3)").text().trim(),
-            phone: $row.find("td:nth-child(4)").text().trim(),
-            jobTitle: $row.find("td:nth-child(5)").text().trim(),
-            score: $row.find(".ca-col-score").first().text().trim(),
+            id: $row.find(".ca-col-id").first().text().trim(),
+            name: $row.find(".ca-sub-name").text().trim(),
+            email: $row.find(".ca-sub-email").text().trim(),
+            phone: $row.find(".ca-sub-phone").text().trim(),
+            jobTitle: $row.find(".ca-sub-job").text().trim(),
+            assessment: $row.find(".ca-sub-assessment").text().trim(),
+            score: scoreParts.join(" "),
             status: $row.find(".ca-col-status").text().trim(),
           };
         }
@@ -565,14 +585,19 @@ jQuery(document).ready(function ($) {
                     count: $row.find("td:nth-child(3)").text().trim(),
                   };
                 } else if (currentPageType === "submissions") {
+                  var scorePartsAjax = [];
+                  $row.find(".ca-col-score").each(function () {
+                    scorePartsAjax.push($(this).text().trim());
+                  });
                   rowData = {
                     row: $row.clone(),
-                    id: $row.find(".ca-col-id").text().trim(),
-                    name: $row.find("td:nth-child(2)").text().trim(),
-                    email: $row.find("td:nth-child(3)").text().trim(),
-                    phone: $row.find("td:nth-child(4)").text().trim(),
-                    jobTitle: $row.find("td:nth-child(5)").text().trim(),
-                    score: $row.find(".ca-col-score").first().text().trim(),
+                    id: $row.find(".ca-col-id").first().text().trim(),
+                    name: $row.find(".ca-sub-name").text().trim(),
+                    email: $row.find(".ca-sub-email").text().trim(),
+                    phone: $row.find(".ca-sub-phone").text().trim(),
+                    jobTitle: $row.find(".ca-sub-job").text().trim(),
+                    assessment: $row.find(".ca-sub-assessment").text().trim(),
+                    score: scorePartsAjax.join(" "),
                     status: $row.find(".ca-col-status").text().trim(),
                   };
                 }
@@ -750,13 +775,14 @@ jQuery(document).ready(function ($) {
             matches = true;
           }
         } else if (currentPageType === "submissions") {
-          // Search in ID, name, email, phone, job title, score, and status
+          // Search in ID, name, email, phone, job title, assessment (all-submissions), score, status
           if (
             (item.id || "").toString().toLowerCase().includes(searchTerm) ||
             (item.name || "").toString().toLowerCase().includes(searchTerm) ||
             (item.email || "").toString().toLowerCase().includes(searchTerm) ||
             (item.phone || "").toString().toLowerCase().includes(searchTerm) ||
             (item.jobTitle || "").toString().toLowerCase().includes(searchTerm) ||
+            (item.assessment || "").toString().toLowerCase().includes(searchTerm) ||
             (item.score || "").toString().toLowerCase().includes(searchTerm) ||
             (item.status || "").toString().toLowerCase().includes(searchTerm)
           ) {
