@@ -171,8 +171,15 @@ class CA_Ajax
 		$payload['scale_max'] = $scale_max;
 
 		if (CA_Assessment_Types::SOCIAL_FLUENCY === $assessment_type) {
-			$payload['label_style'] = 'endpoints';
-			$payload['endpoints'] = isset($question['endpoints']) && is_array($question['endpoints']) ? $question['endpoints'] : array();
+			$eps = isset($question['endpoints']) && is_array($question['endpoints']) ? $question['endpoints'] : array();
+			$has_eps = !empty($eps['left']) || !empty($eps['right']) || !empty($eps['mid']);
+			if ($has_eps) {
+				$payload['label_style'] = 'endpoints';
+				$payload['endpoints'] = $eps;
+			} else {
+				$payload['label_style'] = 'per_number';
+				$payload['endpoints'] = array();
+			}
 		} elseif (CA_Assessment_Types::INNER_DIMENSIONS === $assessment_type) {
 			$payload['label_style'] = 'yes_no';
 			$payload['scale_max']   = 2;

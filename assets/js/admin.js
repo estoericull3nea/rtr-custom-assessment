@@ -1073,6 +1073,8 @@ jQuery(document).ready(function ($) {
       new_category: $categorySelect.val() || "",
       new_question_text: $questionInput.val() || "",
       new_priority: $priorityInput.val() || 0,
+      assessment_type:
+        window.CA_ADMIN_QUESTIONS_ASSESSMENT_TYPE || "mindset",
     };
 
     var $saveBtn = $row.find(".ca-question-save-btn").first();

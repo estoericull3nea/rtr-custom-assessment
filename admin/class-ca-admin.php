@@ -522,6 +522,63 @@ class CA_Admin
 	}
 
 	/**
+	 * Social Fluency questions screen (section + tab).
+	 */
+	private function is_social_fluency_questions_admin_page()
+	{
+		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- Read-only routing.
+		$page = isset($_GET['page']) ? sanitize_key(wp_unslash($_GET['page'])) : '';
+		$tab = isset($_GET['ca_tab']) ? sanitize_key(wp_unslash($_GET['ca_tab'])) : '';
+		// phpcs:enable WordPress.Security.NonceVerification.Recommended
+		return ('custom-assessment-social' === $page && 'questions' === $tab);
+	}
+
+	/**
+	 * Option keys for admin-managed questions (custom rows, overrides, empty categories).
+	 *
+	 * @param string $assessment_type Normalized type (mindset or social_fluency).
+	 * @return array{custom_questions:string,question_overrides:string,custom_categories:string}
+	 */
+	private function questions_storage_keys($assessment_type)
+	{
+		$t = CA_Assessment_Types::normalize($assessment_type);
+		if (CA_Assessment_Types::SOCIAL_FLUENCY === $t) {
+			return array(
+				'custom_questions' => 'ca_sf_custom_questions',
+				'question_overrides' => 'ca_sf_question_overrides',
+				'custom_categories' => 'ca_sf_custom_categories',
+			);
+		}
+		return array(
+			'custom_questions' => 'ca_custom_questions',
+			'question_overrides' => 'ca_question_overrides',
+			'custom_categories' => 'ca_custom_categories',
+		);
+	}
+
+	/**
+	 * @param string $assessment_type Normalized assessment type.
+	 * @return array
+	 */
+	private function get_admin_questions_flat($assessment_type)
+	{
+		return CA_Assessment_Types::SOCIAL_FLUENCY === CA_Assessment_Types::normalize($assessment_type)
+			? CA_Social_Fluency_Questions::get_flat()
+			: CA_Questions::get_flat();
+	}
+
+	/**
+	 * @param string $assessment_type Normalized assessment type.
+	 * @return array
+	 */
+	private function get_admin_questions_categories($assessment_type)
+	{
+		return CA_Assessment_Types::SOCIAL_FLUENCY === CA_Assessment_Types::normalize($assessment_type)
+			? CA_Social_Fluency_Questions::get_categories()
+			: CA_Questions::get_categories();
+	}
+
+	/**
 	 * Allowed admin pages for submission delete / export / email actions.
 	 *
 	 * @return string[]
@@ -827,7 +884,12 @@ class CA_Admin
 	 */
 	public function handle_questions_action()
 	{
-		if (!$this->is_mindset_questions_admin_page()) {
+		$questions_assessment_type = null;
+		if ($this->is_mindset_questions_admin_page()) {
+			$questions_assessment_type = CA_Assessment_Types::MINDSET;
+		} elseif ($this->is_social_fluency_questions_admin_page()) {
+			$questions_assessment_type = CA_Assessment_Types::SOCIAL_FLUENCY;
+		} else {
 			return;
 		}
 
@@ -842,10 +904,10 @@ class CA_Admin
 		) {
 			$question_index = absint($_POST['question_index']);
 			if ($question_index >= 0) {
-				$this->delete_question($question_index);
+				$this->delete_question($question_index, $questions_assessment_type);
 				$message = 'question_deleted';
 
-				$redirect_url = add_query_arg('message', $message, $this->admin_screen_url('questions', CA_Assessment_Types::MINDSET));
+				$redirect_url = add_query_arg('message', $message, $this->admin_screen_url('questions', $questions_assessment_type));
 				wp_safe_redirect(esc_url_raw($redirect_url));
 				exit;
 			}
@@ -863,7 +925,7 @@ class CA_Admin
 
 			if ($question_index >= 0 && '' !== $new_category && '' !== $new_question_text && $new_priority > 0) {
 				// Enforce unique priority within the same category (except the current question).
-				$flat_questions = CA_Questions::get_flat();
+				$flat_questions = $this->get_admin_questions_flat($questions_assessment_type);
 				$priority_exists = false;
 				foreach ($flat_questions as $q) {
 					if (!isset($q['index'], $q['category'], $q['priority'])) {
@@ -881,15 +943,15 @@ class CA_Admin
 
 				if ($priority_exists) {
 					$message = 'priority_exists';
-					$redirect_url = add_query_arg('message', $message, $this->admin_screen_url('questions', CA_Assessment_Types::MINDSET));
+					$redirect_url = add_query_arg('message', $message, $this->admin_screen_url('questions', $questions_assessment_type));
 					wp_safe_redirect(esc_url_raw($redirect_url));
 					exit;
 				}
 
-				$edited = $this->edit_question($question_index, $new_category, $new_question_text, $new_priority);
+				$edited = $this->edit_question($question_index, $new_category, $new_question_text, $new_priority, $questions_assessment_type);
 				$message = $edited ? 'question_edited' : 'question_edit_failed';
 
-				$redirect_url = add_query_arg('message', $message, $this->admin_screen_url('questions', CA_Assessment_Types::MINDSET));
+				$redirect_url = add_query_arg('message', $message, $this->admin_screen_url('questions', $questions_assessment_type));
 				wp_safe_redirect(esc_url_raw($redirect_url));
 				exit;
 			}
@@ -917,12 +979,12 @@ class CA_Admin
 
 			if (empty($indexes)) {
 				$message = 'bulk_edit_failed';
-				$redirect_url = add_query_arg('message', $message, $this->admin_screen_url('questions', CA_Assessment_Types::MINDSET));
+				$redirect_url = add_query_arg('message', $message, $this->admin_screen_url('questions', $questions_assessment_type));
 				wp_safe_redirect(esc_url_raw($redirect_url));
 				exit;
 			}
 
-			$flat_questions = CA_Questions::get_flat();
+			$flat_questions = $this->get_admin_questions_flat($questions_assessment_type);
 			$selected_set = array_flip($indexes);
 
 			// Build the target category/text/priority for each selected question.
@@ -948,7 +1010,7 @@ class CA_Admin
 
 			if (empty($targets)) {
 				$message = 'bulk_edit_failed';
-				$redirect_url = add_query_arg('message', $message, $this->admin_screen_url('questions', CA_Assessment_Types::MINDSET));
+				$redirect_url = add_query_arg('message', $message, $this->admin_screen_url('questions', $questions_assessment_type));
 				wp_safe_redirect(esc_url_raw($redirect_url));
 				exit;
 			}
@@ -986,21 +1048,21 @@ class CA_Admin
 
 			if ($priority_collision) {
 				$message = 'priority_exists';
-				$redirect_url = add_query_arg('message', $message, $this->admin_screen_url('questions', CA_Assessment_Types::MINDSET));
+				$redirect_url = add_query_arg('message', $message, $this->admin_screen_url('questions', $questions_assessment_type));
 				wp_safe_redirect(esc_url_raw($redirect_url));
 				exit;
 			}
 
 			$updated_any = false;
 			foreach ($targets as $idx => $t) {
-				$ok = $this->edit_question($idx, $t['category'], $t['text'], $t['priority']);
+				$ok = $this->edit_question($idx, $t['category'], $t['text'], $t['priority'], $questions_assessment_type);
 				if ($ok) {
 					$updated_any = true;
 				}
 			}
 
 			$message = $updated_any ? 'bulk_edit_success' : 'bulk_edit_failed';
-			$redirect_url = add_query_arg('message', $message, $this->admin_screen_url('questions', CA_Assessment_Types::MINDSET));
+			$redirect_url = add_query_arg('message', $message, $this->admin_screen_url('questions', $questions_assessment_type));
 			wp_safe_redirect(esc_url_raw($redirect_url));
 			exit;
 		}
@@ -1016,7 +1078,7 @@ class CA_Admin
 
 			if (!empty($question_text) && !empty($question_category) && $question_priority > 0) {
 				// Enforce unique priority within the same category.
-				$flat_questions = CA_Questions::get_flat();
+				$flat_questions = $this->get_admin_questions_flat($questions_assessment_type);
 				$priority_exists = false;
 				foreach ($flat_questions as $q) {
 					if (
@@ -1031,15 +1093,15 @@ class CA_Admin
 
 				if ($priority_exists) {
 					$message = 'priority_exists';
-					$redirect_url = add_query_arg('message', $message, $this->admin_screen_url('questions', CA_Assessment_Types::MINDSET));
+					$redirect_url = add_query_arg('message', $message, $this->admin_screen_url('questions', $questions_assessment_type));
 					wp_safe_redirect(esc_url_raw($redirect_url));
 					exit;
 				}
 
-				$this->add_question($question_text, $question_category, $question_priority);
+				$this->add_question($question_text, $question_category, $question_priority, $questions_assessment_type);
 				$message = 'question_added';
 
-				$redirect_url = add_query_arg('message', $message, $this->admin_screen_url('questions', CA_Assessment_Types::MINDSET));
+				$redirect_url = add_query_arg('message', $message, $this->admin_screen_url('questions', $questions_assessment_type));
 				wp_safe_redirect(esc_url_raw($redirect_url));
 				exit;
 			}
@@ -1064,13 +1126,20 @@ class CA_Admin
 		$new_category = isset($_POST['new_category']) ? sanitize_text_field(wp_unslash($_POST['new_category'])) : '';
 		$new_question_text = isset($_POST['new_question_text']) ? sanitize_text_field(wp_unslash($_POST['new_question_text'])) : '';
 		$new_priority = isset($_POST['new_priority']) ? absint($_POST['new_priority']) : 0;
+		// phpcs:disable WordPress.Security.NonceVerification.Missing -- Nonce verified above.
+		$raw_atype = isset($_POST['assessment_type']) ? sanitize_key(wp_unslash($_POST['assessment_type'])) : CA_Assessment_Types::MINDSET;
+		// phpcs:enable WordPress.Security.NonceVerification.Missing
+		$assessment_type = CA_Assessment_Types::normalize($raw_atype);
+		if (CA_Assessment_Types::SOCIAL_FLUENCY !== $assessment_type) {
+			$assessment_type = CA_Assessment_Types::MINDSET;
+		}
 
 		if ($question_index < 0 || '' === $new_category || '' === $new_question_text || $new_priority <= 0) {
 			wp_send_json_error(array('message' => 'Invalid input.'), 400);
 		}
 
 		// Enforce unique priority within the same category (except the current question).
-		$flat_questions = CA_Questions::get_flat();
+		$flat_questions = $this->get_admin_questions_flat($assessment_type);
 		$priority_exists = false;
 		foreach ($flat_questions as $q) {
 			if (!isset($q['index'], $q['category'], $q['priority'])) {
@@ -1092,12 +1161,12 @@ class CA_Admin
 			);
 		}
 
-		$edited = $this->edit_question($question_index, $new_category, $new_question_text, $new_priority);
+		$edited = $this->edit_question($question_index, $new_category, $new_question_text, $new_priority, $assessment_type);
 		if (!$edited) {
 			wp_send_json_error(array('message' => 'Unable to update this question.'), 404);
 		}
 
-		$updated = CA_Questions::get_question($question_index);
+		$updated = CA_Assessment_Registry::get_question($assessment_type, $question_index);
 		wp_send_json_success(array(
 			'question_index' => $question_index,
 			'category' => isset($updated['category']) ? (string) $updated['category'] : $new_category,
@@ -2539,17 +2608,28 @@ class CA_Admin
 	}
 
 	/**
-	 * Render questions page - displays all assessment questions.
+	 * Entrepreneurial Mindset — Questions admin tab.
 	 */
 	public function render_questions_page()
+	{
+		$this->render_assessment_questions_admin_page(CA_Assessment_Types::MINDSET);
+	}
+
+	/**
+	 * Shared questions list UI (add / edit / delete / bulk / search) for Mindset or Social Fluency.
+	 *
+	 * @param string $assessment_type Normalized assessment type.
+	 */
+	private function render_assessment_questions_admin_page($assessment_type)
 	{
 		if (!current_user_can('manage_options')) {
 			wp_die(esc_html__('You do not have permission to view this page.', 'rtr-custom-assessment'));
 		}
 
-		$questions = CA_Questions::get_flat();
-		$total_questions = CA_Questions::get_total_count();
-		$categories = CA_Questions::get_categories();
+		$assessment_type = CA_Assessment_Types::normalize($assessment_type);
+		$questions = $this->get_admin_questions_flat($assessment_type);
+		$total_questions = count($questions);
+		$categories = $this->get_admin_questions_categories($assessment_type);
 
 		// Priority range for edit dropdown: 1..max (at least 5 for consistency with Add New Question).
 		$priority_max = 0;
@@ -2558,7 +2638,8 @@ class CA_Admin
 				$priority_max = max($priority_max, (int) $q['priority']);
 			}
 		}
-		$priority_end = max(5, (int) $priority_max);
+		$priority_floor = CA_Assessment_Types::SOCIAL_FLUENCY === $assessment_type ? 10 : 5;
+		$priority_end = max($priority_floor, (int) $priority_max);
 
 		// Provide the full questions list to the admin search script.
 		// This guarantees global searching across pagination.
@@ -2633,7 +2714,7 @@ class CA_Admin
 		?>
 		<div class="wrap ca-admin-wrap">
 			<?php if ($this->is_assessment_section_screen()) : ?>
-				<?php $this->render_assessment_section_nav_tabs(CA_Assessment_Types::MINDSET, 'questions'); ?>
+				<?php $this->render_assessment_section_nav_tabs($assessment_type, 'questions'); ?>
 			<?php endif; ?>
 			<script type="text/javascript">
 				window.CA_ADMIN_QUESTIONS_ALL = <?php echo wp_json_encode($all_questions_js); ?>;
@@ -2643,10 +2724,17 @@ class CA_Admin
 				window.CA_ADMIN_QUESTIONS_EDIT_NONCE = <?php echo wp_json_encode($edit_question_nonce); ?>;
 				window.CA_ADMIN_QUESTIONS_CATEGORIES = <?php echo wp_json_encode($categories); ?>;
 				window.CA_ADMIN_QUESTIONS_PRIORITY_MAX = <?php echo (int) $priority_end; ?>;
+				window.CA_ADMIN_QUESTIONS_ASSESSMENT_TYPE = <?php echo wp_json_encode($assessment_type); ?>;
 			</script>
 			<h1 class="ca-admin-title">
 				<span class="ca-admin-title-icon dashicons dashicons-format-chat"></span>
-				<?php esc_html_e('Entrepreneurial Mindset — Questions', 'rtr-custom-assessment'); ?>
+				<?php
+				if (CA_Assessment_Types::SOCIAL_FLUENCY === $assessment_type) {
+					esc_html_e('Social Fluency — Questions', 'rtr-custom-assessment');
+				} else {
+					esc_html_e('Entrepreneurial Mindset — Questions', 'rtr-custom-assessment');
+				}
+				?>
 			</h1>
 
 			<!-- Basic Statistics -->
@@ -2927,7 +3015,7 @@ class CA_Admin
 						<?php if ($total_pages > 1): ?>
 							<span class="pagination-links">
 								<?php
-								$base_url = $this->admin_screen_url('questions', CA_Assessment_Types::MINDSET);
+								$base_url = $this->admin_screen_url('questions', $assessment_type);
 								$prev_disabled = $current_page <= 1 ? 'disabled' : '';
 								$next_disabled = $current_page >= $total_pages ? 'disabled' : '';
 
@@ -3292,69 +3380,11 @@ class CA_Admin
 	}
 
 	/**
-	 * Social Fluency assessment questions (read-only; shipped in plugin code).
+	 * Social Fluency — Questions admin tab (same CRUD as Mindset; custom rows stored in options).
 	 */
 	public function render_sf_questions_page()
 	{
-		if (!current_user_can('manage_options')) {
-			wp_die(esc_html__('You do not have permission to view this page.', 'rtr-custom-assessment'));
-		}
-
-		$questions = CA_Social_Fluency_Questions::get_flat();
-		$total = count($questions);
-		?>
-		<div class="wrap ca-admin-wrap">
-			<?php if ($this->is_assessment_section_screen()) : ?>
-				<?php $this->render_assessment_section_nav_tabs(CA_Assessment_Types::SOCIAL_FLUENCY, 'questions'); ?>
-			<?php endif; ?>
-			<h1 class="ca-admin-title">
-				<span class="ca-admin-title-icon dashicons dashicons-format-chat"></span>
-				<?php esc_html_e('Social Fluency — Questions', 'rtr-custom-assessment'); ?>
-			</h1>
-
-			<div class="notice notice-info inline">
-				<p>
-					<?php esc_html_e('These questions are defined in the plugin and are not editable from the admin screen. To change them, update the plugin file that registers the Social Fluency question set.', 'rtr-custom-assessment'); ?>
-				</p>
-			</div>
-
-			<p>
-				<?php
-				printf(
-					/* translators: %d: question count */
-					esc_html(_n('%d question', '%d questions', $total, 'rtr-custom-assessment')),
-					(int) $total
-				);
-				?>
-				<?php esc_html_e(' · 1–10 scale per question', 'rtr-custom-assessment'); ?>
-			</p>
-
-			<?php if (empty($questions)) : ?>
-				<p><?php esc_html_e('No questions found.', 'rtr-custom-assessment'); ?></p>
-			<?php else : ?>
-				<table class="wp-list-table widefat fixed striped ca-admin-table">
-					<thead>
-						<tr>
-							<th class="ca-col-id"><?php esc_html_e('#', 'rtr-custom-assessment'); ?></th>
-							<th><?php esc_html_e('Category', 'rtr-custom-assessment'); ?></th>
-							<th><?php esc_html_e('Priority', 'rtr-custom-assessment'); ?></th>
-							<th><?php esc_html_e('Question', 'rtr-custom-assessment'); ?></th>
-						</tr>
-					</thead>
-					<tbody>
-						<?php foreach ($questions as $q) : ?>
-							<tr>
-								<td class="ca-col-id"><?php echo esc_html((int) $q['index'] + 1); ?></td>
-								<td><?php echo esc_html(isset($q['category']) ? $q['category'] : ''); ?></td>
-								<td><?php echo esc_html(isset($q['priority']) ? (string) $q['priority'] : ''); ?></td>
-								<td><?php echo esc_html(isset($q['text']) ? $q['text'] : ''); ?></td>
-							</tr>
-						<?php endforeach; ?>
-					</tbody>
-				</table>
-			<?php endif; ?>
-		</div>
-		<?php
+		$this->render_assessment_questions_admin_page(CA_Assessment_Types::SOCIAL_FLUENCY);
 	}
 
 	/**
@@ -3590,30 +3620,34 @@ class CA_Admin
 	 * 
 	 * @param int $question_index
 	 */
-	private function delete_question($question_index)
+	private function delete_question($question_index, $assessment_type = null)
 	{
-		// Get all questions to find which category and priority this question belongs to
-		$all_questions = CA_Questions::get_all();
-		$flat_questions = CA_Questions::get_flat();
+		if (null === $assessment_type) {
+			$assessment_type = CA_Assessment_Types::MINDSET;
+		}
+		$assessment_type = CA_Assessment_Types::normalize($assessment_type);
+		$keys = $this->questions_storage_keys($assessment_type);
+		$flat_questions = $this->get_admin_questions_flat($assessment_type);
 
-		// Find the question details from the flat array
 		if (!isset($flat_questions[$question_index])) {
-			return; // Question not found
+			return;
 		}
 
 		$question_to_delete = $flat_questions[$question_index];
 		$category_to_delete = $question_to_delete['category'];
 		$priority_to_delete = $question_to_delete['priority'];
 
-		// Get existing custom questions
-		$custom_questions = get_option('ca_custom_questions', array());
+		$custom_questions = get_option($keys['custom_questions'], array());
+		if (!is_array($custom_questions)) {
+			$custom_questions = array();
+		}
 
-		// Find and remove the matching question from custom questions
 		$found = false;
 		foreach ($custom_questions as $key => $custom_question) {
 			if (
+				isset($custom_question['category'], $custom_question['priority'], $custom_question['text']) &&
 				$custom_question['category'] === $category_to_delete &&
-				$custom_question['priority'] === $priority_to_delete &&
+				(int) $custom_question['priority'] === (int) $priority_to_delete &&
 				$custom_question['text'] === $question_to_delete['text']
 			) {
 				unset($custom_questions[$key]);
@@ -3622,10 +3656,8 @@ class CA_Admin
 			}
 		}
 
-		// Only update if we found and removed a custom question
 		if ($found) {
-			$custom_questions = array_values($custom_questions); // Re-index array
-			update_option('ca_custom_questions', $custom_questions);
+			update_option($keys['custom_questions'], array_values($custom_questions));
 		}
 	}
 
@@ -3634,9 +3666,15 @@ class CA_Admin
 	 *
 	 * @return bool True if edited, false if question is not found in custom questions.
 	 */
-	private function edit_question($question_index, $new_category, $new_question_text, $new_priority)
+	private function edit_question($question_index, $new_category, $new_question_text, $new_priority, $assessment_type = null)
 	{
-		$flat_questions = CA_Questions::get_flat();
+		if (null === $assessment_type) {
+			$assessment_type = CA_Assessment_Types::MINDSET;
+		}
+		$assessment_type = CA_Assessment_Types::normalize($assessment_type);
+		$keys = $this->questions_storage_keys($assessment_type);
+
+		$flat_questions = $this->get_admin_questions_flat($assessment_type);
 		if (!isset($flat_questions[$question_index])) {
 			return false;
 		}
@@ -3646,7 +3684,10 @@ class CA_Admin
 		$original_priority = isset($question_to_edit['priority']) ? (int) $question_to_edit['priority'] : 0;
 		$original_text = isset($question_to_edit['text']) ? (string) $question_to_edit['text'] : '';
 
-		$custom_questions = get_option('ca_custom_questions', array());
+		$custom_questions = get_option($keys['custom_questions'], array());
+		if (!is_array($custom_questions)) {
+			$custom_questions = array();
+		}
 
 		$found = false;
 		foreach ($custom_questions as $key => $custom_question) {
@@ -3668,13 +3709,11 @@ class CA_Admin
 		}
 
 		if ($found) {
-			update_option('ca_custom_questions', array_values($custom_questions));
+			update_option($keys['custom_questions'], array_values($custom_questions));
 			return true;
 		}
 
-		// If not found in custom questions, allow editing base (hardcoded) questions
-		// by storing an override entry.
-		$overrides = get_option('ca_question_overrides', array());
+		$overrides = get_option($keys['question_overrides'], array());
 		if (!is_array($overrides)) {
 			$overrides = array();
 		}
@@ -3685,7 +3724,7 @@ class CA_Admin
 			'priority' => (int) $new_priority,
 		);
 
-		update_option('ca_question_overrides', $overrides);
+		update_option($keys['question_overrides'], $overrides);
 
 		return true;
 	}
@@ -3697,20 +3736,24 @@ class CA_Admin
 	 * @param string $question_category
 	 * @param int $question_priority
 	 */
-	private function add_question($question_text, $question_category, $question_priority)
+	private function add_question($question_text, $question_category, $question_priority, $assessment_type = null)
 	{
-		// Get existing questions configuration
-		$questions = get_option('ca_custom_questions', array());
+		if (null === $assessment_type) {
+			$assessment_type = CA_Assessment_Types::MINDSET;
+		}
+		$keys = $this->questions_storage_keys($assessment_type);
+		$questions = get_option($keys['custom_questions'], array());
+		if (!is_array($questions)) {
+			$questions = array();
+		}
 
-		// Add the new question
-		$new_question = array(
+		$questions[] = array(
 			'text' => $question_text,
 			'category' => $question_category,
-			'priority' => $question_priority
+			'priority' => $question_priority,
 		);
 
-		$questions[] = $new_question;
-		update_option('ca_custom_questions', $questions);
+		update_option($keys['custom_questions'], $questions);
 	}
 }
 
