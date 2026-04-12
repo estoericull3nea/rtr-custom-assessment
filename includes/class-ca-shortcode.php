@@ -134,6 +134,14 @@ class CA_Shortcode {
 						),
 					),
 				),
+				'inner_results' => array(
+					'title'        => __( 'Natural Attributes Cataloging', 'rtr-custom-assessment' ),
+					'tagline'      => __( 'Remember Who You Were Before the World Told You Who to Be.', 'rtr-custom-assessment' ),
+					'congrats'     => __( 'Congratulations on Completing Your Discovery Journey!', 'rtr-custom-assessment' ),
+					'email_lead'   => __( 'Your full report has been emailed to', 'rtr-custom-assessment' ),
+					'change_email' => __( 'Change email address', 'rtr-custom-assessment' ),
+					'intro'        => __( 'You\'ve taken an important step towards unlocking your potential. Dive into your personalized results below to uncover insights and next steps on your path to enhancing leadership skills and embracing new opportunities.', 'rtr-custom-assessment' ),
+				),
 				'labels'      => array(
 					'next'          => __( 'Next', 'rtr-custom-assessment' ),
 					'back'          => __( 'Back', 'rtr-custom-assessment' ),

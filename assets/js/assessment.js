@@ -874,7 +874,54 @@
         "</sup></span>" +
         '<span class="ca-results-score-label">Average Score</span>';
 
+    var IR = CA_Config.inner_results || {};
+    var nacTop = "";
+    if (isYesNo) {
+      var emailEsc = escHtml(user.email);
+      nacTop =
+        '<div class="ca-results-nac-completion">' +
+        '<h1 class="ca-results-nac-title">' +
+        escHtml(IR.title || "Natural Attributes Cataloging") +
+        "</h1>" +
+        '<p class="ca-results-nac-quote">&ldquo;' +
+        escHtml(
+          IR.tagline ||
+            "Remember Who You Were Before the World Told You Who to Be.",
+        ) +
+        '&rdquo;</p>' +
+        '<h2 class="ca-results-nac-subtitle">' +
+        escHtml(
+          IR.congrats ||
+            "Congratulations on Completing Your Discovery Journey!",
+        ) +
+        "</h2>" +
+        '<p class="ca-results-nac-email">' +
+        escHtml(IR.email_lead || "Your full report has been emailed to") +
+        " <strong>" +
+        emailEsc +
+        '</strong>. <button type="button" class="ca-results-change-email-btn" id="ca-nac-change-email">' +
+        escHtml(IR.change_email || "Change email address") +
+        "</button></p>" +
+        '<p class="ca-results-nac-intro">' +
+        escHtml(
+          IR.intro ||
+            "You've taken an important step towards unlocking your potential. Dive into your personalized results below to uncover insights and next steps on your path to enhancing leadership skills and embracing new opportunities.",
+        ) +
+        "</p>" +
+        "</div>";
+    }
+
+    var ctaBlock = isYesNo
+      ? '<div class="ca-results-cta">' +
+        '<button type="button" class="ca-btn ca-btn--ghost" id="ca-close-results">Close</button>' +
+        "</div>"
+      : '<div class="ca-results-cta">' +
+        "<p>Your results have been saved. A copy may be shared with you by email.</p>" +
+        '<button type="button" class="ca-btn ca-btn--ghost" id="ca-close-results">Close</button>' +
+        "</div>";
+
     var html =
+      nacTop +
       '<div class="ca-results-hero">' +
       '<p class="ca-results-hero-name">' +
       escHtml(user.first_name + " " + user.last_name) +
@@ -916,10 +963,7 @@
       "</div>" +
       '<p class="ca-results-section-title">Category Breakdown</p>' +
       catHtml +
-      '<div class="ca-results-cta">' +
-      "<p>Your results have been saved. A copy may be shared with you by email.</p>" +
-      '<button type="button" class="ca-btn ca-btn--ghost" id="ca-close-results">Close</button>' +
-      "</div>" +
+      ctaBlock +
       "</div>";
 
     $resultsContent.html(html);
@@ -933,7 +977,25 @@
       });
     }, 100);
 
-    $("#ca-close-results").on("click", closeModal);
+    $resultsContent
+      .off("click.caCloseResults")
+      .on("click.caCloseResults", "#ca-close-results", closeModal);
+
+    $resultsContent
+      .off("click.caNacChangeEmail")
+      .on("click.caNacChangeEmail", "#ca-nac-change-email", function (e) {
+        e.preventDefault();
+        showScreen("info");
+        hideProgress();
+        setTimeout(function () {
+          $("#ca-email").trigger("focus");
+          try {
+            document.getElementById("ca-email").select();
+          } catch (err) {
+            /* ignore */
+          }
+        }, 100);
+      });
   }
 
   function showError($el, msg) {

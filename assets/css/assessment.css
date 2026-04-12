@@ -795,6 +795,87 @@ body,
   padding: 0;
 }
 
+/* Natural Attributes Cataloging — completion header */
+.ca-results-nac-completion {
+  text-align: center;
+  padding: 28px 20px 32px;
+  background: var(--ca-surface);
+  border-bottom: 1px solid var(--ca-border);
+}
+
+.ca-results-nac-title {
+  font-family: var(--ca-font);
+  font-size: 1.6rem;
+  font-weight: 700;
+  margin: 0 0 14px;
+  color: var(--ca-text);
+  line-height: 1.25;
+}
+
+.ca-results-nac-quote {
+  font-family: var(--ca-font);
+  font-size: 1.05rem;
+  font-style: italic;
+  color: var(--ca-text-muted);
+  margin: 0 auto 22px;
+  line-height: 1.55;
+  max-width: 34rem;
+}
+
+.ca-results-nac-subtitle {
+  font-family: var(--ca-font);
+  font-size: 1.28rem;
+  font-weight: 700;
+  margin: 0 0 14px;
+  color: var(--ca-primary);
+  line-height: 1.3;
+}
+
+.ca-results-nac-email {
+  font-family: var(--ca-font-ui);
+  font-size: 0.95rem;
+  margin: 0 auto 16px;
+  line-height: 1.65;
+  color: var(--ca-text);
+  max-width: 36rem;
+}
+
+.ca-results-nac-email strong {
+  font-weight: 700;
+  color: var(--ca-text);
+  word-break: break-word;
+}
+
+.ca-results-change-email-btn {
+  display: inline;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: var(--ca-primary);
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+  vertical-align: baseline;
+}
+
+.ca-results-change-email-btn:hover,
+.ca-results-change-email-btn:focus-visible {
+  color: #8a2120;
+  text-decoration: underline;
+}
+
+.ca-results-nac-intro {
+  font-family: var(--ca-font);
+  font-size: 0.95rem;
+  line-height: 1.65;
+  color: var(--ca-text);
+  margin: 0 auto;
+  max-width: 40rem;
+}
+
 .ca-results-hero {
   background: linear-gradient(135deg, var(--ca-primary) 0%, #8a2120 100%);
   color: #fff;
