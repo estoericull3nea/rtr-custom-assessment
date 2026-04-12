@@ -1661,7 +1661,7 @@ class CA_Admin
 						if (CA_Assessment_Types::SOCIAL_FLUENCY === $assessment_type) {
 							esc_html_e('No Social Fluency submissions yet. Use the shortcode [social_fluency_assessment] on a page.', 'rtr-custom-assessment');
 						} elseif (CA_Assessment_Types::INNER_DIMENSIONS === $assessment_type) {
-							esc_html_e('No Natural Attributes Cataloging submissions yet. Use the shortcode [natural_attributes_cataloging_assessment] on a page. The shortcode [inner_dimensions_assessment] still works.', 'rtr-custom-assessment');
+							esc_html_e('No Natural Attributes Cataloging submissions yet. Use the shortcode [natural_attributes_cataloging_assessment] on a page.', 'rtr-custom-assessment');
 						} else {
 							esc_html_e('No submissions yet. Share the shortcode [custom_assessment] on any page.', 'rtr-custom-assessment');
 						}
@@ -1925,7 +1925,7 @@ class CA_Admin
 						} elseif (CA_Assessment_Types::SOCIAL_FLUENCY === $assessment_type) {
 							esc_html_e('No Social Fluency submissions yet. Use the shortcode [social_fluency_assessment] on a page.', 'rtr-custom-assessment');
 						} elseif (CA_Assessment_Types::INNER_DIMENSIONS === $assessment_type) {
-							esc_html_e('No Natural Attributes Cataloging submissions yet. Use the shortcode [natural_attributes_cataloging_assessment] on a page. The shortcode [inner_dimensions_assessment] still works.', 'rtr-custom-assessment');
+							esc_html_e('No Natural Attributes Cataloging submissions yet. Use the shortcode [natural_attributes_cataloging_assessment] on a page.', 'rtr-custom-assessment');
 						} else {
 							esc_html_e('No submissions yet. Share the shortcode [custom_assessment] on any page.', 'rtr-custom-assessment');
 						}

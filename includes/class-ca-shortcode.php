@@ -1,6 +1,6 @@
 <?php
 /**
- * Shortcodes: [custom_assessment] [social_fluency_assessment] [natural_attributes_cataloging_assessment] [inner_dimensions_assessment]
+ * Shortcodes: [custom_assessment] [social_fluency_assessment] [natural_attributes_cataloging_assessment]
  * Renders trigger buttons; shared modal prints in wp_footer when needed.
  */
 
@@ -20,7 +20,6 @@ class CA_Shortcode {
 		add_shortcode( 'custom_assessment', array( $this, 'render_mindset' ) );
 		add_shortcode( 'social_fluency_assessment', array( $this, 'render_social_fluency' ) );
 		add_shortcode( 'natural_attributes_cataloging_assessment', array( $this, 'render_natural_attributes_cataloging' ) );
-		add_shortcode( 'inner_dimensions_assessment', array( $this, 'render_inner_dimensions' ) );
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_assets' ) );
 		add_action( 'wp_footer', array( $this, 'maybe_print_modal' ), 5 );
 	}
@@ -35,8 +34,7 @@ class CA_Shortcode {
 		}
 		return has_shortcode( $post->post_content, 'custom_assessment' )
 			|| has_shortcode( $post->post_content, 'social_fluency_assessment' )
-			|| has_shortcode( $post->post_content, 'natural_attributes_cataloging_assessment' )
-			|| has_shortcode( $post->post_content, 'inner_dimensions_assessment' );
+			|| has_shortcode( $post->post_content, 'natural_attributes_cataloging_assessment' );
 	}
 
 	public function enqueue_assets() {
@@ -188,32 +186,13 @@ class CA_Shortcode {
 	 * @return string
 	 */
 	public function render_natural_attributes_cataloging( $atts ) {
-		return $this->render_natural_attributes_cataloging_trigger( $atts, 'natural_attributes_cataloging_assessment' );
-	}
-
-	/**
-	 * Legacy shortcode alias (same assessment; stored type inner_dimensions).
-	 *
-	 * @param array $atts Shortcode atts.
-	 * @return string
-	 */
-	public function render_inner_dimensions( $atts ) {
-		return $this->render_natural_attributes_cataloging_trigger( $atts, 'inner_dimensions_assessment' );
-	}
-
-	/**
-	 * @param array  $atts         Shortcode atts.
-	 * @param string $shortcode_tag Registered shortcode name (for shortcode_atts).
-	 * @return string
-	 */
-	private function render_natural_attributes_cataloging_trigger( $atts, $shortcode_tag ) {
 		self::$needs_modal = true;
 		$atts              = shortcode_atts(
 			array(
 				'button_text' => __( 'Start Natural Attributes Cataloging', 'rtr-custom-assessment' ),
 			),
 			$atts,
-			$shortcode_tag
+			'natural_attributes_cataloging_assessment'
 		);
 		return $this->render_trigger_button( CA_Assessment_Types::INNER_DIMENSIONS, $atts['button_text'] );
 	}
