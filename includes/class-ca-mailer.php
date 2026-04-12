@@ -24,9 +24,7 @@ class CA_Mailer
 			return false;
 		}
 
-		$answers = CA_Database::get_answers($submission_id);
 		$cat_scores = CA_Database::get_category_scores($submission_id);
-		$flat_q = CA_Questions::get_flat();
 
 		// Build email subject and body
 		$subject = sprintf(
@@ -59,9 +57,11 @@ class CA_Mailer
 	private static function build_email_body($submission, $cat_scores)
 	{
 		$blog_name = get_bloginfo('name');
-		$total_questions = CA_Questions::get_total_count();
-		$max_score = $total_questions * 5;
-		$overall_profile = CA_Scoring::get_overall_profile((float) $submission->average_score);
+		$assessment_type = CA_Assessment_Types::from_submission($submission);
+		$scale_max = CA_Assessment_Types::get_scale_max($assessment_type);
+		$total_questions = CA_Assessment_Registry::get_total_count($assessment_type);
+		$max_score = $total_questions * $scale_max;
+		$overall_profile = CA_Scoring::get_overall_profile((float) $submission->average_score, $assessment_type);
 
 		$body = '
 		<!DOCTYPE html>
@@ -264,7 +264,7 @@ class CA_Mailer
 								<div class="stat-label">Total Score</div>
 							</div>
 							<div class="stat-box">
-								<div class="stat-value">' . esc_html(number_format($submission->average_score, 2)) . ' / 5.00</div>
+								<div class="stat-value">' . esc_html(number_format($submission->average_score, 2)) . ' / ' . esc_html(number_format((float) $scale_max, 2)) . '</div>
 								<div class="stat-label">Average Score</div>
 							</div>
 						</div>
@@ -281,13 +281,15 @@ class CA_Mailer
 						<div class="categories-list">';
 
 		foreach ($cat_scores as $cat) {
+			$q_count = ($cat->average > 0) ? (int) round((float) $cat->subtotal / (float) $cat->average) : 0;
+			$cat_max = $q_count * $scale_max;
 			$body .= '
 						<div class="category-item">
 							<div class="category-header">
 								<span class="category-name">' . esc_html($cat->category_name) . '</span>
-								<span class="category-score">' . esc_html($cat->subtotal) . ' / ' . esc_html($cat->subtotal / $cat->average) . '</span>
+								<span class="category-score">' . esc_html(number_format((float) $cat->average, 2)) . ' / ' . esc_html(number_format((float) $scale_max, 2)) . ' &nbsp;·&nbsp; ' . esc_html($cat->subtotal) . ' / ' . esc_html($cat_max) . '</span>
 							</div>
-							<div class="score-summary">' . esc_html(CA_Scoring::get_category_summary($cat->category_name, (float) $cat->average)) . '</div>
+							<div class="score-summary">' . esc_html(CA_Scoring::get_category_summary($cat->category_name, (float) $cat->average, $assessment_type)) . '</div>
 						</div>';
 		}
 

@@ -1,32 +1,22 @@
 /**
  * Custom Assessment — Frontend JavaScript
- * Full AJAX-powered multi-step modal assessment.
- * Depends on: jQuery, CA_Config (wp_localize_script)
+ * Multi-assessment modal (mindset 1–5, social fluency 1–10).
  */
 (function ($) {
   "use strict";
 
-  /* -------------------------------------------------------
-	   State
-	------------------------------------------------------- */
   var state = {
+    assessmentType: "mindset",
     submissionId: null,
-    // Step index (0..totalQuestions-1) in the priority-sorted display order.
     stepIndex: 0,
-    totalQuestions: CA_Config.total_questions || 30,
-    // Priority-sorted order of the stable backend `question_index` values.
+    totalQuestions: 0,
     questionOrder: [],
-    // Cache answers by stable `question_index`: { [questionIndex]: answerValue }
     answersCache: {},
     isSubmitting: false,
   };
 
-  /* -------------------------------------------------------
-	   DOM refs (populated on doc ready)
-	------------------------------------------------------- */
   var $modal,
     $overlay,
-    $panel,
     $body,
     $progressContainer,
     $progressBar,
@@ -35,10 +25,12 @@
     $infoForm,
     $infoError,
     $startBtn,
+    $modalTitle,
     $categoryLabel,
     $questionCounter,
     $questionText,
-    $answerOptions,
+    $questionScaleNote,
+    $answerGroup,
     $questionError,
     $backBtn,
     $nextBtn,
@@ -48,10 +40,42 @@
     $resumeContinueBtn,
     $resumeNewBtn;
 
+  function getCurrentConfig() {
+    if (
+      CA_Config.assessments &&
+      state.assessmentType &&
+      CA_Config.assessments[state.assessmentType]
+    ) {
+      return CA_Config.assessments[state.assessmentType];
+    }
+    return {
+      type: "mindset",
+      modal_title: "Assessment",
+      scale_max: 5,
+      total_questions: CA_Config.total_questions || 30,
+      scale_note: "",
+      per_number_labels: {},
+      questions_priority: CA_Config.questions_priority || [],
+    };
+  }
+
+  function sessionStorageKey() {
+    return "ca_assessment_session_" + state.assessmentType;
+  }
+
+  function withAssessment(payload) {
+    var data = payload || {};
+    data.assessment_type = state.assessmentType;
+    return data;
+  }
+
   function init() {
     $modal = $("#ca-modal");
+    if (!$modal.length) {
+      return;
+    }
+
     $overlay = $("#ca-modal-overlay");
-    $panel = $modal.find(".ca-modal-panel");
     $body = $("body");
     $progressContainer = $("#ca-progress-container");
     $progressBar = $("#ca-progress-bar");
@@ -60,10 +84,12 @@
     $infoForm = $("#ca-info-form");
     $infoError = $("#ca-info-error");
     $startBtn = $("#ca-start-btn");
+    $modalTitle = $("#ca-modal-title");
     $categoryLabel = $("#ca-category-label");
     $questionCounter = $("#ca-question-counter");
     $questionText = $("#ca-question-text");
-    $answerOptions = $modal.find(".ca-answer-option");
+    $questionScaleNote = $("#ca-question-scale-note");
+    $answerGroup = $("#ca-answer-group");
     $questionError = $("#ca-question-error");
     $backBtn = $("#ca-back-btn");
     $nextBtn = $("#ca-next-btn");
@@ -73,50 +99,46 @@
     $resumeContinueBtn = $("#ca-resume-continue");
     $resumeNewBtn = $("#ca-resume-new");
 
-    // Open modal
-    $("#ca-open-modal").on("click", openModal);
+    $(document).on("click", ".ca-assessment-trigger", openModal);
 
-    // Close modal
     $("#ca-close-modal").on("click", closeModal);
     $overlay.on("click", closeModal);
 
-    // Keyboard close
     $(document).on("keydown", function (e) {
       if (e.key === "Escape" && $modal.hasClass("ca-modal--open")) {
         closeModal();
       }
     });
 
-    // Info form submit
     $infoForm.on("submit", handleInfoSubmit);
 
-    // Answer option selection
     $modal.on("click", ".ca-answer-option", function () {
-      $answerOptions.removeClass("ca-selected");
+      $modal.find(".ca-answer-option").removeClass("ca-selected");
       $(this).addClass("ca-selected");
       $(this).find(".ca-answer-radio").prop("checked", true);
       hideError($questionError);
     });
 
-    // Navigation
     $nextBtn.on("click", handleNext);
     $backBtn.on("click", handleBack);
   }
 
-  /* -------------------------------------------------------
-	   Modal open / close
-	------------------------------------------------------- */
-  function openModal() {
+  function openModal(e) {
+    var type = $(e.currentTarget).attr("data-ca-assessment") || "mindset";
+    state.assessmentType = type;
+
+    var cfg = getCurrentConfig();
+    if ($modalTitle.length) {
+      $modalTitle.text(cfg.modal_title || "Assessment");
+    }
+
     $modal.attr("aria-hidden", "false");
     $body.addClass("ca-modal-open");
 
-    // Small delay to allow display: flex to apply before transition
     requestAnimationFrame(function () {
       $modal.addClass("ca-modal--open");
     });
 
-    // Don't check for saved session on page reload
-    // Only check when user manually enters email and submits
     resetState();
     showScreen("info");
     hideProgress();
@@ -127,6 +149,7 @@
     $modal.attr("aria-hidden", "true");
     $body.removeClass("ca-modal-open");
     hideResumeDialog();
+    $("#ca-scale-endpoints").remove();
   }
 
   function showResumeDialog(email, onContinue, onNew) {
@@ -170,43 +193,45 @@
   function getSavedSession() {
     try {
       return JSON.parse(
-        localStorage.getItem("ca_assessment_session") || "null",
+        localStorage.getItem(sessionStorageKey()) || "null",
       );
-    } catch (e) {
+    } catch (err) {
       return null;
     }
   }
 
   function saveSession(email, submissionId) {
     localStorage.setItem(
-      "ca_assessment_session",
+      sessionStorageKey(),
       JSON.stringify({ email: email, submissionId: submissionId }),
     );
   }
 
   function clearSavedSession() {
-    localStorage.removeItem("ca_assessment_session");
+    localStorage.removeItem(sessionStorageKey());
   }
 
   function resetState() {
+    var cfg = getCurrentConfig();
     state.submissionId = null;
     state.stepIndex = 0;
     state.answersCache = {};
     state.isSubmitting = false;
+    state.totalQuestions = cfg.total_questions || 0;
     state.questionOrder = buildQuestionOrder();
     $infoForm[0].reset();
     hideError($infoError);
     setProgress(0);
+    $("#ca-scale-endpoints").remove();
   }
 
   function buildQuestionOrder() {
-    var list = Array.isArray(CA_Config.questions_priority)
-      ? CA_Config.questions_priority
+    var cfg = getCurrentConfig();
+    var list = Array.isArray(cfg.questions_priority)
+      ? cfg.questions_priority
       : [];
 
     if (list.length > 0) {
-      // Priority is managed per category in admin, so keep category groups
-      // in their original order and sort only within each category.
       var categoryOrder = {};
       var categoryPos = 0;
       list.forEach(function (item) {
@@ -242,20 +267,16 @@
           return parseInt(item.index, 10) || 0;
         })
         .filter(function (v, i, arr) {
-          // De-dupe (shouldn't be needed, but prevents weirdness if data is malformed)
           return arr.indexOf(v) === i;
         });
     }
 
-    // Fallback: natural order.
     var order = [];
-    for (var i = 0; i < state.totalQuestions; i++) order.push(i);
+    var n = state.totalQuestions || 0;
+    for (var i = 0; i < n; i++) order.push(i);
     return order;
   }
 
-  /* -------------------------------------------------------
-	   Screen management
-	------------------------------------------------------- */
   function showScreen(name) {
     $screens.removeClass("ca-screen-active");
 
@@ -277,14 +298,10 @@
 
     if ($target) {
       $target.addClass("ca-screen-active");
-      // Scroll body to top
       $modal.find(".ca-modal-body").scrollTop(0);
     }
   }
 
-  /* -------------------------------------------------------
-	   Progress bar
-	------------------------------------------------------- */
   function showProgress() {
     $progressContainer.addClass("ca-visible");
     $progressContainer.attr("aria-hidden", "false");
@@ -307,7 +324,7 @@
     state.answersCache = answersMap && typeof answersMap === "object" ? answersMap : {};
 
     saveSession(
-      $("#ca-email").val().trim() || getSavedSession().email || "",
+      $("#ca-email").val().trim() || (getSavedSession() && getSavedSession().email) || "",
       submissionId,
     );
 
@@ -315,7 +332,6 @@
     setProgress(total > 0 ? Math.round((answeredCount / total) * 100) : 0);
     showProgress();
 
-    // Find first unanswered question in the priority-sorted order.
     function hasAnswer(questionIndex) {
       var idx = parseInt(questionIndex, 10);
       return (
@@ -338,7 +354,6 @@
     state.stepIndex = nextStep;
 
     if (allAnswered) {
-      // Should be rare, but if everything is answered just compute results.
       submitAssessment();
       return;
     }
@@ -347,11 +362,13 @@
   }
 
   function findInProgressByEmail(email, next) {
-    caPost({
-      action: "ca_find_in_progress_by_email",
-      nonce: CA_Config.nonce,
-      email: email,
-    })
+    caPost(
+      withAssessment({
+        action: "ca_find_in_progress_by_email",
+        nonce: CA_Config.nonce,
+        email: email,
+      }),
+    )
       .done(function (response) {
         if (typeof next === "function") {
           next(response);
@@ -365,7 +382,7 @@
   }
 
   function saveUserInfo() {
-    var data = {
+    var data = withAssessment({
       action: "ca_save_user_info",
       nonce: CA_Config.nonce,
       first_name: $("#ca-first-name").val().trim(),
@@ -373,7 +390,7 @@
       email: $("#ca-email").val().trim(),
       phone: $("#ca-phone").val().trim(),
       job_title: $("#ca-job-title").val().trim(),
-    };
+    });
 
     caPost(data)
       .done(function (response) {
@@ -388,18 +405,15 @@
           showError(
             $infoError,
             (response &&
-            response.data &&
-            typeof response.data === "string" &&
-            response.data) ||
-              (response &&
-                response.data &&
-                response.data.message) ||
+              response.data &&
+              typeof response.data === "string" &&
+              response.data) ||
+              (response && response.data && response.data.message) ||
               CA_Config.labels.error_generic,
           );
         }
       })
       .fail(function (xhr, textStatus, errorThrown) {
-        // eslint-disable-next-line no-console
         console.error("CA AJAX ca_save_user_info failed:", {
           textStatus: textStatus,
           errorThrown: errorThrown,
@@ -415,9 +429,6 @@
       });
   }
 
-  /* -------------------------------------------------------
-	   Step 1: Info form
-	------------------------------------------------------- */
   function handleInfoSubmit(e) {
     e.preventDefault();
 
@@ -459,14 +470,70 @@
         return;
       }
 
-      // Either no in-progress entry or user chose to start new
       saveUserInfo();
     });
   }
 
-  /* -------------------------------------------------------
-	   Question loading
-	------------------------------------------------------- */
+  function escAttr(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/"/g, "&quot;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
+  function buildAnswerMarkup(q) {
+    var cfg = getCurrentConfig();
+    var scaleMax =
+      (q && q.scale_max) ||
+      (cfg && cfg.scale_max) ||
+      5;
+    var style = (q && q.label_style) || "per_number";
+    var html = "";
+    var i;
+
+    if (style === "endpoints") {
+      for (i = 1; i <= scaleMax; i++) {
+        html +=
+          '<label class="ca-answer-option" data-value="' +
+          i +
+          '">' +
+          '<input type="radio" name="ca_answer" value="' +
+          i +
+          '" class="ca-answer-radio" aria-label="' +
+          i +
+          '">' +
+          '<span class="ca-answer-btn"><span class="ca-answer-num">' +
+          i +
+          '</span><span class="ca-answer-label"></span></span></label>';
+      }
+    } else {
+      var labels = (cfg && cfg.per_number_labels) || {};
+      for (i = 1; i <= scaleMax; i++) {
+        var lbl =
+          (labels[i] !== undefined && labels[i] !== null && labels[i] !== ""
+            ? labels[i]
+            : labels[String(i)]) || "";
+        html +=
+          '<label class="ca-answer-option" data-value="' +
+          i +
+          '">' +
+          '<input type="radio" name="ca_answer" value="' +
+          i +
+          '" class="ca-answer-radio" aria-label="' +
+          escAttr(lbl ? lbl : String(i)) +
+          '">' +
+          '<span class="ca-answer-btn"><span class="ca-answer-num">' +
+          i +
+          '</span><span class="ca-answer-label">' +
+          escHtml(lbl) +
+          "</span></span></label>";
+      }
+    }
+
+    return { html: html, scaleMax: scaleMax, style: style, endpoints: (q && q.endpoints) || {} };
+  }
+
   function loadQuestion(stepIndex) {
     showScreen("loading");
 
@@ -475,12 +542,12 @@
         ? state.questionOrder[stepIndex]
         : stepIndex;
 
-    var data = {
+    var data = withAssessment({
       action: "ca_get_question",
       nonce: CA_Config.nonce,
       question_index: questionIndex,
       submission_id: state.submissionId,
-    };
+    });
 
     caPost(data)
       .done(function (response) {
@@ -498,7 +565,6 @@
         }
       })
       .fail(function (xhr, textStatus, errorThrown) {
-        // eslint-disable-next-line no-console
         console.error("CA AJAX ca_get_question failed:", {
           textStatus: textStatus,
           errorThrown: errorThrown,
@@ -515,14 +581,46 @@
     var total = data.total;
     var saved = data.saved_answer;
     var isLast = stepIndex >= total - 1;
+    var cfg = getCurrentConfig();
 
-    // Update text
+    $("#ca-scale-endpoints").remove();
+
+    var noteText = cfg.scale_note || "";
+    if ($questionScaleNote.length) {
+      $questionScaleNote.html(noteText || "");
+    }
+
+    var built = buildAnswerMarkup(q);
+    $answerGroup.html(built.html);
+    $answerGroup.removeClass("ca-answer-group--cols-10 ca-answer-group--cols-5");
+    if (built.scaleMax > 5) {
+      $answerGroup.addClass("ca-answer-group--cols-10");
+    } else {
+      $answerGroup.addClass("ca-answer-group--cols-5");
+    }
+
+    if (built.style === "endpoints") {
+      var ep = built.endpoints || {};
+      var midHtml = ep.mid
+        ? '<span class="ca-scale-endpoints__mid">' + escHtml(ep.mid) + "</span>"
+        : '<span class="ca-scale-endpoints__mid" aria-hidden="true"></span>';
+      $answerGroup.after(
+        '<div class="ca-scale-endpoints" id="ca-scale-endpoints">' +
+          '<span class="ca-scale-endpoints__left">' +
+          escHtml(ep.left || "") +
+          "</span>" +
+          midHtml +
+          '<span class="ca-scale-endpoints__right">' +
+          escHtml(ep.right || "") +
+          "</span></div>",
+      );
+    }
+
     $categoryLabel.text(q.category);
     $questionCounter.text("Question " + (stepIndex + 1) + " of " + total);
     $questionText.text(q.text);
 
-    // Clear and restore answers
-    $answerOptions.removeClass("ca-selected");
+    $modal.find(".ca-answer-option").removeClass("ca-selected");
     $modal.find(".ca-answer-radio").prop("checked", false);
 
     var selectedVal = state.answersCache[questionIndex] || saved;
@@ -534,26 +632,16 @@
       $opt.find(".ca-answer-radio").prop("checked", true);
     }
 
-    // Progress
     var pct = total > 0 ? Math.round((stepIndex / total) * 100) : 0;
     setProgress(pct);
 
-    // Buttons
     $backBtn.prop("disabled", stepIndex === 0);
     $nextBtn.text(isLast ? CA_Config.labels.submit : CA_Config.labels.next);
-    if (isLast) {
-      $nextBtn.append(""); // clear icon for submit
-    } else {
-      // ensure icon is present
-    }
 
     hideError($questionError);
     showScreen("questions");
   }
 
-  /* -------------------------------------------------------
-	   Next / Back
-	------------------------------------------------------- */
   function handleNext() {
     if (state.isSubmitting) return;
 
@@ -570,19 +658,18 @@
         ? state.questionOrder[stepIndex]
         : stepIndex;
 
-    // Cache it
     state.answersCache[questionIndex] = answer;
 
     state.isSubmitting = true;
     $nextBtn.prop("disabled", true);
 
-    var data = {
+    var data = withAssessment({
       action: "ca_save_answer",
       nonce: CA_Config.nonce,
       submission_id: state.submissionId,
       question_index: questionIndex,
       answer: answer,
-    };
+    });
 
     caPost(data)
       .done(function (response) {
@@ -600,18 +687,15 @@
           showError(
             $questionError,
             (response &&
-            response.data &&
-            typeof response.data === "string" &&
-            response.data) ||
-              (response &&
-                response.data &&
-                response.data.message) ||
+              response.data &&
+              typeof response.data === "string" &&
+              response.data) ||
+              (response && response.data && response.data.message) ||
               CA_Config.labels.error_generic,
           );
         }
       })
       .fail(function (xhr, textStatus, errorThrown) {
-        // eslint-disable-next-line no-console
         console.error("CA AJAX ca_save_answer failed:", {
           textStatus: textStatus,
           errorThrown: errorThrown,
@@ -633,18 +717,15 @@
     loadQuestion(state.stepIndex);
   }
 
-  /* -------------------------------------------------------
-	   Submit assessment
-	------------------------------------------------------- */
   function submitAssessment() {
     showScreen("loading");
     setProgress(100);
 
-    var data = {
+    var data = withAssessment({
       action: "ca_submit_assessment",
       nonce: CA_Config.nonce,
       submission_id: state.submissionId,
-    };
+    });
 
     caPost(data)
       .done(function (response) {
@@ -664,7 +745,6 @@
         }
       })
       .fail(function (xhr, textStatus, errorThrown) {
-        // eslint-disable-next-line no-console
         console.error("CA AJAX ca_submit_assessment failed:", {
           textStatus: textStatus,
           errorThrown: errorThrown,
@@ -677,15 +757,12 @@
       });
   }
 
-  /* -------------------------------------------------------
-	   Results preview
-	------------------------------------------------------- */
   function loadResultsPreview() {
-    var data = {
+    var data = withAssessment({
       action: "ca_get_results_preview",
       nonce: CA_Config.nonce,
       submission_id: state.submissionId,
-    };
+    });
 
     caPost(data)
       .done(function (response) {
@@ -703,7 +780,6 @@
         }
       })
       .fail(function (xhr, textStatus, errorThrown) {
-        // eslint-disable-next-line no-console
         console.error("CA AJAX ca_get_results_preview failed:", {
           textStatus: textStatus,
           errorThrown: errorThrown,
@@ -722,15 +798,15 @@
     var maxScore = data.max_score;
     var profile = data.overall_profile;
     var cats = data.category_scores;
+    var scaleMax = parseInt(data.scale_max, 10) || 5;
 
     var initials = (
       user.first_name.charAt(0) + user.last_name.charAt(0)
     ).toUpperCase();
 
-    // Category cards
     var catHtml = "";
     cats.forEach(function (cat) {
-      var pct = Math.round((cat.average / 5) * 100);
+      var pct = Math.round((cat.average / scaleMax) * 100);
       catHtml +=
         '<div class="ca-cat-card">' +
         '<div class="ca-cat-card-header">' +
@@ -741,7 +817,9 @@
         '<span class="ca-cat-score-num">' +
         parseFloat(cat.average).toFixed(2) +
         "</span>" +
-        '<span class="ca-cat-score-max">/ 5</span>' +
+        '<span class="ca-cat-score-max">/ ' +
+        scaleMax +
+        "</span>" +
         "</span>" +
         "</div>" +
         '<div class="ca-cat-bar-track"><div class="ca-cat-bar-fill" style="width:0%" data-width="' +
@@ -775,7 +853,9 @@
       '<div class="ca-results-score-item">' +
       '<span class="ca-results-score-num">' +
       avg +
-      "<sup>/5</sup></span>" +
+      "<sup>/" +
+      scaleMax +
+      "</sup></span>" +
       '<span class="ca-results-score-label">Average Score</span>' +
       "</div>" +
       "</div>" +
@@ -808,7 +888,6 @@
     hideProgress();
     showScreen("results");
 
-    // Animate bars after short delay
     setTimeout(function () {
       $resultsContent.find(".ca-cat-bar-fill").each(function () {
         var $bar = $(this);
@@ -816,13 +895,9 @@
       });
     }, 100);
 
-    // Bind close results button
     $("#ca-close-results").on("click", closeModal);
   }
 
-  /* -------------------------------------------------------
-	   Utility helpers
-	------------------------------------------------------- */
   function showError($el, msg) {
     $el.text(msg).addClass("ca-visible");
   }
@@ -846,7 +921,6 @@
       .trim();
   }
 
-  // Extract the most useful server-side message from failed AJAX responses.
   function getAjaxErrorMessage(xhr) {
     var fallback = CA_Config.labels.error_generic;
     if (!xhr) return fallback;
@@ -876,11 +950,10 @@
       if (parsed && parsed.message) {
         return String(parsed.message);
       }
-    } catch (e) {
-      // Not JSON; continue with HTML/plain-text extraction below.
+    } catch (e1) {
+      /* ignore */
     }
 
-    // WordPress wp_die pages often include the message in <p> or body text.
     var text = stripHtml(decodeHtmlEntities(raw));
     if (text) {
       return text.slice(0, 240);
@@ -889,20 +962,6 @@
     return xhr.status ? "Request failed (HTTP " + xhr.status + ")." : fallback;
   }
 
-  /**
-   * Robust AJAX POST wrapper.
-   *
-   * On some mobile networks, proxies/CDNs/WAFs can inject extra content
-   * (whitespace, BOM, HTML notices) before the JSON body that WordPress
-   * returns from admin-ajax.php.  jQuery's default behaviour is to fail
-   * with "parsererror" when the response cannot be decoded as JSON, which
-   * surfaces as the generic "Something went wrong" message.
-   *
-   * caPost() forces dataType: 'json' and uses a dataFilter to strip any
-   * leading garbage before the first '{' so JSON.parse always receives a
-   * clean string.  It returns the same jQuery jqXHR/promise so callers
-   * can chain .done() / .fail() / .always() as usual.
-   */
   function caPost(data) {
     return $.ajax({
       url: CA_Config.ajax_url,
@@ -911,8 +970,6 @@
       dataType: "json",
       dataFilter: function (raw) {
         if (typeof raw === "string") {
-          // Attempt to isolate the JSON payload even if proxies inject
-          // extra HTML/text before/after the JSON.
           raw = raw.trim();
           var start = raw.indexOf("{");
           var startAlt = raw.indexOf("[");
@@ -942,7 +999,6 @@
     }
   }
 
-  // Simple HTML escape to prevent XSS in dynamically inserted strings
   function escHtml(str) {
     return String(str)
       .replace(/&/g, "&amp;")
@@ -952,8 +1008,5 @@
       .replace(/'/g, "&#039;");
   }
 
-  /* -------------------------------------------------------
-	   Boot
-	------------------------------------------------------- */
   $(document).ready(init);
 })(jQuery);

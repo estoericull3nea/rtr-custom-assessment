@@ -20,12 +20,23 @@ class CA_Scoring {
 	 * }
 	 */
 	public static function calculate( $answers ) {
-		$categories   = CA_Questions::get_all();
-		$flat         = CA_Questions::get_flat();
+		return self::calculate_for_assessment( CA_Assessment_Types::MINDSET, $answers );
+	}
+
+	/**
+	 * Calculate scoring for a given assessment type.
+	 *
+	 * @param string $assessment_type Normalized type.
+	 * @param array  $answers         Keyed by question_index => answer.
+	 * @return array
+	 */
+	public static function calculate_for_assessment( $assessment_type, $answers ) {
+		$type         = CA_Assessment_Types::normalize( $assessment_type );
+		$categories   = CA_Assessment_Registry::get_all( $type );
+		$flat         = CA_Assessment_Registry::get_flat( $type );
 		$total_score  = 0;
 		$cat_scores   = array();
 
-		// Build category totals
 		foreach ( $categories as $cat ) {
 			$cat_scores[ $cat['category'] ] = array(
 				'name'     => $cat['category'],
@@ -43,7 +54,6 @@ class CA_Scoring {
 			$cat_scores[ $cat ]['subtotal'] += $answer;
 		}
 
-		// Calculate averages
 		foreach ( $cat_scores as &$cat ) {
 			$cat['average'] = $cat['count'] > 0
 				? round( $cat['subtotal'] / $cat['count'], 2 )
@@ -51,8 +61,8 @@ class CA_Scoring {
 		}
 		unset( $cat );
 
-		$total_questions  = count( $flat );
-		$average_score    = $total_questions > 0
+		$total_questions = count( $flat );
+		$average_score   = $total_questions > 0
 			? round( $total_score / $total_questions, 2 )
 			: 0.00;
 
@@ -67,10 +77,17 @@ class CA_Scoring {
 	 * Generate a written summary for each category based on average score.
 	 *
 	 * @param string $category Category name.
-	 * @param float  $average  Category average (0–5).
+	 * @param float  $average         Category average on this assessment's scale.
+	 * @param string $assessment_type Optional. Defaults to mindset (1–5 scale).
 	 * @return string
 	 */
-	public static function get_category_summary( $category, $average ) {
+	public static function get_category_summary( $category, $average, $assessment_type = null ) {
+		$type = CA_Assessment_Types::normalize( null !== $assessment_type ? $assessment_type : CA_Assessment_Types::MINDSET );
+
+		if ( CA_Assessment_Types::SOCIAL_FLUENCY === $type ) {
+			return self::get_social_fluency_category_summary( $category, (float) $average );
+		}
+
 		$summaries = array(
 			'Growth Mindset' => array(
 				'high'   => 'You demonstrate an exceptional growth mindset. You embrace challenges, persist through adversity, and maintain a positive attitude that empowers those around you.',
@@ -136,12 +153,104 @@ class CA_Scoring {
 	}
 
 	/**
-	 * Get overall profile label based on total average.
+	 * Social Fluency category copy (scale roughly 1–10 per question; averages near 1–10).
 	 *
-	 * @param float $average Overall average score.
+	 * @param string $category Category name.
+	 * @param float  $average  Category average.
 	 * @return string
 	 */
-	public static function get_overall_profile( $average ) {
+	private static function get_social_fluency_category_summary( $category, $average ) {
+		$summaries = array(
+			'Authentic Presence' => array(
+				'high' => __( 'You show up with authenticity and presence. Others likely experience you as genuine, curious, and memorable in conversation.', 'rtr-custom-assessment' ),
+				'mid'  => __( 'Your authentic presence is developing. Small shifts—deeper listening, sincere curiosity, and honest expression—will compound quickly.', 'rtr-custom-assessment' ),
+				'low'  => __( 'This is a growth edge: practice sharing truth kindly, listening fully, and following curiosity so your presence feels grounded and real.', 'rtr-custom-assessment' ),
+			),
+			'Emotional Resonance' => array(
+				'high' => __( 'You tune into emotion skillfully and respond with empathy. People likely feel seen, supported, and appreciated around you.', 'rtr-custom-assessment' ),
+				'mid'  => __( 'You have solid emotional intelligence foundations. Continuing to name feelings, acknowledge vulnerability, and respond with care will deepen trust.', 'rtr-custom-assessment' ),
+				'low'  => __( 'Focus here on noticing others\' cues, validating feelings, and expressing appreciation— these habits deepen connection fast.', 'rtr-custom-assessment' ),
+			),
+			'Strategic Visibility' => array(
+				'high' => __( 'You are visible in the right rooms—digitally and in person—with a clear narrative and regular valuable contributions.', 'rtr-custom-assessment' ),
+				'mid'  => __( 'Your visibility is growing. Clarify your story, share expertise consistently, and widen outreach to influential peers and communities.', 'rtr-custom-assessment' ),
+				'low'  => __( 'Invest in how you show expertise online, show up in communities, and introduce yourself with clarity so opportunities can find you.', 'rtr-custom-assessment' ),
+			),
+			'Ecosystem Diversity' => array(
+				'high' => __( 'Your network spans diverse perspectives and domains, fuelling creativity and introductions that cross boundaries.', 'rtr-custom-assessment' ),
+				'mid'  => __( 'You are building breadth. Seek more varied contexts, make bridging introductions, and stay curious in unfamiliar settings.', 'rtr-custom-assessment' ),
+				'low'  => __( 'Widen your ecosystem intentionally—different industries, backgrounds, and cultures—so ideas and relationships stay fresh.', 'rtr-custom-assessment' ),
+			),
+			'Strategic Intentionality' => array(
+				'high' => __( 'You are deliberate about who is in your circle, how you follow up, and how you balance organic rapport with strategic growth.', 'rtr-custom-assessment' ),
+				'mid'  => __( 'You are partly intentional. Sharpen clarity on who you need, systematize follow-up, and invest consistently in mentors and allies.', 'rtr-custom-assessment' ),
+				'low'  => __( 'Define the qualities and relationships that matter, then build simple habits for follow-up and nurturing key connections.', 'rtr-custom-assessment' ),
+			),
+			'Value Exchange Mindset' => array(
+				'high' => __( 'You give generously, spot needs early, and receive support with ease— a hallmark of high-trust networks.', 'rtr-custom-assessment' ),
+				'mid'  => __( 'You exchange value in pockets. Practice proactive help, creative adds, and graceful receiving to strengthen reciprocity.', 'rtr-custom-assessment' ),
+				'low'  => __( 'Lead with generosity: offer specific help, listen for unstated needs, and practice accepting support so the loop stays open.', 'rtr-custom-assessment' ),
+			),
+		);
+
+		$level = 'mid';
+		if ( $average >= 8.0 ) {
+			$level = 'high';
+		} elseif ( $average < 5.0 ) {
+			$level = 'low';
+		}
+
+		if ( isset( $summaries[ $category ][ $level ] ) ) {
+			return $summaries[ $category ][ $level ];
+		}
+
+		if ( 'high' === $level ) {
+			return sprintf(
+				/* translators: %s: category name */
+				__( 'Strong results in %s. Keep reinforcing these behaviours in real conversations and collaborations.', 'rtr-custom-assessment' ),
+				esc_html( $category )
+			);
+		}
+		if ( 'low' === $level ) {
+			return sprintf(
+				/* translators: %s: category name */
+				__( '%s is a priority growth area—choose one habit per week to practice in live interactions.', 'rtr-custom-assessment' ),
+				esc_html( $category )
+			);
+		}
+		return sprintf(
+			/* translators: %s: category name */
+			__( 'Solid baseline in %s with room to deepen consistency and impact.', 'rtr-custom-assessment' ),
+			esc_html( $category )
+		);
+	}
+
+	/**
+	 * Get overall profile label based on total average.
+	 *
+	 * @param float  $average         Overall average score.
+	 * @param string $assessment_type Optional. Mindset uses 1–5 scale; Social Fluency uses 1–10.
+	 * @return string
+	 */
+	public static function get_overall_profile( $average, $assessment_type = null ) {
+		$type = CA_Assessment_Types::normalize( null !== $assessment_type ? $assessment_type : CA_Assessment_Types::MINDSET );
+
+		if ( CA_Assessment_Types::SOCIAL_FLUENCY === $type ) {
+			if ( $average >= 9.0 ) {
+				return __( 'Exceptional Social Fluency', 'rtr-custom-assessment' );
+			}
+			if ( $average >= 7.5 ) {
+				return __( 'Advanced Social Fluency', 'rtr-custom-assessment' );
+			}
+			if ( $average >= 6.0 ) {
+				return __( 'Proficient Social Fluency', 'rtr-custom-assessment' );
+			}
+			if ( $average >= 4.0 ) {
+				return __( 'Developing Social Fluency', 'rtr-custom-assessment' );
+			}
+			return __( 'Emerging Social Fluency', 'rtr-custom-assessment' );
+		}
+
 		if ( $average >= 4.5 ) {
 			return 'Exceptional Entrepreneur';
 		} elseif ( $average >= 3.75 ) {

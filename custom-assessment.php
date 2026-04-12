@@ -22,7 +22,10 @@ define('CA_TEXT_DOMAIN', 'rtr-custom-assessment');
 
 // Load includes
 require_once CA_PLUGIN_DIR . 'includes/class-ca-database.php';
+require_once CA_PLUGIN_DIR . 'includes/class-ca-assessment-types.php';
 require_once CA_PLUGIN_DIR . 'includes/class-ca-questions.php';
+require_once CA_PLUGIN_DIR . 'includes/class-ca-social-fluency-questions.php';
+require_once CA_PLUGIN_DIR . 'includes/class-ca-assessment-registry.php';
 require_once CA_PLUGIN_DIR . 'includes/class-ca-scoring.php';
 require_once CA_PLUGIN_DIR . 'includes/class-ca-logger.php';
 require_once CA_PLUGIN_DIR . 'includes/class-ca-ajax.php';
@@ -35,6 +38,7 @@ register_activation_hook(__FILE__, array('CA_Database', 'create_tables'));
 
 // Boot the plugin
 add_action('plugins_loaded', static function () {
+	CA_Database::maybe_upgrade();
 	new CA_Ajax();
 	new CA_Shortcode();
 	new CA_Admin();

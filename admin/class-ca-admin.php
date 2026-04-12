@@ -698,7 +698,10 @@ class CA_Admin
 	{
 		$answers = CA_Database::get_answers($submission_id);
 		$cat_scores = CA_Database::get_category_scores($submission_id);
-		$flat_q = CA_Questions::get_flat();
+		$sub_type = CA_Assessment_Types::from_submission($submission);
+		$scale_max = CA_Assessment_Types::get_scale_max($sub_type);
+		$flat_q = CA_Assessment_Registry::get_flat($sub_type);
+		$total_q = CA_Assessment_Registry::get_total_count($sub_type);
 
 		header('Content-Type: text/csv; charset=utf-8');
 		header('Content-Disposition: attachment; filename="submission_' . $submission_id . '_' . sanitize_file_name($submission->first_name . '_' . $submission->last_name) . '.csv"');
@@ -710,8 +713,9 @@ class CA_Admin
 		fputcsv($output, array('Email', $submission->email));
 		fputcsv($output, array('Phone', $submission->phone));
 		fputcsv($output, array('Job Title', $submission->job_title));
-		fputcsv($output, array('Total Score', $submission->total_score . ' / ' . (CA_Questions::get_total_count() * 5)));
-		fputcsv($output, array('Average Score', number_format($submission->average_score, 2) . ' / 5.00'));
+		fputcsv($output, array('Assessment Type', $sub_type));
+		fputcsv($output, array('Total Score', $submission->total_score . ' / ' . ($total_q * $scale_max)));
+		fputcsv($output, array('Average Score', number_format($submission->average_score, 2) . ' / ' . number_format((float) $scale_max, 2)));
 		fputcsv($output, array('Status', ucwords(str_replace('_', ' ', $submission->status))));
 		fputcsv($output, array('Submitted', date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($submission->created_at))));
 
@@ -723,14 +727,15 @@ class CA_Admin
 				$cat->category_name,
 				$cat->subtotal,
 				number_format($cat->average, 2),
-				CA_Scoring::get_category_summary($cat->category_name, (float) $cat->average)
+				CA_Scoring::get_category_summary($cat->category_name, (float) $cat->average, $sub_type)
 			));
 		}
 
 		fputcsv($output, array());
 		fputcsv($output, array('Question Responses'));
 		fputcsv($output, array('Question', 'Response'));
-		foreach ($flat_q as $idx => $q) {
+		foreach ($flat_q as $q) {
+			$idx = isset($q['index']) ? (int) $q['index'] : 0;
 			$answer = isset($answers[$idx]) ? $answers[$idx] : null;
 			fputcsv($output, array($q['text'], $answer ? $answer : 'No answer'));
 		}
@@ -805,12 +810,13 @@ class CA_Admin
 			$category_scores = $submission_id > 0 ? CA_Database::get_category_scores($submission_id) : array();
 			$scores_summary = array();
 			$text_summary = array();
+			$row_sub_type = CA_Assessment_Types::from_submission($submission);
 			foreach ($category_scores as $cat) {
 				$cat_name = isset($cat->category_name) ? (string) $cat->category_name : '';
 				$cat_subtotal = isset($cat->subtotal) ? (int) $cat->subtotal : 0;
 				$cat_average = isset($cat->average) ? (float) $cat->average : 0.0;
 				$scores_summary[] = $cat_name . ':' . $cat_subtotal . ':' . number_format($cat_average, 2);
-				$text_summary[] = $cat_name . ':' . CA_Scoring::get_category_summary($cat_name, $cat_average);
+				$text_summary[] = $cat_name . ':' . CA_Scoring::get_category_summary($cat_name, $cat_average, $row_sub_type);
 			}
 			$row[] = implode(' | ', $scores_summary);
 			$row[] = implode(' | ', $text_summary);
@@ -868,7 +874,10 @@ class CA_Admin
 	{
 		$answers = CA_Database::get_answers($submission_id);
 		$cat_scores = CA_Database::get_category_scores($submission_id);
-		$flat_q = CA_Questions::get_flat();
+		$sub_type = CA_Assessment_Types::from_submission($submission);
+		$scale_max = CA_Assessment_Types::get_scale_max($sub_type);
+		$flat_q = CA_Assessment_Registry::get_flat($sub_type);
+		$total_q = CA_Assessment_Registry::get_total_count($sub_type);
 
 		$html = '<html>
 			<head>
@@ -892,8 +901,8 @@ class CA_Admin
 					<div><span class="info-label">Email:</span> ' . esc_html($submission->email) . '</div>
 					<div><span class="info-label">Phone:</span> ' . esc_html($submission->phone) . '</div>
 					<div><span class="info-label">Job Title:</span> ' . esc_html($submission->job_title) . '</div>
-					<div><span class="info-label">Total Score:</span> ' . esc_html($submission->total_score . ' / ' . (CA_Questions::get_total_count() * 5)) . '</div>
-					<div><span class="info-label">Average Score:</span> ' . esc_html(number_format($submission->average_score, 2) . ' / 5.00') . '</div>
+					<div><span class="info-label">Total Score:</span> ' . esc_html($submission->total_score . ' / ' . ($total_q * $scale_max)) . '</div>
+					<div><span class="info-label">Average Score:</span> ' . esc_html(number_format($submission->average_score, 2) . ' / ' . number_format((float) $scale_max, 2)) . '</div>
 					<div><span class="info-label">Submitted:</span> ' . esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($submission->created_at))) . '</div>
 				</div>
 
@@ -914,7 +923,7 @@ class CA_Admin
 				<td>' . esc_html($cat->category_name) . '</td>
 				<td>' . esc_html($cat->subtotal) . '</td>
 				<td>' . esc_html(number_format($cat->average, 2)) . '</td>
-				<td>' . esc_html(CA_Scoring::get_category_summary($cat->category_name, (float) $cat->average)) . '</td>
+				<td>' . esc_html(CA_Scoring::get_category_summary($cat->category_name, (float) $cat->average, $sub_type)) . '</td>
 			</tr>';
 		}
 
@@ -931,7 +940,8 @@ class CA_Admin
 					</thead>
 					<tbody>';
 
-		foreach ($flat_q as $idx => $q) {
+		foreach ($flat_q as $q) {
+			$idx = isset($q['index']) ? (int) $q['index'] : 0;
 			$answer = isset($answers[$idx]) ? $answers[$idx] : null;
 			$html .= '<tr>
 				<td>' . esc_html($q['text']) . '</td>
@@ -1774,12 +1784,16 @@ class CA_Admin
 		$submission = CA_Database::get_submission($submission_id);
 		$answers = CA_Database::get_answers($submission_id);
 		$cat_scores = CA_Database::get_category_scores($submission_id);
-		$flat_q = CA_Questions::get_flat();
 
 		if (!$submission) {
 			echo '<div class="wrap"><p>' . esc_html__('Submission not found.', 'rtr-custom-assessment') . '</p></div>';
 			return;
 		}
+
+		$sub_type = CA_Assessment_Types::from_submission($submission);
+		$scale_max = CA_Assessment_Types::get_scale_max($sub_type);
+		$flat_q = CA_Assessment_Registry::get_flat($sub_type);
+		$total_q = CA_Assessment_Registry::get_total_count($sub_type);
 		?>
 		<div class="wrap ca-admin-wrap">
 			<h1 class="ca-admin-title">
@@ -1813,6 +1827,10 @@ class CA_Admin
 						<span
 							class="ca-status-badge ca-status--<?php echo esc_attr($submission->status); ?>"><?php echo esc_html(ucwords(str_replace('_', ' ', $submission->status))); ?></span>
 					</div>
+					<div>
+						<label><?php esc_html_e('Assessment', 'rtr-custom-assessment'); ?></label>
+						<span><?php echo esc_html($sub_type === CA_Assessment_Types::SOCIAL_FLUENCY ? __('Social Fluency', 'rtr-custom-assessment') : __('Entrepreneurial Mindset', 'rtr-custom-assessment')); ?></span>
+					</div>
 				</div>
 			</div>
 
@@ -1826,7 +1844,7 @@ class CA_Admin
 							<div class="ca-admin-score-value"><?php echo esc_html($submission->total_score); ?></div>
 							<div class="ca-admin-score-label"><?php esc_html_e('Total Score', 'rtr-custom-assessment'); ?></div>
 							<div class="ca-admin-score-max">
-								<?php echo esc_html('/ ' . (CA_Questions::get_total_count() * 5)); ?>
+								<?php echo esc_html('/ ' . ($total_q * $scale_max)); ?>
 							</div>
 						</div>
 						<div class="ca-admin-score-box">
@@ -1834,11 +1852,11 @@ class CA_Admin
 								<?php echo esc_html(number_format($submission->average_score, 2)); ?>
 							</div>
 							<div class="ca-admin-score-label"><?php esc_html_e('Average Score', 'rtr-custom-assessment'); ?></div>
-							<div class="ca-admin-score-max"><?php esc_html_e('/ 5.00', 'rtr-custom-assessment'); ?></div>
+							<div class="ca-admin-score-max"><?php echo esc_html('/ ' . number_format((float) $scale_max, 2)); ?></div>
 						</div>
 						<div class="ca-admin-score-box">
 							<div class="ca-admin-score-value ca-admin-score-profile">
-								<?php echo esc_html(CA_Scoring::get_overall_profile((float) $submission->average_score)); ?>
+								<?php echo esc_html(CA_Scoring::get_overall_profile((float) $submission->average_score, $sub_type)); ?>
 							</div>
 							<div class="ca-admin-score-label"><?php esc_html_e('Profile', 'rtr-custom-assessment'); ?></div>
 						</div>
@@ -1864,7 +1882,7 @@ class CA_Admin
 									<td><?php echo esc_html($cat->subtotal); ?></td>
 									<td><?php echo esc_html(number_format($cat->average, 2)); ?></td>
 									<td class="ca-admin-summary">
-										<?php echo esc_html(CA_Scoring::get_category_summary($cat->category_name, (float) $cat->average)); ?>
+										<?php echo esc_html(CA_Scoring::get_category_summary($cat->category_name, (float) $cat->average, $sub_type)); ?>
 									</td>
 								</tr>
 							<?php endforeach; ?>

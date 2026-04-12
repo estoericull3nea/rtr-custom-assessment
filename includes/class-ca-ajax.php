@@ -50,6 +50,40 @@ class CA_Ajax
 		}
 	}
 
+	/**
+	 * Assessment type from POST (defaults to mindset).
+	 *
+	 * @return string Normalized type.
+	 */
+	private function get_assessment_type_from_request()
+	{
+		// phpcs:disable WordPress.Security.NonceVerification.Missing -- Nonce verified per action before this runs.
+		$raw = isset($_POST['assessment_type']) ? sanitize_key(wp_unslash($_POST['assessment_type'])) : CA_Assessment_Types::MINDSET;
+		// phpcs:enable WordPress.Security.NonceVerification.Missing
+		return CA_Assessment_Types::normalize($raw);
+	}
+
+	/**
+	 * Ensure submission exists and matches the assessment type in the request.
+	 *
+	 * @param int    $submission_id   Submission ID.
+	 * @param string $assessment_type Requested type.
+	 * @return object WP DB row.
+	 */
+	private function require_submission_for_type($submission_id, $assessment_type)
+	{
+		$submission = CA_Database::get_submission((int) $submission_id);
+		if (!$submission) {
+			$this->send_error('ca_session', __('Submission not found.', 'rtr-custom-assessment'), array('submission_id' => $submission_id));
+		}
+		$stored = CA_Assessment_Types::from_submission($submission);
+		$want = CA_Assessment_Types::normalize($assessment_type);
+		if ($stored !== $want) {
+			$this->send_error('ca_session', __('This session does not match the selected assessment. Please start again.', 'rtr-custom-assessment'));
+		}
+		return $submission;
+	}
+
 	// -------------------------------------------------------------------------
 	// Action: save user info (Step 1)
 	// -------------------------------------------------------------------------
@@ -64,6 +98,7 @@ class CA_Ajax
 		$email = isset($_POST['email']) ? sanitize_email(wp_unslash($_POST['email'])) : '';
 		$phone = isset($_POST['phone']) ? sanitize_text_field(wp_unslash($_POST['phone'])) : '';
 		$job_title = isset($_POST['job_title']) ? sanitize_text_field(wp_unslash($_POST['job_title'])) : '';
+		$assessment_type = $this->get_assessment_type_from_request();
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
 		// Validate
@@ -89,6 +124,7 @@ class CA_Ajax
 			'email' => $email,
 			'phone' => $phone,
 			'job_title' => $job_title,
+			'assessment_type' => $assessment_type,
 		));
 
 		if (!$submission_id) {
@@ -117,24 +153,42 @@ class CA_Ajax
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- Nonce already verified via $this->verify_nonce().
 		$index = isset($_POST['question_index']) ? absint($_POST['question_index']) : 0;
 		$submission_id = isset($_POST['submission_id']) ? absint($_POST['submission_id']) : 0;
+		$assessment_type = $this->get_assessment_type_from_request();
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
-		$question = CA_Questions::get_question($index);
+		if ($submission_id) {
+			$this->require_submission_for_type($submission_id, $assessment_type);
+		}
+
+		$question = CA_Assessment_Registry::get_question($assessment_type, $index);
 
 		if (!$question) {
 			$this->send_error('ca_get_question', __('Question not found.', 'rtr-custom-assessment'), array('question_index' => $index));
 		}
 
+		$scale_max = CA_Assessment_Types::get_scale_max($assessment_type);
+		$payload = $question;
+		$payload['scale_max'] = $scale_max;
+
+		if (CA_Assessment_Types::SOCIAL_FLUENCY === $assessment_type) {
+			$payload['label_style'] = 'endpoints';
+			$payload['endpoints'] = isset($question['endpoints']) && is_array($question['endpoints']) ? $question['endpoints'] : array();
+		} else {
+			$payload['label_style'] = 'per_number';
+		}
+
 		$saved_answer = $submission_id ? CA_Database::get_answer($submission_id, $index) : null;
-		$total = CA_Questions::get_total_count();
+		$total = CA_Assessment_Registry::get_total_count($assessment_type);
 		$progress = $total > 0 ? round(($index / $total) * 100) : 0;
 
 		$this->send_success('ca_get_question', array(
-			'question' => $question,
+			'question' => $payload,
 			'saved_answer' => $saved_answer,
 			'total' => $total,
 			'progress' => $progress,
 			'is_last' => ($index === $total - 1),
+			'scale_max' => $scale_max,
+			'assessment_type' => $assessment_type,
 		), '', array('submission_id' => $submission_id, 'question_index' => $index));
 	}
 
@@ -150,20 +204,32 @@ class CA_Ajax
 		$submission_id = isset($_POST['submission_id']) ? absint($_POST['submission_id']) : 0;
 		$question_index = isset($_POST['question_index']) ? absint($_POST['question_index']) : 0;
 		$answer = isset($_POST['answer']) ? absint($_POST['answer']) : 0;
+		$assessment_type = $this->get_assessment_type_from_request();
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
 		// Validate
 		if (!$submission_id) {
 			$this->send_error('ca_save_answer', __('Invalid session. Please refresh and try again.', 'rtr-custom-assessment'));
 		}
-		if ($answer < 1 || $answer > 5) {
-			$this->send_error('ca_save_answer', __('Invalid answer. Please select a value between 1 and 5.', 'rtr-custom-assessment'));
+
+		$this->require_submission_for_type($submission_id, $assessment_type);
+
+		$scale_max = CA_Assessment_Types::get_scale_max($assessment_type);
+		if ($answer < 1 || $answer > $scale_max) {
+			$this->send_error(
+				'ca_save_answer',
+				sprintf(
+					/* translators: %d: maximum scale value */
+					__('Invalid answer. Please select a value between 1 and %d.', 'rtr-custom-assessment'),
+					$scale_max
+				)
+			);
 		}
 
 		CA_Database::save_answer($submission_id, $question_index, $answer);
 		CA_Database::set_in_progress($submission_id);
 
-		$total = CA_Questions::get_total_count();
+		$total = CA_Assessment_Registry::get_total_count($assessment_type);
 		$next = $question_index + 1;
 		$progress = $total > 0 ? round(($next / $total) * 100) : 0;
 
@@ -184,19 +250,17 @@ class CA_Ajax
 
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- Nonce already verified via $this->verify_nonce().
 		$submission_id = isset($_POST['submission_id']) ? absint($_POST['submission_id']) : 0;
+		$assessment_type = $this->get_assessment_type_from_request();
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
 		if (!$submission_id) {
 			$this->send_error('ca_get_progress', __('Invalid session.', 'rtr-custom-assessment'));
 		}
 
-		$submission = CA_Database::get_submission($submission_id);
-		if (!$submission) {
-			$this->send_error('ca_get_progress', __('Submission not found.', 'rtr-custom-assessment'), array('submission_id' => $submission_id));
-		}
+		$submission = $this->require_submission_for_type($submission_id, $assessment_type);
 
 		$answers = CA_Database::get_answers($submission_id);
-		$total = CA_Questions::get_total_count();
+		$total = CA_Assessment_Registry::get_total_count($assessment_type);
 		$answered = count($answers);
 		$progress = $total > 0 ? round(($answered / $total) * 100) : 0;
 
@@ -219,20 +283,21 @@ class CA_Ajax
 
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- Nonce already verified via $this->verify_nonce().
 		$email = isset($_POST['email']) ? sanitize_email(wp_unslash($_POST['email'])) : '';
+		$assessment_type = $this->get_assessment_type_from_request();
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
 		if (empty($email) || !is_email($email)) {
 			$this->send_error('ca_find_in_progress_by_email', __('A valid email is required.', 'rtr-custom-assessment'));
 		}
 
-		$submission = CA_Database::get_in_progress_submission_by_email($email);
+		$submission = CA_Database::get_in_progress_submission_by_email($email, $assessment_type);
 
 		if (!$submission) {
 			$this->send_success('ca_find_in_progress_by_email', array('found' => false), '', array('email' => $email));
 		}
 
 		$answers = CA_Database::get_answers($submission->id);
-		$total = CA_Questions::get_total_count();
+		$total = CA_Assessment_Registry::get_total_count($assessment_type);
 		$answered = count($answers);
 		$progress = $total > 0 ? round(($answered / $total) * 100) : 0;
 
@@ -259,20 +324,23 @@ class CA_Ajax
 
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- Nonce already verified via $this->verify_nonce().
 		$submission_id = isset($_POST['submission_id']) ? absint($_POST['submission_id']) : 0;
+		$assessment_type = $this->get_assessment_type_from_request();
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
 		if (!$submission_id) {
 			$this->send_error('ca_submit_assessment', __('Invalid session.', 'rtr-custom-assessment'));
 		}
 
+		$this->require_submission_for_type($submission_id, $assessment_type);
+
 		$answers = CA_Database::get_answers($submission_id);
-		$total_q = CA_Questions::get_total_count();
+		$total_q = CA_Assessment_Registry::get_total_count($assessment_type);
 
 		if (count($answers) < $total_q) {
 			$this->send_error('ca_submit_assessment', __('Please answer all questions before submitting.', 'rtr-custom-assessment'), array('submission_id' => $submission_id));
 		}
 
-		$scoring = CA_Scoring::calculate($answers);
+		$scoring = CA_Scoring::calculate_for_assessment($assessment_type, $answers);
 
 		CA_Database::update_submission_scores(
 			$submission_id,
@@ -300,18 +368,19 @@ class CA_Ajax
 
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- Nonce already verified via $this->verify_nonce().
 		$submission_id = isset($_POST['submission_id']) ? absint($_POST['submission_id']) : 0;
+		$assessment_type = $this->get_assessment_type_from_request();
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
 		if (!$submission_id) {
 			$this->send_error('ca_get_results_preview', __('Invalid session.', 'rtr-custom-assessment'));
 		}
 
-		$submission = CA_Database::get_submission($submission_id);
+		$submission = $this->require_submission_for_type($submission_id, $assessment_type);
 		$cat_scores_raw = CA_Database::get_category_scores($submission_id);
 
-		if (!$submission) {
-			$this->send_error('ca_get_results_preview', __('Submission not found.', 'rtr-custom-assessment'), array('submission_id' => $submission_id));
-		}
+		$stored_type = CA_Assessment_Types::from_submission($submission);
+		$scale_max = CA_Assessment_Types::get_scale_max($stored_type);
+		$total_q = CA_Assessment_Registry::get_total_count($stored_type);
 
 		// Build category data with summaries
 		$category_scores = array();
@@ -320,11 +389,11 @@ class CA_Ajax
 				'name' => $cat->category_name,
 				'subtotal' => (int) $cat->subtotal,
 				'average' => (float) $cat->average,
-				'summary' => CA_Scoring::get_category_summary($cat->category_name, (float) $cat->average),
+				'summary' => CA_Scoring::get_category_summary($cat->category_name, (float) $cat->average, $stored_type),
 			);
 		}
 
-		$overall_profile = CA_Scoring::get_overall_profile((float) $submission->average_score);
+		$overall_profile = CA_Scoring::get_overall_profile((float) $submission->average_score, $stored_type);
 
 		$this->send_success('ca_get_results_preview', array(
 			'user' => array(
@@ -338,7 +407,9 @@ class CA_Ajax
 			'average_score' => (float) $submission->average_score,
 			'overall_profile' => $overall_profile,
 			'category_scores' => $category_scores,
-			'max_score' => CA_Questions::get_total_count() * 5,
+			'max_score' => $total_q * $scale_max,
+			'scale_max' => $scale_max,
+			'assessment_type' => $stored_type,
 		), '', array('submission_id' => $submission_id));
 	}
 }

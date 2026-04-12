@@ -28,12 +28,14 @@ class CA_Database
 			email           VARCHAR(200) NOT NULL DEFAULT '',
 			phone           VARCHAR(50)  NOT NULL DEFAULT '',
 			job_title       VARCHAR(200) NOT NULL DEFAULT '',
+			assessment_type VARCHAR(32)  NOT NULL DEFAULT 'mindset',
 			total_score     SMALLINT     NOT NULL DEFAULT 0,
 			average_score   DECIMAL(4,2) NOT NULL DEFAULT 0.00,
 			status          VARCHAR(20)  NOT NULL DEFAULT 'started',
 			created_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-			PRIMARY KEY (id)
+			PRIMARY KEY (id),
+			KEY assessment_type (assessment_type)
 		) {$charset_collate};";
 
 		// Answers table
@@ -65,6 +67,21 @@ class CA_Database
 		dbDelta($sql_cat_scores);
 	}
 
+	/**
+	 * Add new columns on existing installs (dbDelta may not ALTER all cases).
+	 */
+	public static function maybe_upgrade()
+	{
+		global $wpdb;
+		$table = $wpdb->prefix . 'ca_submissions';
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Table name is built from prefix only.
+		$has_type = $wpdb->get_results("SHOW COLUMNS FROM {$table} LIKE 'assessment_type'");
+		if (empty($has_type)) {
+			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Table name is built from prefix only.
+			$wpdb->query("ALTER TABLE {$table} ADD COLUMN assessment_type VARCHAR(32) NOT NULL DEFAULT 'mindset' AFTER job_title, ADD KEY assessment_type (assessment_type)");
+		}
+	}
+
 	// -------------------------------------------------------------------------
 	// Submissions
 	// -------------------------------------------------------------------------
@@ -80,6 +97,8 @@ class CA_Database
 		global $wpdb;
 		$table = esc_sql($wpdb->prefix . 'ca_submissions');
 
+		$assessment_type = isset( $data['assessment_type'] ) ? CA_Assessment_Types::normalize( $data['assessment_type'] ) : CA_Assessment_Types::MINDSET;
+
 		$inserted = $wpdb->insert(
 			$table,
 			array(
@@ -88,11 +107,12 @@ class CA_Database
 				'email' => $data['email'],
 				'phone' => $data['phone'],
 				'job_title' => $data['job_title'],
+				'assessment_type' => $assessment_type,
 				'status' => 'started',
 				'created_at' => current_time('mysql'),
 				'updated_at' => current_time('mysql'),
 			),
-			array('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s')
+			array('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s')
 		);
 
 		return $inserted ? $wpdb->insert_id : false;
@@ -169,10 +189,23 @@ class CA_Database
 	 * @param string $email
 	 * @return object|null
 	 */
-	public static function get_in_progress_submission_by_email($email)
+	public static function get_in_progress_submission_by_email($email, $assessment_type = null)
 	{
 		global $wpdb;
 		$table = esc_sql($wpdb->prefix . 'ca_submissions');
+
+		$type = null !== $assessment_type ? CA_Assessment_Types::normalize($assessment_type) : null;
+
+		if ($type) {
+			return $wpdb->get_row(
+				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $table is derived from $wpdb->prefix and not user input.
+				$wpdb->prepare(
+					"SELECT * FROM {$table} WHERE email = %s AND assessment_type = %s AND status IN ('in_progress','started') ORDER BY updated_at DESC LIMIT 1",
+					$email,
+					$type
+				)
+			);
+		}
 
 		return $wpdb->get_row(
 			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $table is derived from $wpdb->prefix and not user input.
