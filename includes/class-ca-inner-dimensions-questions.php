@@ -34,6 +34,15 @@ class CA_Inner_Dimensions_Questions {
 	 * @return array Nested categories and questions.
 	 */
 	public static function get_all() {
+		return self::build_all_questions();
+	}
+
+	/**
+	 * Base catalog before admin overrides and custom rows.
+	 *
+	 * @return array
+	 */
+	private static function get_base_all() {
 		return array(
 			self::pack(
 				'Inner World',
@@ -156,6 +165,96 @@ class CA_Inner_Dimensions_Questions {
 				)
 			),
 		);
+	}
+
+	/**
+	 * Merge base items with per-index overrides and custom admin-added rows.
+	 *
+	 * @return array
+	 */
+	private static function build_all_questions() {
+		$base_questions = self::get_base_all();
+		$overrides      = get_option( 'ca_inner_question_overrides', array() );
+		if ( ! is_array( $overrides ) ) {
+			$overrides = array();
+		}
+
+		$base_flat_index = 0;
+		for ( $cat_idx = 0, $cat_count = count( $base_questions ); $cat_idx < $cat_count; $cat_idx++ ) {
+			$cat_name = isset( $base_questions[ $cat_idx ]['category'] ) ? (string) $base_questions[ $cat_idx ]['category'] : '';
+			$qlist    = isset( $base_questions[ $cat_idx ]['questions'] ) && is_array( $base_questions[ $cat_idx ]['questions'] )
+				? $base_questions[ $cat_idx ]['questions']
+				: array();
+			for ( $q_idx = 0, $q_count = count( $qlist ); $q_idx < $q_count; $q_idx++ ) {
+				if ( isset( $overrides[ $base_flat_index ] ) && is_array( $overrides[ $base_flat_index ] ) ) {
+					$ov   = $overrides[ $base_flat_index ];
+					$orig = $base_questions[ $cat_idx ]['questions'][ $q_idx ];
+					$row  = array(
+						'text'     => isset( $ov['text'] ) ? (string) $ov['text'] : (string) $orig['text'],
+						'priority' => isset( $ov['priority'] ) ? (int) $ov['priority'] : (int) $orig['priority'],
+						'category' => isset( $ov['category'] ) ? (string) $ov['category'] : ( isset( $orig['category'] ) ? (string) $orig['category'] : $cat_name ),
+					);
+					$base_questions[ $cat_idx ]['questions'][ $q_idx ] = $row;
+				}
+				$base_flat_index++;
+			}
+		}
+
+		$custom_questions = get_option( 'ca_inner_custom_questions', array() );
+		if ( ! is_array( $custom_questions ) ) {
+			$custom_questions = array();
+		}
+
+		$custom_categories = array();
+		foreach ( $custom_questions as $custom_question ) {
+			if ( ! is_array( $custom_question ) ) {
+				continue;
+			}
+			$category = isset( $custom_question['category'] ) ? (string) $custom_question['category'] : '';
+			if ( ! isset( $custom_categories[ $category ] ) ) {
+				$custom_categories[ $category ] = array();
+			}
+			$custom_categories[ $category ][] = array(
+				'text'     => isset( $custom_question['text'] ) ? (string) $custom_question['text'] : '',
+				'priority' => isset( $custom_question['priority'] ) ? (int) $custom_question['priority'] : 0,
+			);
+		}
+
+		foreach ( $custom_categories as $category_name => $questions ) {
+			$base_questions[] = array(
+				'category'  => $category_name,
+				'questions' => $questions,
+			);
+		}
+
+		return $base_questions;
+	}
+
+	/**
+	 * Categories in the merged set plus empty custom categories from options.
+	 *
+	 * @return string[]
+	 */
+	public static function get_categories() {
+		$flat       = self::get_flat();
+		$categories = array();
+		foreach ( $flat as $q ) {
+			if ( isset( $q['category'] ) && ! in_array( $q['category'], $categories, true ) ) {
+				$categories[] = $q['category'];
+			}
+		}
+
+		$custom_categories = get_option( 'ca_inner_custom_categories', array() );
+		if ( is_array( $custom_categories ) ) {
+			foreach ( $custom_categories as $custom_category ) {
+				$c = (string) $custom_category;
+				if ( '' !== $c && ! in_array( $c, $categories, true ) ) {
+					$categories[] = $c;
+				}
+			}
+		}
+
+		return $categories;
 	}
 
 	/**

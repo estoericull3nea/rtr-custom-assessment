@@ -534,9 +534,21 @@ class CA_Admin
 	}
 
 	/**
+	 * Natural Attributes Cataloging questions screen (section + tab).
+	 */
+	private function is_inner_questions_admin_page()
+	{
+		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- Read-only routing.
+		$page = isset($_GET['page']) ? sanitize_key(wp_unslash($_GET['page'])) : '';
+		$tab = isset($_GET['ca_tab']) ? sanitize_key(wp_unslash($_GET['ca_tab'])) : '';
+		// phpcs:enable WordPress.Security.NonceVerification.Recommended
+		return ('custom-assessment-inner' === $page && 'questions' === $tab);
+	}
+
+	/**
 	 * Option keys for admin-managed questions (custom rows, overrides, empty categories).
 	 *
-	 * @param string $assessment_type Normalized type (mindset or social_fluency).
+	 * @param string $assessment_type Normalized type.
 	 * @return array{custom_questions:string,question_overrides:string,custom_categories:string}
 	 */
 	private function questions_storage_keys($assessment_type)
@@ -547,6 +559,13 @@ class CA_Admin
 				'custom_questions' => 'ca_sf_custom_questions',
 				'question_overrides' => 'ca_sf_question_overrides',
 				'custom_categories' => 'ca_sf_custom_categories',
+			);
+		}
+		if (CA_Assessment_Types::INNER_DIMENSIONS === $t) {
+			return array(
+				'custom_questions' => 'ca_inner_custom_questions',
+				'question_overrides' => 'ca_inner_question_overrides',
+				'custom_categories' => 'ca_inner_custom_categories',
 			);
 		}
 		return array(
@@ -562,9 +581,14 @@ class CA_Admin
 	 */
 	private function get_admin_questions_flat($assessment_type)
 	{
-		return CA_Assessment_Types::SOCIAL_FLUENCY === CA_Assessment_Types::normalize($assessment_type)
-			? CA_Social_Fluency_Questions::get_flat()
-			: CA_Questions::get_flat();
+		$t = CA_Assessment_Types::normalize($assessment_type);
+		if (CA_Assessment_Types::SOCIAL_FLUENCY === $t) {
+			return CA_Social_Fluency_Questions::get_flat();
+		}
+		if (CA_Assessment_Types::INNER_DIMENSIONS === $t) {
+			return CA_Inner_Dimensions_Questions::get_flat();
+		}
+		return CA_Questions::get_flat();
 	}
 
 	/**
@@ -573,9 +597,14 @@ class CA_Admin
 	 */
 	private function get_admin_questions_categories($assessment_type)
 	{
-		return CA_Assessment_Types::SOCIAL_FLUENCY === CA_Assessment_Types::normalize($assessment_type)
-			? CA_Social_Fluency_Questions::get_categories()
-			: CA_Questions::get_categories();
+		$t = CA_Assessment_Types::normalize($assessment_type);
+		if (CA_Assessment_Types::SOCIAL_FLUENCY === $t) {
+			return CA_Social_Fluency_Questions::get_categories();
+		}
+		if (CA_Assessment_Types::INNER_DIMENSIONS === $t) {
+			return CA_Inner_Dimensions_Questions::get_categories();
+		}
+		return CA_Questions::get_categories();
 	}
 
 	/**
@@ -889,6 +918,8 @@ class CA_Admin
 			$questions_assessment_type = CA_Assessment_Types::MINDSET;
 		} elseif ($this->is_social_fluency_questions_admin_page()) {
 			$questions_assessment_type = CA_Assessment_Types::SOCIAL_FLUENCY;
+		} elseif ($this->is_inner_questions_admin_page()) {
+			$questions_assessment_type = CA_Assessment_Types::INNER_DIMENSIONS;
 		} else {
 			return;
 		}
@@ -1130,7 +1161,7 @@ class CA_Admin
 		$raw_atype = isset($_POST['assessment_type']) ? sanitize_key(wp_unslash($_POST['assessment_type'])) : CA_Assessment_Types::MINDSET;
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 		$assessment_type = CA_Assessment_Types::normalize($raw_atype);
-		if (CA_Assessment_Types::SOCIAL_FLUENCY !== $assessment_type) {
+		if (CA_Assessment_Types::SOCIAL_FLUENCY !== $assessment_type && CA_Assessment_Types::INNER_DIMENSIONS !== $assessment_type) {
 			$assessment_type = CA_Assessment_Types::MINDSET;
 		}
 
@@ -2638,7 +2669,11 @@ class CA_Admin
 				$priority_max = max($priority_max, (int) $q['priority']);
 			}
 		}
-		$priority_floor = CA_Assessment_Types::SOCIAL_FLUENCY === $assessment_type ? 10 : 5;
+		if (CA_Assessment_Types::SOCIAL_FLUENCY === $assessment_type || CA_Assessment_Types::INNER_DIMENSIONS === $assessment_type) {
+			$priority_floor = 10;
+		} else {
+			$priority_floor = 5;
+		}
 		$priority_end = max($priority_floor, (int) $priority_max);
 
 		// Provide the full questions list to the admin search script.
@@ -2731,11 +2766,19 @@ class CA_Admin
 				<?php
 				if (CA_Assessment_Types::SOCIAL_FLUENCY === $assessment_type) {
 					esc_html_e('Social Fluency — Questions', 'rtr-custom-assessment');
+				} elseif (CA_Assessment_Types::INNER_DIMENSIONS === $assessment_type) {
+					esc_html_e('Natural Attributes Cataloging — Questions', 'rtr-custom-assessment');
 				} else {
 					esc_html_e('Entrepreneurial Mindset — Questions', 'rtr-custom-assessment');
 				}
 				?>
 			</h1>
+
+			<?php if (CA_Assessment_Types::INNER_DIMENSIONS === $assessment_type) : ?>
+				<div class="notice notice-info inline">
+					<p><?php esc_html_e('Respondents answer each statement with Yes or No. Custom questions use the same Yes/No flow.', 'rtr-custom-assessment'); ?></p>
+				</div>
+			<?php endif; ?>
 
 			<!-- Basic Statistics -->
 			<div class="ca-questions-stats-grid">
@@ -3442,68 +3485,11 @@ class CA_Admin
 	}
 
 	/**
-	 * Natural Attributes Cataloging questions (read-only; Yes/No).
+	 * Natural Attributes Cataloging — Questions (same CRUD as Mindset / Social; options-backed).
 	 */
 	public function render_inner_questions_page()
 	{
-		if (!current_user_can('manage_options')) {
-			wp_die(esc_html__('You do not have permission to view this page.', 'rtr-custom-assessment'));
-		}
-
-		$questions = CA_Inner_Dimensions_Questions::get_flat();
-		$total = count($questions);
-		?>
-		<div class="wrap ca-admin-wrap">
-			<?php if ($this->is_assessment_section_screen()) : ?>
-				<?php $this->render_assessment_section_nav_tabs(CA_Assessment_Types::INNER_DIMENSIONS, 'questions'); ?>
-			<?php endif; ?>
-			<h1 class="ca-admin-title">
-				<span class="ca-admin-title-icon dashicons dashicons-format-chat"></span>
-				<?php esc_html_e('Natural Attributes Cataloging — Questions', 'rtr-custom-assessment'); ?>
-			</h1>
-
-			<div class="notice notice-info inline">
-				<p>
-					<?php esc_html_e('These questions are defined in the plugin and are not editable from the admin screen. Respondents answer each with Yes or No.', 'rtr-custom-assessment'); ?>
-				</p>
-			</div>
-
-			<p>
-				<?php
-				printf(
-					/* translators: %d: question count */
-					esc_html(_n('%d question', '%d questions', $total, 'rtr-custom-assessment')),
-					(int) $total
-				);
-				?>
-			</p>
-
-			<?php if (empty($questions)) : ?>
-				<p><?php esc_html_e('No questions found.', 'rtr-custom-assessment'); ?></p>
-			<?php else : ?>
-				<table class="wp-list-table widefat fixed striped ca-admin-table">
-					<thead>
-						<tr>
-							<th class="ca-col-id"><?php esc_html_e('#', 'rtr-custom-assessment'); ?></th>
-							<th><?php esc_html_e('Category', 'rtr-custom-assessment'); ?></th>
-							<th><?php esc_html_e('Priority', 'rtr-custom-assessment'); ?></th>
-							<th><?php esc_html_e('Question', 'rtr-custom-assessment'); ?></th>
-						</tr>
-					</thead>
-					<tbody>
-						<?php foreach ($questions as $q) : ?>
-							<tr>
-								<td class="ca-col-id"><?php echo esc_html((int) $q['index'] + 1); ?></td>
-								<td><?php echo esc_html(isset($q['category']) ? $q['category'] : ''); ?></td>
-								<td><?php echo esc_html(isset($q['priority']) ? (string) $q['priority'] : ''); ?></td>
-								<td><?php echo esc_html(isset($q['text']) ? $q['text'] : ''); ?></td>
-							</tr>
-						<?php endforeach; ?>
-					</tbody>
-				</table>
-			<?php endif; ?>
-		</div>
-		<?php
+		$this->render_assessment_questions_admin_page(CA_Assessment_Types::INNER_DIMENSIONS);
 	}
 
 	/**
