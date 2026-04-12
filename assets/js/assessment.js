@@ -492,7 +492,27 @@
     var html = "";
     var i;
 
-    if (style === "endpoints") {
+    if (style === "yes_no") {
+      var yesLbl =
+        (CA_Config.labels && CA_Config.labels.yes_no_yes) || "Yes";
+      var noLbl = (CA_Config.labels && CA_Config.labels.yes_no_no) || "No";
+      html +=
+        '<label class="ca-answer-option ca-answer-option--yesno" data-value="1">' +
+        '<input type="radio" name="ca_answer" value="1" class="ca-answer-radio" aria-label="' +
+        escAttr(yesLbl) +
+        '">' +
+        '<span class="ca-answer-btn ca-answer-btn--yesno"><span class="ca-answer-label">' +
+        escHtml(yesLbl) +
+        "</span></span></label>";
+      html +=
+        '<label class="ca-answer-option ca-answer-option--yesno" data-value="2">' +
+        '<input type="radio" name="ca_answer" value="2" class="ca-answer-radio" aria-label="' +
+        escAttr(noLbl) +
+        '">' +
+        '<span class="ca-answer-btn ca-answer-btn--yesno"><span class="ca-answer-label">' +
+        escHtml(noLbl) +
+        "</span></span></label>";
+    } else if (style === "endpoints") {
       for (i = 1; i <= scaleMax; i++) {
         html +=
           '<label class="ca-answer-option" data-value="' +
@@ -592,8 +612,12 @@
 
     var built = buildAnswerMarkup(q);
     $answerGroup.html(built.html);
-    $answerGroup.removeClass("ca-answer-group--cols-10 ca-answer-group--cols-5");
-    if (built.scaleMax > 5) {
+    $answerGroup.removeClass(
+      "ca-answer-group--cols-10 ca-answer-group--cols-5 ca-answer-group--yesno",
+    );
+    if (built.style === "yes_no") {
+      $answerGroup.addClass("ca-answer-group--yesno");
+    } else if (built.scaleMax > 5) {
       $answerGroup.addClass("ca-answer-group--cols-10");
     } else {
       $answerGroup.addClass("ca-answer-group--cols-5");
@@ -794,11 +818,13 @@
   function renderResults(data) {
     var user = data.user;
     var total = data.total_score;
-    var avg = parseFloat(data.average_score).toFixed(2);
+    var avgNum = parseFloat(data.average_score);
+    var avg = avgNum.toFixed(2);
     var maxScore = data.max_score;
     var profile = data.overall_profile;
     var cats = data.category_scores;
     var scaleMax = parseInt(data.scale_max, 10) || 5;
+    var isYesNo = data.assessment_type === "inner_dimensions";
 
     var initials = (
       user.first_name.charAt(0) + user.last_name.charAt(0)
@@ -807,20 +833,25 @@
     var catHtml = "";
     cats.forEach(function (cat) {
       var pct = Math.round((cat.average / scaleMax) * 100);
+      var scoreBadge = isYesNo
+        ? '<span class="ca-cat-score-badge"><span class="ca-cat-score-num">' +
+          pct +
+          '%</span><span class="ca-cat-score-max"> Yes</span></span>'
+        : '<span class="ca-cat-score-badge">' +
+          '<span class="ca-cat-score-num">' +
+          parseFloat(cat.average).toFixed(2) +
+          "</span>" +
+          '<span class="ca-cat-score-max">/ ' +
+          scaleMax +
+          "</span>" +
+          "</span>";
       catHtml +=
         '<div class="ca-cat-card">' +
         '<div class="ca-cat-card-header">' +
         '<span class="ca-cat-name">' +
         escHtml(cat.name) +
         "</span>" +
-        '<span class="ca-cat-score-badge">' +
-        '<span class="ca-cat-score-num">' +
-        parseFloat(cat.average).toFixed(2) +
-        "</span>" +
-        '<span class="ca-cat-score-max">/ ' +
-        scaleMax +
-        "</span>" +
-        "</span>" +
+        scoreBadge +
         "</div>" +
         '<div class="ca-cat-bar-track"><div class="ca-cat-bar-fill" style="width:0%" data-width="' +
         pct +
@@ -830,6 +861,18 @@
         "</p>" +
         "</div>";
     });
+
+    var avgBlock = isYesNo
+      ? '<span class="ca-results-score-num">' +
+        Math.round(avgNum * 100) +
+        "%</span>" +
+        '<span class="ca-results-score-label">Yes responses (overall)</span>'
+      : '<span class="ca-results-score-num">' +
+        avg +
+        "<sup>/" +
+        scaleMax +
+        "</sup></span>" +
+        '<span class="ca-results-score-label">Average Score</span>';
 
     var html =
       '<div class="ca-results-hero">' +
@@ -851,12 +894,7 @@
       '<span class="ca-results-score-label">Total Score</span>' +
       "</div>" +
       '<div class="ca-results-score-item">' +
-      '<span class="ca-results-score-num">' +
-      avg +
-      "<sup>/" +
-      scaleMax +
-      "</sup></span>" +
-      '<span class="ca-results-score-label">Average Score</span>' +
+      avgBlock +
       "</div>" +
       "</div>" +
       "</div>" +

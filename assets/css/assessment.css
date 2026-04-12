@@ -606,6 +606,26 @@ body,
   gap: 8px;
 }
 
+.ca-answer-group.ca-answer-group--yesno {
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  max-width: 420px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.ca-answer-btn--yesno {
+  aspect-ratio: auto;
+  min-height: 52px;
+  padding: 14px 20px;
+  border-radius: 12px;
+}
+
+.ca-answer-option--yesno .ca-answer-label {
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
 .ca-scale-endpoints {
   display: flex;
   justify-content: space-between;

@@ -173,6 +173,9 @@ class CA_Ajax
 		if (CA_Assessment_Types::SOCIAL_FLUENCY === $assessment_type) {
 			$payload['label_style'] = 'endpoints';
 			$payload['endpoints'] = isset($question['endpoints']) && is_array($question['endpoints']) ? $question['endpoints'] : array();
+		} elseif (CA_Assessment_Types::INNER_DIMENSIONS === $assessment_type) {
+			$payload['label_style'] = 'yes_no';
+			$payload['scale_max']   = 2;
 		} else {
 			$payload['label_style'] = 'per_number';
 		}
@@ -214,16 +217,22 @@ class CA_Ajax
 
 		$this->require_submission_for_type($submission_id, $assessment_type);
 
-		$scale_max = CA_Assessment_Types::get_scale_max($assessment_type);
-		if ($answer < 1 || $answer > $scale_max) {
-			$this->send_error(
-				'ca_save_answer',
-				sprintf(
-					/* translators: %d: maximum scale value */
-					__('Invalid answer. Please select a value between 1 and %d.', 'rtr-custom-assessment'),
-					$scale_max
-				)
-			);
+		if (CA_Assessment_Types::is_yes_no_assessment($assessment_type)) {
+			if (1 !== $answer && 2 !== $answer) {
+				$this->send_error('ca_save_answer', __('Please select Yes or No.', 'rtr-custom-assessment'));
+			}
+		} else {
+			$scale_max = CA_Assessment_Types::get_scale_max($assessment_type);
+			if ($answer < 1 || $answer > $scale_max) {
+				$this->send_error(
+					'ca_save_answer',
+					sprintf(
+						/* translators: %d: maximum scale value */
+						__('Invalid answer. Please select a value between 1 and %d.', 'rtr-custom-assessment'),
+						$scale_max
+					)
+				);
+			}
 		}
 
 		CA_Database::save_answer($submission_id, $question_index, $answer);

@@ -66,6 +66,15 @@ class CA_Admin
 
 		add_submenu_page(
 			'custom-assessment-hub',
+			__('Inner Dimensions', 'rtr-custom-assessment'),
+			__('Inner Dimensions', 'rtr-custom-assessment'),
+			'manage_options',
+			'custom-assessment-inner',
+			array($this, 'render_inner_section_page')
+		);
+
+		add_submenu_page(
+			'custom-assessment-hub',
 			__('All Submissions', 'rtr-custom-assessment'),
 			__('All Submissions', 'rtr-custom-assessment'),
 			'manage_options',
@@ -167,6 +176,13 @@ class CA_Admin
 			),
 			admin_url('admin.php')
 		);
+		$inner_url = add_query_arg(
+			array(
+				'page' => 'custom-assessment-inner',
+				'ca_tab' => 'dashboard',
+			),
+			admin_url('admin.php')
+		);
 		?>
 		<div class="wrap ca-admin-wrap ca-assessment-hub-wrap">
 			<h1 class="ca-admin-title">
@@ -182,6 +198,10 @@ class CA_Admin
 				<a class="ca-dashboard-hub-card" href="<?php echo esc_url($social_url); ?>">
 					<h2><?php esc_html_e('Social Fluency', 'rtr-custom-assessment'); ?></h2>
 					<p><?php esc_html_e('Social Fluency assessment', 'rtr-custom-assessment'); ?></p>
+				</a>
+				<a class="ca-dashboard-hub-card" href="<?php echo esc_url($inner_url); ?>">
+					<h2><?php esc_html_e('Inner Dimensions', 'rtr-custom-assessment'); ?></h2>
+					<p><?php esc_html_e('Yes / No multidimensional profile', 'rtr-custom-assessment'); ?></p>
 				</a>
 			</div>
 		</div>
@@ -241,6 +261,48 @@ class CA_Admin
 	}
 
 	/**
+	 * Inner Dimensions section: routes by ca_tab.
+	 */
+	public function render_inner_section_page()
+	{
+		if (!current_user_can('manage_options')) {
+			wp_die(esc_html__('You do not have permission to view this page.', 'rtr-custom-assessment'));
+		}
+
+		$tab = $this->get_current_ca_tab();
+		switch ($tab) {
+			case 'submissions':
+				$this->render_inner_list_page();
+				return;
+			case 'questions':
+				$this->render_inner_questions_page();
+				return;
+			case 'categories':
+				$this->render_inner_categories_page();
+				return;
+			default:
+				$this->render_inner_dashboard_page();
+				return;
+		}
+	}
+
+	/**
+	 * Inner Dimensions dashboard.
+	 */
+	public function render_inner_dashboard_page()
+	{
+		$this->render_dashboard_for_assessment(CA_Assessment_Types::INNER_DIMENSIONS);
+	}
+
+	/**
+	 * Inner Dimensions submissions.
+	 */
+	public function render_inner_list_page()
+	{
+		$this->render_submissions_list_for_type(CA_Assessment_Types::INNER_DIMENSIONS);
+	}
+
+	/**
 	 * Current tab for section screens (custom-assessment-mindset / custom-assessment-social).
 	 *
 	 * @return string dashboard|submissions|questions|categories
@@ -262,7 +324,25 @@ class CA_Admin
 		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- Read-only routing.
 		$page = isset($_GET['page']) ? sanitize_key(wp_unslash($_GET['page'])) : '';
 		// phpcs:enable WordPress.Security.NonceVerification.Recommended
-		return in_array($page, array('custom-assessment-mindset', 'custom-assessment-social'), true);
+		return in_array($page, array('custom-assessment-mindset', 'custom-assessment-social', 'custom-assessment-inner'), true);
+	}
+
+	/**
+	 * Admin page slug for a tabbed assessment section.
+	 *
+	 * @param string $assessment_type Normalized type.
+	 * @return string
+	 */
+	private function admin_section_page_slug_for_type($assessment_type)
+	{
+		$t = CA_Assessment_Types::normalize($assessment_type);
+		if (CA_Assessment_Types::SOCIAL_FLUENCY === $t) {
+			return 'custom-assessment-social';
+		}
+		if (CA_Assessment_Types::INNER_DIMENSIONS === $t) {
+			return 'custom-assessment-inner';
+		}
+		return 'custom-assessment-mindset';
 	}
 
 	/**
@@ -273,10 +353,7 @@ class CA_Admin
 	 */
 	private function render_assessment_section_nav_tabs($assessment_type, $current_tab)
 	{
-		$t = CA_Assessment_Types::normalize($assessment_type);
-		$section_page = (CA_Assessment_Types::SOCIAL_FLUENCY === $t)
-			? 'custom-assessment-social'
-			: 'custom-assessment-mindset';
+		$section_page = $this->admin_section_page_slug_for_type($assessment_type);
 
 		$tabs = array(
 			'dashboard' => __('Dashboard', 'rtr-custom-assessment'),
@@ -314,10 +391,7 @@ class CA_Admin
 	 */
 	private function admin_screen_query_args($screen, $assessment_type)
 	{
-		$t = CA_Assessment_Types::normalize($assessment_type);
-		$section_page = (CA_Assessment_Types::SOCIAL_FLUENCY === $t)
-			? 'custom-assessment-social'
-			: 'custom-assessment-mindset';
+		$section_page = $this->admin_section_page_slug_for_type($assessment_type);
 		$tab_map = array(
 			'dashboard' => 'dashboard',
 			'submissions' => 'submissions',
@@ -402,6 +476,9 @@ class CA_Admin
 		if ('custom-assessment-submissions-all' === $page) {
 			return null;
 		}
+		if ('custom-assessment-inner' === $page) {
+			return CA_Assessment_Types::INNER_DIMENSIONS;
+		}
 		if ('custom-assessment-social' === $page) {
 			return CA_Assessment_Types::SOCIAL_FLUENCY;
 		}
@@ -454,6 +531,7 @@ class CA_Admin
 		return array(
 			'custom-assessment-mindset',
 			'custom-assessment-social',
+			'custom-assessment-inner',
 			'custom-assessment-submissions-all',
 			'custom-assessment-dashboard',
 			'custom-assessment-submissions',
@@ -1489,9 +1567,13 @@ class CA_Admin
 		$assessment_type = CA_Assessment_Types::normalize($assessment_type);
 		$scale_max = CA_Assessment_Types::get_scale_max($assessment_type);
 		$submissions_list_args = $this->admin_screen_query_args('submissions', $assessment_type);
-		$dashboard_title = (CA_Assessment_Types::SOCIAL_FLUENCY === $assessment_type)
-			? __('Social Fluency — Dashboard', 'rtr-custom-assessment')
-			: __('Entrepreneurial Mindset — Dashboard', 'rtr-custom-assessment');
+		if (CA_Assessment_Types::SOCIAL_FLUENCY === $assessment_type) {
+			$dashboard_title = __('Social Fluency — Dashboard', 'rtr-custom-assessment');
+		} elseif (CA_Assessment_Types::INNER_DIMENSIONS === $assessment_type) {
+			$dashboard_title = __('Inner Dimensions — Dashboard', 'rtr-custom-assessment');
+		} else {
+			$dashboard_title = __('Entrepreneurial Mindset — Dashboard', 'rtr-custom-assessment');
+		}
 
 		$submissions = CA_Database::get_all_submissions($assessment_type);
 		$completed = array_filter($submissions, fn($s) => $s->status === 'completed');
@@ -1578,6 +1660,8 @@ class CA_Admin
 						<?php
 						if (CA_Assessment_Types::SOCIAL_FLUENCY === $assessment_type) {
 							esc_html_e('No Social Fluency submissions yet. Use the shortcode [social_fluency_assessment] on a page.', 'rtr-custom-assessment');
+						} elseif (CA_Assessment_Types::INNER_DIMENSIONS === $assessment_type) {
+							esc_html_e('No Inner Dimensions submissions yet. Use the shortcode [inner_dimensions_assessment] on a page.', 'rtr-custom-assessment');
 						} else {
 							esc_html_e('No submissions yet. Share the shortcode [custom_assessment] on any page.', 'rtr-custom-assessment');
 						}
@@ -1666,9 +1750,13 @@ class CA_Admin
 	private function admin_submission_assessment_label($submission)
 	{
 		$t = CA_Assessment_Types::from_submission($submission);
-		return CA_Assessment_Types::SOCIAL_FLUENCY === $t
-			? __('Social Fluency', 'rtr-custom-assessment')
-			: __('Entrepreneurial Mindset', 'rtr-custom-assessment');
+		if (CA_Assessment_Types::SOCIAL_FLUENCY === $t) {
+			return __('Social Fluency', 'rtr-custom-assessment');
+		}
+		if (CA_Assessment_Types::INNER_DIMENSIONS === $t) {
+			return __('Inner Dimensions', 'rtr-custom-assessment');
+		}
+		return __('Entrepreneurial Mindset', 'rtr-custom-assessment');
 	}
 
 	/**
@@ -1687,9 +1775,13 @@ class CA_Admin
 		} else {
 			$assessment_type = CA_Assessment_Types::normalize($assessment_type);
 			$list_page_args = $this->admin_screen_query_args('submissions', $assessment_type);
-			$list_heading = (CA_Assessment_Types::SOCIAL_FLUENCY === $assessment_type)
-				? __('Social Fluency — Submissions', 'rtr-custom-assessment')
-				: __('Entrepreneurial Mindset — Submissions', 'rtr-custom-assessment');
+			if (CA_Assessment_Types::SOCIAL_FLUENCY === $assessment_type) {
+				$list_heading = __('Social Fluency — Submissions', 'rtr-custom-assessment');
+			} elseif (CA_Assessment_Types::INNER_DIMENSIONS === $assessment_type) {
+				$list_heading = __('Inner Dimensions — Submissions', 'rtr-custom-assessment');
+			} else {
+				$list_heading = __('Entrepreneurial Mindset — Submissions', 'rtr-custom-assessment');
+			}
 		}
 
 		// Check SMTP configuration - show error if no SMTP detected
@@ -1832,6 +1924,8 @@ class CA_Admin
 							esc_html_e('No submissions yet.', 'rtr-custom-assessment');
 						} elseif (CA_Assessment_Types::SOCIAL_FLUENCY === $assessment_type) {
 							esc_html_e('No Social Fluency submissions yet. Use the shortcode [social_fluency_assessment] on a page.', 'rtr-custom-assessment');
+						} elseif (CA_Assessment_Types::INNER_DIMENSIONS === $assessment_type) {
+							esc_html_e('No Inner Dimensions submissions yet. Use the shortcode [inner_dimensions_assessment] on a page.', 'rtr-custom-assessment');
 						} else {
 							esc_html_e('No submissions yet. Share the shortcode [custom_assessment] on any page.', 'rtr-custom-assessment');
 						}
@@ -2340,7 +2434,7 @@ class CA_Admin
 					</div>
 					<div>
 						<label><?php esc_html_e('Assessment', 'rtr-custom-assessment'); ?></label>
-						<span><?php echo esc_html($sub_type === CA_Assessment_Types::SOCIAL_FLUENCY ? __('Social Fluency', 'rtr-custom-assessment') : __('Entrepreneurial Mindset', 'rtr-custom-assessment')); ?></span>
+						<span><?php echo esc_html($this->admin_submission_assessment_label($submission)); ?></span>
 					</div>
 				</div>
 			</div>
@@ -3286,6 +3380,125 @@ class CA_Admin
 			<div class="notice notice-info inline">
 				<p>
 					<?php esc_html_e('Categories for the Social Fluency assessment are fixed in the plugin. Use Mindset — Categories to manage the entrepreneurial mindset assessment only.', 'rtr-custom-assessment'); ?>
+				</p>
+			</div>
+
+			<?php if (empty($blocks)) : ?>
+				<p><?php esc_html_e('No categories found.', 'rtr-custom-assessment'); ?></p>
+			<?php else : ?>
+				<table class="wp-list-table widefat fixed striped ca-admin-table">
+					<thead>
+						<tr>
+							<th><?php esc_html_e('Category', 'rtr-custom-assessment'); ?></th>
+							<th><?php esc_html_e('Questions', 'rtr-custom-assessment'); ?></th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php foreach ($blocks as $block) : ?>
+							<?php
+							$cat_name = isset($block['category']) ? (string) $block['category'] : '';
+							$qcount = isset($block['questions']) && is_array($block['questions']) ? count($block['questions']) : 0;
+							?>
+							<tr>
+								<td><strong><?php echo esc_html($cat_name); ?></strong></td>
+								<td><?php echo esc_html((string) $qcount); ?></td>
+							</tr>
+						<?php endforeach; ?>
+					</tbody>
+				</table>
+			<?php endif; ?>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Inner Dimensions questions (read-only; Yes/No).
+	 */
+	public function render_inner_questions_page()
+	{
+		if (!current_user_can('manage_options')) {
+			wp_die(esc_html__('You do not have permission to view this page.', 'rtr-custom-assessment'));
+		}
+
+		$questions = CA_Inner_Dimensions_Questions::get_flat();
+		$total = count($questions);
+		?>
+		<div class="wrap ca-admin-wrap">
+			<?php if ($this->is_assessment_section_screen()) : ?>
+				<?php $this->render_assessment_section_nav_tabs(CA_Assessment_Types::INNER_DIMENSIONS, 'questions'); ?>
+			<?php endif; ?>
+			<h1 class="ca-admin-title">
+				<span class="ca-admin-title-icon dashicons dashicons-format-chat"></span>
+				<?php esc_html_e('Inner Dimensions — Questions', 'rtr-custom-assessment'); ?>
+			</h1>
+
+			<div class="notice notice-info inline">
+				<p>
+					<?php esc_html_e('These questions are defined in the plugin and are not editable from the admin screen. Respondents answer each with Yes or No.', 'rtr-custom-assessment'); ?>
+				</p>
+			</div>
+
+			<p>
+				<?php
+				printf(
+					/* translators: %d: question count */
+					esc_html(_n('%d question', '%d questions', $total, 'rtr-custom-assessment')),
+					(int) $total
+				);
+				?>
+			</p>
+
+			<?php if (empty($questions)) : ?>
+				<p><?php esc_html_e('No questions found.', 'rtr-custom-assessment'); ?></p>
+			<?php else : ?>
+				<table class="wp-list-table widefat fixed striped ca-admin-table">
+					<thead>
+						<tr>
+							<th class="ca-col-id"><?php esc_html_e('#', 'rtr-custom-assessment'); ?></th>
+							<th><?php esc_html_e('Category', 'rtr-custom-assessment'); ?></th>
+							<th><?php esc_html_e('Priority', 'rtr-custom-assessment'); ?></th>
+							<th><?php esc_html_e('Question', 'rtr-custom-assessment'); ?></th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php foreach ($questions as $q) : ?>
+							<tr>
+								<td class="ca-col-id"><?php echo esc_html((int) $q['index'] + 1); ?></td>
+								<td><?php echo esc_html(isset($q['category']) ? $q['category'] : ''); ?></td>
+								<td><?php echo esc_html(isset($q['priority']) ? (string) $q['priority'] : ''); ?></td>
+								<td><?php echo esc_html(isset($q['text']) ? $q['text'] : ''); ?></td>
+							</tr>
+						<?php endforeach; ?>
+					</tbody>
+				</table>
+			<?php endif; ?>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Inner Dimensions categories (read-only).
+	 */
+	public function render_inner_categories_page()
+	{
+		if (!current_user_can('manage_options')) {
+			wp_die(esc_html__('You do not have permission to view this page.', 'rtr-custom-assessment'));
+		}
+
+		$blocks = CA_Inner_Dimensions_Questions::get_all();
+		?>
+		<div class="wrap ca-admin-wrap">
+			<?php if ($this->is_assessment_section_screen()) : ?>
+				<?php $this->render_assessment_section_nav_tabs(CA_Assessment_Types::INNER_DIMENSIONS, 'categories'); ?>
+			<?php endif; ?>
+			<h1 class="ca-admin-title">
+				<span class="ca-admin-title-icon dashicons dashicons-category"></span>
+				<?php esc_html_e('Inner Dimensions — Categories', 'rtr-custom-assessment'); ?>
+			</h1>
+
+			<div class="notice notice-info inline">
+				<p>
+					<?php esc_html_e('Categories for Inner Dimensions are fixed in the plugin.', 'rtr-custom-assessment'); ?>
 				</p>
 			</div>
 

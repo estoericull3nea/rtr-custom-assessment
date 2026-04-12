@@ -25,6 +25,7 @@ require_once CA_PLUGIN_DIR . 'includes/class-ca-database.php';
 require_once CA_PLUGIN_DIR . 'includes/class-ca-assessment-types.php';
 require_once CA_PLUGIN_DIR . 'includes/class-ca-questions.php';
 require_once CA_PLUGIN_DIR . 'includes/class-ca-social-fluency-questions.php';
+require_once CA_PLUGIN_DIR . 'includes/class-ca-inner-dimensions-questions.php';
 require_once CA_PLUGIN_DIR . 'includes/class-ca-assessment-registry.php';
 require_once CA_PLUGIN_DIR . 'includes/class-ca-scoring.php';
 require_once CA_PLUGIN_DIR . 'includes/class-ca-logger.php';

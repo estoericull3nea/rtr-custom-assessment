@@ -36,6 +36,7 @@ class CA_Scoring {
 		$flat         = CA_Assessment_Registry::get_flat( $type );
 		$total_score  = 0;
 		$cat_scores   = array();
+		$yes_no       = CA_Assessment_Types::is_yes_no_assessment( $type );
 
 		foreach ( $categories as $cat ) {
 			$cat_scores[ $cat['category'] ] = array(
@@ -47,9 +48,14 @@ class CA_Scoring {
 		}
 
 		foreach ( $flat as $q ) {
-			$idx    = $q['index'];
-			$cat    = $q['category'];
-			$answer = isset( $answers[ $idx ] ) ? (int) $answers[ $idx ] : 0;
+			$idx = $q['index'];
+			$cat = $q['category'];
+			$raw = isset( $answers[ $idx ] ) ? (int) $answers[ $idx ] : 0;
+			if ( $yes_no ) {
+				$answer = ( 1 === $raw ) ? 1 : 0;
+			} else {
+				$answer = $raw;
+			}
 			$total_score += $answer;
 			$cat_scores[ $cat ]['subtotal'] += $answer;
 		}
@@ -83,6 +89,10 @@ class CA_Scoring {
 	 */
 	public static function get_category_summary( $category, $average, $assessment_type = null ) {
 		$type = CA_Assessment_Types::normalize( null !== $assessment_type ? $assessment_type : CA_Assessment_Types::MINDSET );
+
+		if ( CA_Assessment_Types::INNER_DIMENSIONS === $type ) {
+			return self::get_inner_dimensions_category_summary( $category, (float) $average );
+		}
 
 		if ( CA_Assessment_Types::SOCIAL_FLUENCY === $type ) {
 			return self::get_social_fluency_category_summary( $category, (float) $average );
@@ -150,6 +160,43 @@ class CA_Scoring {
 		} else {
 			return "This is an area of opportunity. Investing in " . esc_html( $category ) . " will strengthen your entrepreneurial foundation.";
 		}
+	}
+
+	/**
+	 * Inner Dimensions — averages are share of “Yes” per category (0–1).
+	 *
+	 * @param string $category Category name.
+	 * @param float  $average  Category average (0–1).
+	 * @return string
+	 */
+	private static function get_inner_dimensions_category_summary( $category, $average ) {
+		$bodies = array(
+			'Inner World'                  => __( 'You have a fairly solid inner world, but there\'s room for deeper self-exploration. Engage in activities that challenge your self-awareness and emotional intelligence.', 'rtr-custom-assessment' ),
+			'Mental Wiring'                => __( 'You possess a balanced mental wiring, but enhancing problem-solving skills will further boost your adaptability and innovation.', 'rtr-custom-assessment' ),
+			'Communication & Expression'   => __( 'Your communication and expression are solid, yet refining your persuasive abilities will further strengthen your impact.', 'rtr-custom-assessment' ),
+			'Vision & Intuition'           => __( 'You have a good sense of vision and intuition. Strengthening your strategic thinking will elevate your long-term planning abilities.', 'rtr-custom-assessment' ),
+			'Relationships & Connection'   => __( 'You have a strong foundation in relationships. Further developing your networking skills will enhance your influence and support system.', 'rtr-custom-assessment' ),
+			'Motivation & Drive'           => __( 'You have a good level of motivation. Focusing on aligning your goals with your passions will further enhance your drive.', 'rtr-custom-assessment' ),
+			'Movement & Energy'            => __( 'You have a decent level of movement and energy. Exploring new physical activities can further enhance your overall well-being.', 'rtr-custom-assessment' ),
+			'Environments & Systems'       => __( 'You have a fairly organized environment. Streamlining systems further can enhance your efficiency and effectiveness.', 'rtr-custom-assessment' ),
+		);
+
+		$mid = isset( $bodies[ $category ] )
+			? $bodies[ $category ]
+			: sprintf(
+				/* translators: %s: category name */
+				__( 'Continue reflecting on how you experience %s — small experiments often reveal the next right step.', 'rtr-custom-assessment' ),
+				esc_html( $category )
+			);
+
+		if ( $average >= 0.67 ) {
+			return __( 'Your answers show strong alignment in this area. ', 'rtr-custom-assessment' ) . $mid;
+		}
+		if ( $average < 0.34 ) {
+			return __( 'There is room to explore this area more deeply. ', 'rtr-custom-assessment' ) . $mid;
+		}
+
+		return $mid;
 	}
 
 	/**
@@ -234,6 +281,22 @@ class CA_Scoring {
 	 */
 	public static function get_overall_profile( $average, $assessment_type = null ) {
 		$type = CA_Assessment_Types::normalize( null !== $assessment_type ? $assessment_type : CA_Assessment_Types::MINDSET );
+
+		if ( CA_Assessment_Types::INNER_DIMENSIONS === $type ) {
+			if ( $average >= 0.85 ) {
+				return __( 'Highly Integrated Profile', 'rtr-custom-assessment' );
+			}
+			if ( $average >= 0.70 ) {
+				return __( 'Strong Multidimensional Profile', 'rtr-custom-assessment' );
+			}
+			if ( $average >= 0.55 ) {
+				return __( 'Balanced Multidimensional Profile', 'rtr-custom-assessment' );
+			}
+			if ( $average >= 0.40 ) {
+				return __( 'Emerging Multidimensional Profile', 'rtr-custom-assessment' );
+			}
+			return __( 'Developing Multidimensional Profile', 'rtr-custom-assessment' );
+		}
 
 		if ( CA_Assessment_Types::SOCIAL_FLUENCY === $type ) {
 			if ( $average >= 9.0 ) {

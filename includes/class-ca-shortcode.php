@@ -1,6 +1,6 @@
 <?php
 /**
- * Shortcodes: [custom_assessment] [social_fluency_assessment]
+ * Shortcodes: [custom_assessment] [social_fluency_assessment] [inner_dimensions_assessment]
  * Renders trigger buttons; shared modal prints in wp_footer when needed.
  */
 
@@ -19,6 +19,7 @@ class CA_Shortcode {
 	public function __construct() {
 		add_shortcode( 'custom_assessment', array( $this, 'render_mindset' ) );
 		add_shortcode( 'social_fluency_assessment', array( $this, 'render_social_fluency' ) );
+		add_shortcode( 'inner_dimensions_assessment', array( $this, 'render_inner_dimensions' ) );
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_assets' ) );
 		add_action( 'wp_footer', array( $this, 'maybe_print_modal' ), 5 );
 	}
@@ -32,7 +33,8 @@ class CA_Shortcode {
 			return false;
 		}
 		return has_shortcode( $post->post_content, 'custom_assessment' )
-			|| has_shortcode( $post->post_content, 'social_fluency_assessment' );
+			|| has_shortcode( $post->post_content, 'social_fluency_assessment' )
+			|| has_shortcode( $post->post_content, 'inner_dimensions_assessment' );
 	}
 
 	public function enqueue_assets() {
@@ -111,6 +113,26 @@ class CA_Shortcode {
 							)
 						),
 					),
+					CA_Assessment_Types::INNER_DIMENSIONS => array(
+						'type'               => CA_Assessment_Types::INNER_DIMENSIONS,
+						'modal_title'        => __( 'Inner Dimensions Assessment', 'rtr-custom-assessment' ),
+						'scale_max'          => 2,
+						'total_questions'    => CA_Inner_Dimensions_Questions::get_total_count(),
+						'scale_note'         => __( 'Answer <strong>Yes</strong> or <strong>No</strong> for each statement, based on how true it is for you.', 'rtr-custom-assessment' ),
+						'per_number_labels'  => array(),
+						'questions_priority' => array_values(
+							array_map(
+								function ( $q ) {
+									return array(
+										'index'    => isset( $q['index'] ) ? (int) $q['index'] : 0,
+										'priority' => isset( $q['priority'] ) ? (int) $q['priority'] : 0,
+										'category' => isset( $q['category'] ) ? (string) $q['category'] : '',
+									);
+								},
+								CA_Inner_Dimensions_Questions::get_flat()
+							)
+						),
+					),
 				),
 				'labels'      => array(
 					'next'          => __( 'Next', 'rtr-custom-assessment' ),
@@ -120,6 +142,8 @@ class CA_Shortcode {
 					'loading'       => __( 'Loading…', 'rtr-custom-assessment' ),
 					'error_answer'  => __( 'Please select an answer before continuing.', 'rtr-custom-assessment' ),
 					'error_generic' => __( 'Something went wrong. Please try again.', 'rtr-custom-assessment' ),
+					'yes_no_yes'    => __( 'Yes', 'rtr-custom-assessment' ),
+					'yes_no_no'     => __( 'No', 'rtr-custom-assessment' ),
 				),
 			)
 		);
@@ -155,6 +179,22 @@ class CA_Shortcode {
 			'social_fluency_assessment'
 		);
 		return $this->render_trigger_button( CA_Assessment_Types::SOCIAL_FLUENCY, $atts['button_text'] );
+	}
+
+	/**
+	 * @param array $atts Shortcode atts.
+	 * @return string
+	 */
+	public function render_inner_dimensions( $atts ) {
+		self::$needs_modal = true;
+		$atts              = shortcode_atts(
+			array(
+				'button_text' => __( 'Take the Inner Dimensions Assessment', 'rtr-custom-assessment' ),
+			),
+			$atts,
+			'inner_dimensions_assessment'
+		);
+		return $this->render_trigger_button( CA_Assessment_Types::INNER_DIMENSIONS, $atts['button_text'] );
 	}
 
 	/**
