@@ -600,10 +600,18 @@ body,
   grid-template-columns: repeat(5, 1fr);
 }
 
-/* 10-point scale: two rows of five */
+/* 10-point scale: one horizontal row (1 … 10) */
 .ca-answer-group.ca-answer-group--cols-10 {
-  grid-template-columns: repeat(5, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.ca-answer-group.ca-answer-group--cols-10 .ca-answer-btn {
+  min-width: 0;
+}
+
+.ca-answer-group.ca-answer-group--cols-10 .ca-answer-num {
+  font-size: clamp(0.8rem, 2.5vw, 1.35rem);
 }
 
 .ca-answer-group.ca-answer-group--yesno {
@@ -664,7 +672,11 @@ body,
   }
 
   .ca-answer-group.ca-answer-group--cols-10 {
-    gap: 5px;
+    gap: 4px;
+  }
+
+  .ca-answer-group.ca-answer-group--cols-10 .ca-answer-num {
+    font-size: clamp(0.75rem, 3.2vw, 1.1rem);
   }
 
   .ca-scale-endpoints {
