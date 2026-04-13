@@ -59,6 +59,7 @@ class CA_Mailer
 		$blog_name = get_bloginfo('name');
 		$assessment_type = CA_Assessment_Types::from_submission($submission);
 		$is_nac = ($assessment_type === CA_Assessment_Types::INNER_DIMENSIONS);
+		$results_mask_style = $is_nac ? ' style="filter: blur(8px); opacity: 0.22; user-select: none; pointer-events: none;"' : '';
 		$scale_max = CA_Assessment_Types::get_scale_max($assessment_type);
 		$total_questions = CA_Assessment_Registry::get_total_count($assessment_type);
 		$max_score = $total_questions * $scale_max;
@@ -273,7 +274,7 @@ class CA_Mailer
 					</div>
 
 					<!-- Overall Scores -->
-					<div class="section">
+					<div class="section"' . $results_mask_style . '>
 						<div class="section-title">📊 Overall Performance</div>
 						
 						<div class="overall-stats">
@@ -294,7 +295,7 @@ class CA_Mailer
 					</div>
 
 					<!-- Category Breakdown -->
-					<div class="section">
+					<div class="section"' . $results_mask_style . '>
 						<div class="section-title">📈 Category Breakdown</div>
 						<div class="categories-list">';
 

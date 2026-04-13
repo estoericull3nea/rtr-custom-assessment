@@ -816,8 +816,8 @@ body,
 }
 
 .ca-results-preview-blocked {
-  opacity: 0.45;
-  filter: blur(2px);
+  opacity: 0.22;
+  filter: blur(8px);
   pointer-events: none;
   user-select: none;
 }
