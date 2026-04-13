@@ -928,7 +928,7 @@
     }
 
     var paywallMessage = isYesNo
-      ? '<div class="ca-results-paywall-text">please pay to get the full results</div>'
+      ? '<div class="ca-results-paywall-text"><button type="button" class="ca-btn ca-btn--primary ca-results-paywall-btn">please pay to get the full results</button></div>'
       : "";
 
     var ctaBlock = isYesNo

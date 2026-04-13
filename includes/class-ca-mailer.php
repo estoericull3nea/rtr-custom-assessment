@@ -58,6 +58,7 @@ class CA_Mailer
 	{
 		$blog_name = get_bloginfo('name');
 		$assessment_type = CA_Assessment_Types::from_submission($submission);
+		$is_nac = ($assessment_type === CA_Assessment_Types::INNER_DIMENSIONS);
 		$scale_max = CA_Assessment_Types::get_scale_max($assessment_type);
 		$total_questions = CA_Assessment_Registry::get_total_count($assessment_type);
 		$max_score = $total_questions * $scale_max;
@@ -237,6 +238,23 @@ class CA_Mailer
 					padding: 2px 4px;
 					border-radius: 2px;
 				}
+				.paywall-btn-wrap {
+					margin-top: 14px;
+				}
+				.paywall-btn {
+					display: inline-block;
+					background: #aa3130;
+					color: #ffffff !important;
+					text-decoration: none;
+					padding: 10px 18px;
+					border-radius: 6px;
+					font-weight: 600;
+					font-size: 14px;
+				}
+				.paywall-btn:hover {
+					background: #8b2823;
+					text-decoration: none;
+				}
 			</style>
 		</head>
 		<body>
@@ -293,6 +311,14 @@ class CA_Mailer
 						</div>';
 		}
 
+		$paywall_email_cta = '';
+		if ($is_nac) {
+			$paywall_email_cta = '
+						<div class="paywall-btn-wrap">
+							<a href="' . esc_url(home_url('/')) . '" class="paywall-btn">please pay to get the full results</a>
+						</div>';
+		}
+
 		$body .= '
 						</div>
 					</div>
@@ -321,6 +347,7 @@ class CA_Mailer
 						<p style="margin: 0; color: #666; font-size: 14px;">
 							Thank you for taking the time to complete this assessment. If you have any questions, please don\'t hesitate to reach out.
 						</p>
+						' . $paywall_email_cta . '
 					</div>
 				</div>
 
