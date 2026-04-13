@@ -410,6 +410,26 @@ body,
   border-color: var(--ca-error);
 }
 
+.ca-phone-field {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: 8px;
+}
+
+.ca-phone-country-select {
+  text-align: left;
+  padding-left: 8px;
+  padding-right: 6px;
+  font-size: 0.82rem;
+  line-height: 1.2;
+}
+
+@media (max-width: 520px) {
+  .ca-phone-field {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* --- Form Error ------------------------------------------- */
 .ca-form-error {
   font-family: var(--ca-font-ui);

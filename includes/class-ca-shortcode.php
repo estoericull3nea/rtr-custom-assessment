@@ -309,8 +309,41 @@ class CA_Shortcode {
 									<div class="ca-field-group">
 										<label for="ca-phone" class="ca-label"><?php esc_html_e( 'Phone Number', 'rtr-custom-assessment' ); ?> <span class="ca-required"
 												aria-hidden="true">*</span></label>
-										<input type="tel" id="ca-phone" name="phone" class="ca-input"
-											placeholder="<?php esc_attr_e( '+1 (555) 000-0000', 'rtr-custom-assessment' ); ?>" autocomplete="tel" required>
+										<div class="ca-phone-field">
+											<select id="ca-phone-country" name="phone_country" class="ca-input ca-phone-country-select" aria-label="<?php esc_attr_e( 'Select country', 'rtr-custom-assessment' ); ?>">
+												<option value="US" data-placeholder="+1 (555) 000-0000">🇺🇸 +1</option>
+												<option value="PH" data-placeholder="+63 912 345 6789">🇵🇭 +63</option>
+												<option value="GB" data-placeholder="+44 7700 900123">🇬🇧 +44</option>
+												<option value="DE" data-placeholder="+49 1512 3456789">🇩🇪 +49</option>
+												<option value="FR" data-placeholder="+33 6 12 34 56 78">🇫🇷 +33</option>
+												<option value="ES" data-placeholder="+34 612 34 56 78">🇪🇸 +34</option>
+												<option value="IT" data-placeholder="+39 312 345 6789">🇮🇹 +39</option>
+												<option value="NL" data-placeholder="+31 6 12345678">🇳🇱 +31</option>
+												<option value="BE" data-placeholder="+32 470 12 34 56">🇧🇪 +32</option>
+												<option value="SE" data-placeholder="+46 70 123 45 67">🇸🇪 +46</option>
+												<option value="NO" data-placeholder="+47 412 34 567">🇳🇴 +47</option>
+												<option value="DK" data-placeholder="+45 20 12 34 56">🇩🇰 +45</option>
+												<option value="IE" data-placeholder="+353 87 123 4567">🇮🇪 +353</option>
+												<option value="PL" data-placeholder="+48 512 345 678">🇵🇱 +48</option>
+												<option value="PT" data-placeholder="+351 912 345 678">🇵🇹 +351</option>
+												<option value="CH" data-placeholder="+41 79 123 45 67">🇨🇭 +41</option>
+												<option value="AU" data-placeholder="+61 412 345 678">🇦🇺 +61</option>
+												<option value="CA" data-placeholder="+1 (604) 555-1234">🇨🇦 +1</option>
+												<option value="IN" data-placeholder="+91 98765 43210">🇮🇳 +91</option>
+												<option value="JP" data-placeholder="+81 90-1234-5678">🇯🇵 +81</option>
+												<option value="KR" data-placeholder="+82 10-1234-5678">🇰🇷 +82</option>
+												<option value="SG" data-placeholder="+65 8123 4567">🇸🇬 +65</option>
+												<option value="MY" data-placeholder="+60 12-345 6789">🇲🇾 +60</option>
+												<option value="NZ" data-placeholder="+64 21 123 4567">🇳🇿 +64</option>
+												<option value="AE" data-placeholder="+971 50 123 4567">🇦🇪 +971</option>
+												<option value="SA" data-placeholder="+966 50 123 4567">🇸🇦 +966</option>
+												<option value="ZA" data-placeholder="+27 82 123 4567">🇿🇦 +27</option>
+												<option value="BR" data-placeholder="+55 (11) 91234-5678">🇧🇷 +55</option>
+												<option value="MX" data-placeholder="+52 55 1234 5678">🇲🇽 +52</option>
+											</select>
+											<input type="tel" id="ca-phone" name="phone" class="ca-input"
+												placeholder="<?php esc_attr_e( '+1 (555) 000-0000', 'rtr-custom-assessment' ); ?>" autocomplete="tel" required>
+										</div>
 									</div>
 									<div class="ca-field-group">
 										<label for="ca-job-title" class="ca-label"><?php esc_html_e( 'Job Title', 'rtr-custom-assessment' ); ?> <span class="ca-required"

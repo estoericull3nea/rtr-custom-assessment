@@ -34,6 +34,8 @@
     $questionError,
     $backBtn,
     $nextBtn,
+    $phoneInput,
+    $phoneCountrySelect,
     $resultsContent,
     $resumeDialog,
     $resumeEmailText,
@@ -93,6 +95,8 @@
     $questionError = $("#ca-question-error");
     $backBtn = $("#ca-back-btn");
     $nextBtn = $("#ca-next-btn");
+    $phoneInput = $("#ca-phone");
+    $phoneCountrySelect = $("#ca-phone-country");
     $resultsContent = $("#ca-results-content");
     $resumeDialog = $("#ca-resume-dialog");
     $resumeEmailText = $("#ca-resume-email-text");
@@ -111,6 +115,8 @@
     });
 
     $infoForm.on("submit", handleInfoSubmit);
+    $phoneCountrySelect.on("change", syncPhonePlaceholderWithCountry);
+    syncPhonePlaceholderWithCountry();
 
     $modal.on("click", ".ca-answer-option", function () {
       $modal.find(".ca-answer-option").removeClass("ca-selected");
@@ -220,9 +226,19 @@
     state.totalQuestions = cfg.total_questions || 0;
     state.questionOrder = buildQuestionOrder();
     $infoForm[0].reset();
+    syncPhonePlaceholderWithCountry();
     hideError($infoError);
     setProgress(0);
     $("#ca-scale-endpoints").remove();
+  }
+
+  function syncPhonePlaceholderWithCountry() {
+    if (!$phoneInput.length || !$phoneCountrySelect.length) {
+      return;
+    }
+    var selected = $phoneCountrySelect.find("option:selected");
+    var placeholder = selected.attr("data-placeholder") || "+1 (555) 000-0000";
+    $phoneInput.attr("placeholder", placeholder);
   }
 
   function buildQuestionOrder() {
