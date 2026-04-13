@@ -795,6 +795,22 @@ body,
   padding: 0;
 }
 
+.ca-results-preview-blocked {
+  opacity: 0.45;
+  filter: blur(2px);
+  pointer-events: none;
+  user-select: none;
+}
+
+.ca-results-paywall-text {
+  margin: 20px auto 12px;
+  text-align: center;
+  font-family: var(--ca-font-ui);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--ca-primary);
+}
+
 /* Natural Attributes Cataloging — completion header */
 .ca-results-nac-completion {
   text-align: center;

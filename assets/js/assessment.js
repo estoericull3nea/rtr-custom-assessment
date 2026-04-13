@@ -911,6 +911,10 @@
         "</div>";
     }
 
+    var paywallMessage = isYesNo
+      ? '<div class="ca-results-paywall-text">please pay to get the full results</div>'
+      : "";
+
     var ctaBlock = isYesNo
       ? '<div class="ca-results-cta">' +
         '<button type="button" class="ca-btn ca-btn--ghost" id="ca-close-results">Close</button>' +
@@ -922,7 +926,9 @@
 
     var html =
       nacTop +
-      '<div class="ca-results-hero">' +
+      '<div class="ca-results-hero' +
+      (isYesNo ? " ca-results-preview-blocked" : "") +
+      '">' +
       '<p class="ca-results-hero-name">' +
       escHtml(user.first_name + " " + user.last_name) +
       " — " +
@@ -945,7 +951,9 @@
       "</div>" +
       "</div>" +
       "</div>" +
-      '<div class="ca-results-body">' +
+      '<div class="ca-results-body' +
+      (isYesNo ? " ca-results-preview-blocked" : "") +
+      '">' +
       '<div class="ca-results-user-card">' +
       '<div class="ca-results-user-avatar">' +
       escHtml(initials) +
@@ -964,7 +972,8 @@
       '<p class="ca-results-section-title">Category Breakdown</p>' +
       catHtml +
       ctaBlock +
-      "</div>";
+      "</div>" +
+      paywallMessage;
 
     $resultsContent.html(html);
     hideProgress();
