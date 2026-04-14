@@ -929,6 +929,37 @@ class CA_Admin
 		}
 
 		if (
+			isset($_POST['ca_action'], $_POST['_wpnonce']) &&
+			'export_questions_json' === $_POST['ca_action'] &&
+			wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'ca_export_questions_json_action')
+		) {
+			$this->export_questions_json($questions_assessment_type);
+			exit;
+		}
+
+		if (
+			isset($_POST['ca_action'], $_POST['_wpnonce']) &&
+			'import_questions_json' === $_POST['ca_action'] &&
+			wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'ca_import_questions_json_action')
+		) {
+			$message = $this->import_questions_json($questions_assessment_type);
+			$redirect_url = add_query_arg('message', $message, $this->admin_screen_url('questions', $questions_assessment_type));
+			wp_safe_redirect(esc_url_raw($redirect_url));
+			exit;
+		}
+
+		if (
+			isset($_POST['ca_action'], $_POST['_wpnonce']) &&
+			'delete_all_questions' === $_POST['ca_action'] &&
+			wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'ca_delete_all_questions_action')
+		) {
+			$this->delete_all_questions_config($questions_assessment_type);
+			$redirect_url = add_query_arg('message', 'questions_deleted_all', $this->admin_screen_url('questions', $questions_assessment_type));
+			wp_safe_redirect(esc_url_raw($redirect_url));
+			exit;
+		}
+
+		if (
 			isset($_POST['ca_action'], $_POST['_wpnonce'], $_POST['question_index']) &&
 			'delete_question' === $_POST['ca_action'] &&
 			wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_wpnonce'])), 'ca_delete_question_action')
@@ -2842,6 +2873,44 @@ class CA_Admin
 				</div>
 			</div>
 
+			<div class="ca-questions-actions">
+				<div class="ca-question-form">
+					<h3><?php esc_html_e('Import / Export Questions (JSON)', 'rtr-custom-assessment'); ?></h3>
+					<p class="description" style="margin-top: 0;">
+						<?php esc_html_e('Export this assessment question setup (questions, overrides, and categories) to JSON, then import it on this same Questions tab.', 'rtr-custom-assessment'); ?>
+					</p>
+					<div class="ca-form-actions" style="display: flex; align-items: end; gap: 12px; flex-wrap: wrap;">
+						<form method="post" action="" style="margin: 0;">
+							<?php wp_nonce_field('ca_export_questions_json_action', '_wpnonce'); ?>
+							<input type="hidden" name="ca_action" value="export_questions_json">
+							<button type="submit" class="button button-secondary">
+								<?php esc_html_e('Export JSON', 'rtr-custom-assessment'); ?>
+							</button>
+						</form>
+
+						<form method="post" action="" enctype="multipart/form-data" style="margin: 0; display: flex; align-items: end; gap: 8px; flex-wrap: wrap;">
+							<?php wp_nonce_field('ca_import_questions_json_action', '_wpnonce'); ?>
+							<input type="hidden" name="ca_action" value="import_questions_json">
+							<div class="ca-form-field" style="margin: 0;">
+								<label for="ca-import-questions-json" style="display: block;"><?php esc_html_e('JSON File', 'rtr-custom-assessment'); ?></label>
+								<input type="file" id="ca-import-questions-json" name="questions_json_file" accept=".json,application/json" required>
+							</div>
+							<button type="submit" class="button button-primary">
+								<?php esc_html_e('Import JSON', 'rtr-custom-assessment'); ?>
+							</button>
+						</form>
+
+						<form method="post" action="" style="margin: 0;" onsubmit="return confirm('<?php echo esc_js(__('Are you sure you want to delete all saved questions configuration for this assessment? This cannot be undone.', 'rtr-custom-assessment')); ?>');">
+							<?php wp_nonce_field('ca_delete_all_questions_action', '_wpnonce'); ?>
+							<input type="hidden" name="ca_action" value="delete_all_questions">
+							<button type="submit" class="button button-link-delete">
+								<?php esc_html_e('Delete All', 'rtr-custom-assessment'); ?>
+							</button>
+						</form>
+					</div>
+				</div>
+			</div>
+
 			<br />
 
 			<div class="ca-questions-search" style="text-align: end;">
@@ -2953,6 +3022,42 @@ class CA_Admin
 			<?php if ('bulk_edit_failed' === $questions_message): ?>
 				<div class="notice notice-error is-dismissible">
 					<p><?php esc_html_e('Bulk edit failed. Please select questions and try again.', 'rtr-custom-assessment'); ?></p>
+				</div>
+			<?php endif; ?>
+
+			<?php if ('questions_exported' === $questions_message): ?>
+				<div class="notice notice-success is-dismissible">
+					<p><?php esc_html_e('Questions exported successfully.', 'rtr-custom-assessment'); ?></p>
+				</div>
+			<?php endif; ?>
+
+			<?php if ('questions_imported' === $questions_message): ?>
+				<div class="notice notice-success is-dismissible">
+					<p><?php esc_html_e('Questions imported successfully.', 'rtr-custom-assessment'); ?></p>
+				</div>
+			<?php endif; ?>
+
+			<?php if ('questions_import_invalid' === $questions_message): ?>
+				<div class="notice notice-error is-dismissible">
+					<p><?php esc_html_e('Invalid JSON file. Please export a valid file and try again.', 'rtr-custom-assessment'); ?></p>
+				</div>
+			<?php endif; ?>
+
+			<?php if ('questions_import_type_mismatch' === $questions_message): ?>
+				<div class="notice notice-error is-dismissible">
+					<p><?php esc_html_e('This JSON file is for a different assessment type. Please import it on the matching Questions tab.', 'rtr-custom-assessment'); ?></p>
+				</div>
+			<?php endif; ?>
+
+			<?php if ('questions_import_failed' === $questions_message): ?>
+				<div class="notice notice-error is-dismissible">
+					<p><?php esc_html_e('Could not import questions from this file. Please try again.', 'rtr-custom-assessment'); ?></p>
+				</div>
+			<?php endif; ?>
+
+			<?php if ('questions_deleted_all' === $questions_message): ?>
+				<div class="notice notice-success is-dismissible">
+					<p><?php esc_html_e('All saved questions configuration was deleted for this assessment type.', 'rtr-custom-assessment'); ?></p>
 				</div>
 			<?php endif; ?>
 			<?php // phpcs:enable WordPress.Security.NonceVerification.Recommended ?>
@@ -3740,6 +3845,231 @@ class CA_Admin
 		);
 
 		update_option($keys['custom_questions'], $questions);
+	}
+
+	/**
+	 * Export assessment questions configuration as JSON file download.
+	 *
+	 * @param string $assessment_type
+	 */
+	private function export_questions_json($assessment_type)
+	{
+		$assessment_type = CA_Assessment_Types::normalize($assessment_type);
+		$keys = $this->questions_storage_keys($assessment_type);
+
+		$payload = array(
+			'plugin' => 'rtr-custom-assessment',
+			'version' => 1,
+			'assessment_type' => $assessment_type,
+			'exported_at_gmt' => gmdate('c'),
+			'custom_questions' => get_option($keys['custom_questions'], array()),
+			'question_overrides' => get_option($keys['question_overrides'], array()),
+			'custom_categories' => get_option($keys['custom_categories'], array()),
+			'questions_flat' => $this->get_admin_questions_flat($assessment_type),
+			'categories' => $this->get_admin_questions_categories($assessment_type),
+		);
+
+		if (!is_array($payload['custom_questions'])) {
+			$payload['custom_questions'] = array();
+		}
+		if (!is_array($payload['question_overrides'])) {
+			$payload['question_overrides'] = array();
+		}
+		if (!is_array($payload['custom_categories'])) {
+			$payload['custom_categories'] = array();
+		}
+		if (!is_array($payload['questions_flat'])) {
+			$payload['questions_flat'] = array();
+		}
+		if (!is_array($payload['categories'])) {
+			$payload['categories'] = array();
+		}
+		$payload['base_question_count'] = max(0, count($payload['questions_flat']) - count($payload['custom_questions']));
+
+		$filename = sprintf(
+			'ca-questions-%s-%s.json',
+			sanitize_file_name($assessment_type),
+			gmdate('Ymd-His')
+		);
+
+		header('Content-Type: application/json; charset=utf-8');
+		header('Content-Disposition: attachment; filename="' . $filename . '"');
+		header('Cache-Control: no-cache, no-store, must-revalidate');
+		header('Pragma: no-cache');
+		header('Expires: 0');
+
+		echo wp_json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+	}
+
+	/**
+	 * Import assessment questions configuration from uploaded JSON file.
+	 *
+	 * @param string $assessment_type
+	 * @return string Redirect message key.
+	 */
+	private function import_questions_json($assessment_type)
+	{
+		$assessment_type = CA_Assessment_Types::normalize($assessment_type);
+		$keys = $this->questions_storage_keys($assessment_type);
+		$existing_custom_questions = get_option($keys['custom_questions'], array());
+		$existing_question_overrides = get_option($keys['question_overrides'], array());
+		$existing_custom_categories = get_option($keys['custom_categories'], array());
+		if (!is_array($existing_custom_questions)) {
+			$existing_custom_questions = array();
+		}
+		if (!is_array($existing_question_overrides)) {
+			$existing_question_overrides = array();
+		}
+		if (!is_array($existing_custom_categories)) {
+			$existing_custom_categories = array();
+		}
+
+		if (!isset($_FILES['questions_json_file']) || !is_array($_FILES['questions_json_file'])) {
+			return 'questions_import_failed';
+		}
+
+		// phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Upload metadata validated below.
+		$file = $_FILES['questions_json_file'];
+		// phpcs:enable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+
+		if (!isset($file['error']) || UPLOAD_ERR_OK !== (int) $file['error']) {
+			return 'questions_import_failed';
+		}
+
+		$tmp_name = isset($file['tmp_name']) ? (string) $file['tmp_name'] : '';
+		if ('' === $tmp_name || !is_uploaded_file($tmp_name)) {
+			return 'questions_import_failed';
+		}
+
+		$raw = file_get_contents($tmp_name);
+		if (false === $raw || '' === $raw) {
+			return 'questions_import_invalid';
+		}
+
+		$data = json_decode($raw, true);
+		if (!is_array($data)) {
+			return 'questions_import_invalid';
+		}
+
+		$file_assessment_type = isset($data['assessment_type']) ? CA_Assessment_Types::normalize((string) $data['assessment_type']) : '';
+		if ($file_assessment_type !== $assessment_type) {
+			return 'questions_import_type_mismatch';
+		}
+
+		$custom_questions = isset($data['custom_questions']) && is_array($data['custom_questions']) ? $data['custom_questions'] : null;
+		$question_overrides = isset($data['question_overrides']) && is_array($data['question_overrides']) ? $data['question_overrides'] : null;
+		$custom_categories = isset($data['custom_categories']) && is_array($data['custom_categories']) ? $data['custom_categories'] : null;
+		$questions_flat = isset($data['questions_flat']) && is_array($data['questions_flat']) ? $data['questions_flat'] : null;
+
+		// When full snapshot is present, append all imported rows as custom questions.
+		if (is_array($questions_flat) && !empty($questions_flat)) {
+			$imported_rows_as_custom = array();
+			$max_idx = count($questions_flat) - 1;
+
+			for ($i = 0; $i <= $max_idx; $i++) {
+				$row = $questions_flat[$i];
+				if (!is_array($row)) {
+					return 'questions_import_invalid';
+				}
+
+				$row_category = isset($row['category']) ? sanitize_text_field((string) $row['category']) : '';
+				$row_text = isset($row['text']) ? sanitize_text_field((string) $row['text']) : '';
+				$row_priority = isset($row['priority']) ? absint($row['priority']) : 0;
+
+				if ('' === $row_category || '' === $row_text || $row_priority <= 0) {
+					return 'questions_import_invalid';
+				}
+
+				$imported_rows_as_custom[] = array(
+					'category' => $row_category,
+					'text' => $row_text,
+					'priority' => $row_priority,
+				);
+			}
+
+			$rebuilt_custom_categories = array();
+			if (isset($data['categories']) && is_array($data['categories'])) {
+				foreach ($data['categories'] as $cat) {
+					$cat = sanitize_text_field((string) $cat);
+					if ('' !== $cat && !in_array($cat, $rebuilt_custom_categories, true)) {
+						$rebuilt_custom_categories[] = $cat;
+					}
+				}
+			}
+			foreach ($imported_rows_as_custom as $row) {
+				$cat = (string) $row['category'];
+				if ('' !== $cat && !in_array($cat, $rebuilt_custom_categories, true)) {
+					$rebuilt_custom_categories[] = $cat;
+				}
+			}
+
+			$merged_custom_questions = array_merge($existing_custom_questions, $imported_rows_as_custom);
+
+			// Keep existing overrides as-is; optionally append imported override indexes if provided.
+			$merged_question_overrides = $existing_question_overrides;
+			$imported_overrides = isset($data['question_overrides']) && is_array($data['question_overrides']) ? $data['question_overrides'] : array();
+			foreach ($imported_overrides as $idx => $ov) {
+				if (!isset($merged_question_overrides[$idx])) {
+					$merged_question_overrides[$idx] = $ov;
+				}
+			}
+
+			$merged_custom_categories = $existing_custom_categories;
+			foreach ($rebuilt_custom_categories as $cat) {
+				if ('' !== $cat && !in_array($cat, $merged_custom_categories, true)) {
+					$merged_custom_categories[] = $cat;
+				}
+			}
+
+			update_option($keys['custom_questions'], $merged_custom_questions);
+			update_option($keys['question_overrides'], $merged_question_overrides);
+			update_option($keys['custom_categories'], $merged_custom_categories);
+
+			return 'questions_imported';
+		}
+
+		if (null === $custom_questions || null === $question_overrides || null === $custom_categories) {
+			return 'questions_import_invalid';
+		}
+
+		$merged_custom_questions = array_merge($existing_custom_questions, $custom_questions);
+
+		// Append-only for base overrides: keep existing index values, add imported only if missing.
+		$merged_question_overrides = $existing_question_overrides;
+		foreach ($question_overrides as $idx => $ov) {
+			if (!isset($merged_question_overrides[$idx])) {
+				$merged_question_overrides[$idx] = $ov;
+			}
+		}
+
+		$merged_custom_categories = $existing_custom_categories;
+		foreach ($custom_categories as $cat) {
+			$cat = sanitize_text_field((string) $cat);
+			if ('' !== $cat && !in_array($cat, $merged_custom_categories, true)) {
+				$merged_custom_categories[] = $cat;
+			}
+		}
+
+		update_option($keys['custom_questions'], $merged_custom_questions);
+		update_option($keys['question_overrides'], $merged_question_overrides);
+		update_option($keys['custom_categories'], $merged_custom_categories);
+
+		return 'questions_imported';
+	}
+
+	/**
+	 * Delete all saved questions configuration for an assessment type.
+	 *
+	 * @param string $assessment_type
+	 */
+	private function delete_all_questions_config($assessment_type)
+	{
+		$assessment_type = CA_Assessment_Types::normalize($assessment_type);
+		$keys = $this->questions_storage_keys($assessment_type);
+
+		update_option($keys['custom_questions'], array());
+		update_option($keys['question_overrides'], array());
+		update_option($keys['custom_categories'], array());
 	}
 }
 

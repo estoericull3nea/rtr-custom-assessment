@@ -173,7 +173,7 @@ class CA_Inner_Dimensions_Questions {
 	 * @return array
 	 */
 	private static function build_all_questions() {
-		$base_questions = self::get_base_all();
+		$base_questions = array();
 		$overrides      = get_option( 'ca_inner_question_overrides', array() );
 		if ( ! is_array( $overrides ) ) {
 			$overrides = array();
