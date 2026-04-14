@@ -491,7 +491,7 @@ class CA_Ajax
 			}
 		}
 
-		$price = (float) apply_filters('ca_inner_dimensions_full_results_price', 49.00, $submission_id);
+		$price = (float) apply_filters('ca_inner_dimensions_full_results_price', 499.00, $submission_id);
 		if ($price <= 0) {
 			$this->send_error('ca_prepare_inner_dimensions_checkout', __('The full results price is not configured correctly.', 'rtr-custom-assessment'));
 		}
