@@ -182,50 +182,58 @@ class Rtr_Custom_Assessment_Pdf
 	 */
 	private function get_binary_with_simple_pdf($html)
 	{
-		$text = trim(wp_strip_all_tags((string) $html));
-		if ('' === $text) {
-			$text = 'Assessment Results';
+		$lines = $this->extract_structured_lines_from_html((string) $html);
+		if (empty($lines)) {
+			$lines = array('Assessment Results');
 		}
 
-		$lines = preg_split('/\r\n|\r|\n/', $text);
-		if (!is_array($lines) || empty($lines)) {
-			$lines = array($text);
-		}
-
-		$content = "BT\n/F1 11 Tf\n50 792 Td\n";
-		$line_count = 0;
-		foreach ($lines as $line) {
-			$line = trim((string) $line);
-			if ('' === $line) {
-				continue;
-			}
-
-			$line = preg_replace('/\s+/', ' ', $line);
-			$chunks = str_split($line, 95);
-			foreach ($chunks as $chunk) {
-				$escaped = str_replace(array('\\', '(', ')'), array('\\\\', '\(', '\)'), $chunk);
-				$content .= '(' . $escaped . ") Tj\n0 -14 Td\n";
-				$line_count++;
-				// Basic single-page safety cap.
-				if ($line_count >= 300) {
-					break 2;
-				}
-			}
-		}
-		$content .= "ET\n";
+		$page_width = 612;
+		$page_height = 792;
+		$margin_x = 50;
+		$margin_y = 50;
+		$line_height = 14;
+		$max_lines_per_page = max(1, (int) floor(($page_height - (2 * $margin_y)) / $line_height));
+		$line_pages = array_chunk($lines, $max_lines_per_page);
 
 		$objects = array();
-		$objects[] = "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n";
-		$objects[] = "2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n";
-		$objects[] = "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>\nendobj\n";
-		$objects[] = "4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n";
-		$objects[] = "5 0 obj\n<< /Length " . strlen($content) . " >>\nstream\n" . $content . "endstream\nendobj\n";
+		$add_object = function ($body) use (&$objects) {
+			$objects[] = $body;
+			return count($objects);
+		};
+
+		$font_obj = $add_object("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
+		$pages_obj = $add_object("<< /Type /Pages /Kids [] /Count 0 >>");
+		$page_objects = array();
+
+		foreach ($line_pages as $page_lines) {
+			$content = "BT\n/F1 10 Tf\n" . $margin_x . ' ' . ($page_height - $margin_y) . " Td\n";
+			foreach ($page_lines as $line) {
+				$escaped = $this->pdf_escape_text($line);
+				$content .= '(' . $escaped . ") Tj\n0 -" . $line_height . " Td\n";
+			}
+			$content .= "ET\n";
+
+			$content_obj = $add_object("<< /Length " . strlen($content) . " >>\nstream\n" . $content . "endstream");
+			$page_obj = $add_object(
+				"<< /Type /Page /Parent " . $pages_obj . " 0 R /MediaBox [0 0 " . $page_width . ' ' . $page_height . "] /Resources << /Font << /F1 " . $font_obj . " 0 R >> >> /Contents " . $content_obj . " 0 R >>"
+			);
+			$page_objects[] = $page_obj;
+		}
+
+		$kids = array();
+		foreach ($page_objects as $page_obj) {
+			$kids[] = $page_obj . ' 0 R';
+		}
+		$objects[$pages_obj - 1] = "<< /Type /Pages /Kids [ " . implode(' ', $kids) . " ] /Count " . count($page_objects) . " >>";
+
+		$catalog_obj = $add_object("<< /Type /Catalog /Pages " . $pages_obj . " 0 R >>");
 
 		$pdf = "%PDF-1.4\n";
 		$offsets = array(0);
-		foreach ($objects as $object) {
+		for ($i = 0, $len = count($objects); $i < $len; $i++) {
 			$offsets[] = strlen($pdf);
-			$pdf .= $object;
+			$obj_num = $i + 1;
+			$pdf .= $obj_num . " 0 obj\n" . $objects[$i] . "\nendobj\n";
 		}
 
 		$xref_offset = strlen($pdf);
@@ -234,10 +242,257 @@ class Rtr_Custom_Assessment_Pdf
 		for ($i = 1; $i <= count($objects); $i++) {
 			$pdf .= sprintf('%010d 00000 n ', $offsets[$i]) . "\n";
 		}
-		$pdf .= "trailer\n<< /Size " . (count($objects) + 1) . " /Root 1 0 R >>\n";
+		$pdf .= "trailer\n<< /Size " . (count($objects) + 1) . " /Root " . $catalog_obj . " 0 R >>\n";
 		$pdf .= "startxref\n" . $xref_offset . "\n%%EOF";
 
 		return $pdf;
+	}
+
+	/**
+	 * Convert report HTML into readable lines, preserving table-like structure.
+	 *
+	 * @param string $html
+	 * @return string[]
+	 */
+	private function extract_structured_lines_from_html($html)
+	{
+		$lines = array();
+		if (class_exists('DOMDocument')) {
+			$dom = new \DOMDocument();
+			$html_doc = '<!doctype html><html><body>' . $html . '</body></html>';
+			libxml_use_internal_errors(true);
+			$loaded = $dom->loadHTML($html_doc);
+			libxml_clear_errors();
+			if ($loaded) {
+				$body = $dom->getElementsByTagName('body')->item(0);
+				if ($body) {
+					foreach ($body->childNodes as $child) {
+						$this->collect_node_lines($child, $lines);
+					}
+				}
+			}
+		}
+
+		if (empty($lines)) {
+			$fallback = html_entity_decode(wp_strip_all_tags((string) $html), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+			$fallback = preg_replace('/\s+/', ' ', $fallback);
+			$fallback = trim((string) $fallback);
+			if ('' !== $fallback) {
+				$lines = $this->wrap_text_line($fallback, 95);
+			}
+		}
+
+		return $lines;
+	}
+
+	/**
+	 * Walk DOM nodes and collect line-oriented text.
+	 *
+	 * @param \DOMNode $node
+	 * @param string[] $lines
+	 * @return void
+	 */
+	private function collect_node_lines($node, &$lines)
+	{
+		if (!isset($node->nodeType)) {
+			return;
+		}
+
+		if (XML_TEXT_NODE === $node->nodeType) {
+			$text = $this->normalize_text($node->nodeValue);
+			if ('' !== $text) {
+				$wrapped = $this->wrap_text_line($text, 95);
+				foreach ($wrapped as $wline) {
+					$lines[] = $wline;
+				}
+			}
+			return;
+		}
+
+		if (XML_ELEMENT_NODE !== $node->nodeType) {
+			return;
+		}
+
+		$name = strtolower((string) $node->nodeName);
+		if ('table' === $name) {
+			$table_lines = $this->table_node_to_lines($node);
+			foreach ($table_lines as $line) {
+				$lines[] = $line;
+			}
+			$lines[] = '';
+			return;
+		}
+
+		if (in_array($name, array('h1', 'h2', 'h3', 'h4'), true)) {
+			$text = $this->normalize_text($node->textContent);
+			if ('' !== $text) {
+				$lines[] = $text;
+				$lines[] = str_repeat('-', min(95, strlen($text)));
+			}
+			$lines[] = '';
+			return;
+		}
+
+		if (in_array($name, array('p', 'div', 'li'), true)) {
+			$text = $this->normalize_text($node->textContent);
+			if ('' !== $text) {
+				$wrapped = $this->wrap_text_line($text, 95);
+				foreach ($wrapped as $wline) {
+					$lines[] = $wline;
+				}
+			}
+			$lines[] = '';
+			return;
+		}
+
+		foreach ($node->childNodes as $child) {
+			$this->collect_node_lines($child, $lines);
+		}
+	}
+
+	/**
+	 * Render HTML table node as fixed-width text table lines.
+	 *
+	 * @param \DOMNode $table
+	 * @return string[]
+	 */
+	private function table_node_to_lines($table)
+	{
+		$rows = array();
+		foreach ($table->childNodes as $child) {
+			$name = strtolower((string) $child->nodeName);
+			if ('tr' === $name) {
+				$rows[] = $child;
+				continue;
+			}
+			if (in_array($name, array('thead', 'tbody', 'tfoot'), true)) {
+				foreach ($child->childNodes as $sub_row) {
+					if ('tr' === strtolower((string) $sub_row->nodeName)) {
+						$rows[] = $sub_row;
+					}
+				}
+			}
+		}
+
+		$matrix = array();
+		$col_count = 0;
+		foreach ($rows as $row) {
+			$cols = array();
+			foreach ($row->childNodes as $cell) {
+				$cell_name = strtolower((string) $cell->nodeName);
+				if (!in_array($cell_name, array('th', 'td'), true)) {
+					continue;
+				}
+				$cols[] = $this->normalize_text($cell->textContent);
+			}
+			if (!empty($cols)) {
+				$matrix[] = $cols;
+				$col_count = max($col_count, count($cols));
+			}
+		}
+
+		if (empty($matrix) || $col_count <= 0) {
+			return array();
+		}
+
+		$max_total = 95;
+		$sep = ' | ';
+		$sep_total = ($col_count - 1) * strlen($sep);
+		$usable = max(20, $max_total - $sep_total);
+		$col_width = max(10, (int) floor($usable / $col_count));
+
+		$lines = array();
+		$lines[] = str_repeat('=', min(95, $max_total));
+		foreach ($matrix as $ridx => $cols) {
+			$wrapped_cols = array();
+			for ($i = 0; $i < $col_count; $i++) {
+				$cell = isset($cols[$i]) ? $cols[$i] : '';
+				$wrapped_cols[$i] = $this->wrap_text_line($cell, $col_width);
+				if (empty($wrapped_cols[$i])) {
+					$wrapped_cols[$i] = array('');
+				}
+			}
+
+			$row_height = 1;
+			foreach ($wrapped_cols as $wcol) {
+				$row_height = max($row_height, count($wcol));
+			}
+
+			for ($line_idx = 0; $line_idx < $row_height; $line_idx++) {
+				$parts = array();
+				for ($i = 0; $i < $col_count; $i++) {
+					$part = isset($wrapped_cols[$i][$line_idx]) ? $wrapped_cols[$i][$line_idx] : '';
+					$parts[] = str_pad($part, $col_width, ' ');
+				}
+				$lines[] = rtrim(implode($sep, $parts));
+			}
+
+			if (0 === $ridx) {
+				$lines[] = str_repeat('-', min(95, $max_total));
+			}
+		}
+		$lines[] = str_repeat('=', min(95, $max_total));
+
+		return $lines;
+	}
+
+	/**
+	 * Normalize text from HTML node to plain readable content.
+	 *
+	 * @param string $text
+	 * @return string
+	 */
+	private function normalize_text($text)
+	{
+		$text = html_entity_decode((string) $text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+		$text = preg_replace('/\s+/', ' ', $text);
+		$text = trim((string) $text);
+		if ('' === $text) {
+			return '';
+		}
+		if (function_exists('iconv')) {
+			$conv = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $text);
+			if (false !== $conv) {
+				$text = $conv;
+			}
+		}
+		return preg_replace('/[^\x20-\x7E]/', '', $text);
+	}
+
+	/**
+	 * Wrap a long text line into smaller lines.
+	 *
+	 * @param string $text
+	 * @param int    $width
+	 * @return string[]
+	 */
+	private function wrap_text_line($text, $width)
+	{
+		$text = trim((string) $text);
+		if ('' === $text) {
+			return array();
+		}
+		$wrapped = wordwrap($text, max(10, (int) $width), "\n", true);
+		$parts = explode("\n", $wrapped);
+		$out = array();
+		foreach ($parts as $part) {
+			$part = trim((string) $part);
+			if ('' !== $part) {
+				$out[] = $part;
+			}
+		}
+		return $out;
+	}
+
+	/**
+	 * Escape text for PDF content stream.
+	 *
+	 * @param string $text
+	 * @return string
+	 */
+	private function pdf_escape_text($text)
+	{
+		return str_replace(array('\\', '(', ')'), array('\\\\', '\(', '\)'), (string) $text);
 	}
 }
 
