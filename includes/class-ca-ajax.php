@@ -42,6 +42,24 @@ class CA_Ajax
 		add_action('woocommerce_order_status_processing', array($this, 'maybe_send_inner_dimensions_results_after_payment'));
 		add_action('woocommerce_order_status_completed', array($this, 'maybe_send_inner_dimensions_results_after_payment'));
 		add_action('woocommerce_thankyou', array($this, 'render_inner_dimensions_download_on_thankyou'), 20);
+		add_action('woocommerce_checkout_create_order', array($this, 'attach_inner_dimensions_meta_to_checkout_order'), 20, 2);
+		add_filter('upload_mimes', array($this, 'allow_results_html_mime_type'));
+	}
+
+	/**
+	 * Allow HTML files for generated NAC downloadable results.
+	 *
+	 * @param array $mimes
+	 * @return array
+	 */
+	public function allow_results_html_mime_type($mimes)
+	{
+		if (!is_array($mimes)) {
+			$mimes = array();
+		}
+		$mimes['html'] = 'text/html';
+		$mimes['htm'] = 'text/html';
+		return $mimes;
 	}
 
 	/**
@@ -451,94 +469,124 @@ class CA_Ajax
 	 */
 	public function ca_prepare_inner_dimensions_checkout()
 	{
-		$this->verify_nonce('ca_prepare_inner_dimensions_checkout');
+		try {
+			$this->verify_nonce('ca_prepare_inner_dimensions_checkout');
 
-		// phpcs:disable WordPress.Security.NonceVerification.Missing -- Nonce already verified via $this->verify_nonce().
-		$submission_id = isset($_POST['submission_id']) ? absint($_POST['submission_id']) : 0;
-		$assessment_type = $this->get_assessment_type_from_request();
-		// phpcs:enable WordPress.Security.NonceVerification.Missing
+			// phpcs:disable WordPress.Security.NonceVerification.Missing -- Nonce already verified via $this->verify_nonce().
+			$submission_id = isset($_POST['submission_id']) ? absint($_POST['submission_id']) : 0;
+			$assessment_type = $this->get_assessment_type_from_request();
+			// phpcs:enable WordPress.Security.NonceVerification.Missing
 
-		if (!$submission_id) {
-			$this->send_error('ca_prepare_inner_dimensions_checkout', __('Invalid session.', 'rtr-custom-assessment'));
-		}
-
-		if (CA_Assessment_Types::INNER_DIMENSIONS !== $assessment_type) {
-			$this->send_error('ca_prepare_inner_dimensions_checkout', __('This payment flow is only available for Natural Attributes Cataloging.', 'rtr-custom-assessment'));
-		}
-
-		if (!$this->is_woocommerce_ready()) {
-			$this->send_error('ca_prepare_inner_dimensions_checkout', __('WooCommerce is required for checkout, but it is not active.', 'rtr-custom-assessment'));
-		}
-
-		$submission = $this->require_submission_for_type($submission_id, $assessment_type);
-		if ('completed' !== $submission->status) {
-			$this->send_error('ca_prepare_inner_dimensions_checkout', __('Please complete all questions before proceeding to checkout.', 'rtr-custom-assessment'));
-		}
-
-		$existing_order_id = $this->find_existing_inner_dimensions_order_id($submission_id);
-		if ($existing_order_id > 0) {
-			$order = wc_get_order($existing_order_id);
-			$existing_product_id = $order ? (int) $order->get_meta('_ca_full_results_product_id') : 0;
-			if ($order && $order->needs_payment() && $existing_product_id > 0) {
-				$this->send_success(
-					'ca_prepare_inner_dimensions_checkout',
-					array(
-						'order_id' => $order->get_id(),
-						'checkout_url' => $order->get_checkout_payment_url(),
-					),
-					'Existing unpaid order reused.',
-					array('submission_id' => $submission_id, 'order_id' => $order->get_id())
-				);
+			if (!$submission_id) {
+				$this->send_error('ca_prepare_inner_dimensions_checkout', __('Invalid session.', 'rtr-custom-assessment'));
 			}
+
+			if (CA_Assessment_Types::INNER_DIMENSIONS !== $assessment_type) {
+				$this->send_error('ca_prepare_inner_dimensions_checkout', __('This payment flow is only available for Natural Attributes Cataloging.', 'rtr-custom-assessment'));
+			}
+
+			if (!$this->is_woocommerce_ready()) {
+				$this->send_error('ca_prepare_inner_dimensions_checkout', __('WooCommerce is required for checkout, but it is not active.', 'rtr-custom-assessment'));
+			}
+
+			$submission = $this->require_submission_for_type($submission_id, $assessment_type);
+			if ('completed' !== $submission->status) {
+				$this->send_error('ca_prepare_inner_dimensions_checkout', __('Please complete all questions before proceeding to checkout.', 'rtr-custom-assessment'));
+			}
+
+			$existing_order_id = $this->find_existing_inner_dimensions_order_id($submission_id);
+			if ($existing_order_id > 0) {
+				$order = wc_get_order($existing_order_id);
+				$existing_product_id = $order ? (int) $order->get_meta('_ca_full_results_product_id') : 0;
+				if ($order && $order->needs_payment() && $existing_product_id > 0) {
+				$this->prepare_inner_dimensions_checkout_cart($existing_product_id);
+				$checkout_url = $this->build_inner_dimensions_checkout_url((int) $existing_product_id);
+					$this->send_success(
+						'ca_prepare_inner_dimensions_checkout',
+						array(
+							'order_id' => $order->get_id(),
+						'checkout_url' => $checkout_url,
+						),
+						'Existing unpaid order reused.',
+						array('submission_id' => $submission_id, 'order_id' => $order->get_id())
+					);
+				}
+			}
+
+			$price = (float) apply_filters('ca_inner_dimensions_full_results_price', 99.90, $submission_id);
+			if ($price <= 0) {
+				$this->send_error('ca_prepare_inner_dimensions_checkout', __('The full results price is not configured correctly.', 'rtr-custom-assessment'));
+			}
+
+		$results_file_path = $this->generate_inner_dimensions_results_file($submission_id, $submission);
+		if (!$results_file_path) {
+				$this->send_error('ca_prepare_inner_dimensions_checkout', __('Could not generate your results file. Please try again.', 'rtr-custom-assessment'));
+			}
+
+		$product_id = $this->upsert_inner_dimensions_product($submission, $submission_id, $price, $results_file_path);
+			if ($product_id <= 0) {
+				$this->send_error('ca_prepare_inner_dimensions_checkout', __('Could not prepare your downloadable product. Please try again.', 'rtr-custom-assessment'));
+			}
+
+			$order = wc_create_order();
+			if (!$order) {
+				$this->send_error('ca_prepare_inner_dimensions_checkout', __('Could not create an order. Please try again.', 'rtr-custom-assessment'));
+			}
+
+			$product = wc_get_product($product_id);
+			if (!$product) {
+				$this->send_error('ca_prepare_inner_dimensions_checkout', __('Could not load the generated product for checkout.', 'rtr-custom-assessment'));
+			}
+			$order->add_product($product, 1);
+
+			$order->set_billing_first_name((string) $submission->first_name);
+			$order->set_billing_last_name((string) $submission->last_name);
+			$order->set_billing_email((string) $submission->email);
+			$order->set_billing_phone((string) $submission->phone);
+
+			$order->update_meta_data('_ca_submission_id', (int) $submission_id);
+			$order->update_meta_data('_ca_assessment_type', $assessment_type);
+			$order->update_meta_data('_ca_full_results_unlock', 'yes');
+			$order->update_meta_data('_ca_full_results_product_id', (int) $product_id);
+		$order->update_meta_data('_ca_full_results_file_path', (string) $results_file_path);
+			$order->calculate_totals(true);
+			$order->save();
+
+			$this->prepare_inner_dimensions_checkout_cart($product_id);
+			$checkout_url = $this->build_inner_dimensions_checkout_url((int) $product_id);
+			$this->send_success(
+				'ca_prepare_inner_dimensions_checkout',
+				array(
+					'order_id' => $order->get_id(),
+					'checkout_url' => $checkout_url,
+				),
+				'Order created.',
+				array('submission_id' => $submission_id, 'order_id' => $order->get_id())
+			);
+		} catch (\Throwable $e) {
+			$error_message = (string) $e->getMessage();
+			if ('' === $error_message) {
+				$error_message = 'Unknown error';
+			}
+			CA_Logger::log(
+				'ca_prepare_inner_dimensions_checkout',
+				'error',
+				'Unhandled checkout preparation error.',
+				array(
+					'error' => $error_message,
+					'file' => $e->getFile(),
+					'line' => $e->getLine(),
+				)
+			);
+			$this->send_error(
+				'ca_prepare_inner_dimensions_checkout',
+				sprintf(
+					/* translators: %s: backend error message */
+					__('We could not start checkout right now. %s', 'rtr-custom-assessment'),
+					sanitize_text_field($error_message)
+				)
+			);
 		}
-
-		$price = (float) apply_filters('ca_inner_dimensions_full_results_price', 99.90, $submission_id);
-		if ($price <= 0) {
-			$this->send_error('ca_prepare_inner_dimensions_checkout', __('The full results price is not configured correctly.', 'rtr-custom-assessment'));
-		}
-
-		$pdf_url = $this->generate_inner_dimensions_pdf_file($submission_id, $submission);
-		if (!$pdf_url) {
-			$this->send_error('ca_prepare_inner_dimensions_checkout', __('Could not generate your PDF results. Please try again.', 'rtr-custom-assessment'));
-		}
-
-		$product_id = $this->upsert_inner_dimensions_product($submission, $submission_id, $price, $pdf_url);
-		if ($product_id <= 0) {
-			$this->send_error('ca_prepare_inner_dimensions_checkout', __('Could not prepare your downloadable product. Please try again.', 'rtr-custom-assessment'));
-		}
-
-		$order = wc_create_order();
-		if (!$order) {
-			$this->send_error('ca_prepare_inner_dimensions_checkout', __('Could not create an order. Please try again.', 'rtr-custom-assessment'));
-		}
-
-		$product = wc_get_product($product_id);
-		if (!$product) {
-			$this->send_error('ca_prepare_inner_dimensions_checkout', __('Could not load the generated product for checkout.', 'rtr-custom-assessment'));
-		}
-		$order->add_product($product, 1);
-
-		$order->set_billing_first_name((string) $submission->first_name);
-		$order->set_billing_last_name((string) $submission->last_name);
-		$order->set_billing_email((string) $submission->email);
-		$order->set_billing_phone((string) $submission->phone);
-
-		$order->update_meta_data('_ca_submission_id', (int) $submission_id);
-		$order->update_meta_data('_ca_assessment_type', $assessment_type);
-		$order->update_meta_data('_ca_full_results_unlock', 'yes');
-		$order->update_meta_data('_ca_full_results_product_id', (int) $product_id);
-		$order->calculate_totals(true);
-		$order->save();
-
-		$this->send_success(
-			'ca_prepare_inner_dimensions_checkout',
-			array(
-				'order_id' => $order->get_id(),
-				'checkout_url' => $order->get_checkout_payment_url(),
-			),
-			'Order created.',
-			array('submission_id' => $submission_id, 'order_id' => $order->get_id())
-		);
 	}
 
 	/**
@@ -576,10 +624,10 @@ class CA_Ajax
 	 * @param object $submission
 	 * @param int    $submission_id
 	 * @param float  $price
-	 * @param string $pdf_url
+	 * @param string $results_file_path
 	 * @return int
 	 */
-	private function upsert_inner_dimensions_product($submission, $submission_id, $price, $pdf_url)
+	private function upsert_inner_dimensions_product($submission, $submission_id, $price, $results_file_path)
 	{
 		$product_id = $this->find_existing_inner_dimensions_product_id($submission_id);
 		$product = $product_id > 0 ? wc_get_product($product_id) : new WC_Product_Simple();
@@ -590,7 +638,7 @@ class CA_Ajax
 		$product->set_name(
 			sprintf(
 				/* translators: 1: submission id, 2: first name, 3: last name */
-				__('NAC Full Results PDF #%1$d - %2$s %3$s', 'rtr-custom-assessment'),
+				__('NAC Full Results File #%1$d - %2$s %3$s', 'rtr-custom-assessment'),
 				(int) $submission_id,
 				(string) $submission->first_name,
 				(string) $submission->last_name
@@ -599,22 +647,16 @@ class CA_Ajax
 		$product->set_status('publish');
 		$product->set_catalog_visibility('hidden');
 		$product->set_virtual(true);
-		$product->set_downloadable(true);
+		$product->set_downloadable(false);
 		$product->set_regular_price(wc_format_decimal($price, 2));
 		$product->set_sold_individually(true);
-
-		$download = new WC_Product_Download();
-		$download->set_id('ca_pdf_' . (int) $submission_id);
-		$download->set_name(__('Full Results PDF', 'rtr-custom-assessment'));
-		$download->set_file($pdf_url);
-		$product->set_downloads(array($download));
-		$product->set_download_limit(-1);
-		$product->set_download_expiry(-1);
+		$product->set_downloads(array());
 
 		$product_id = $product->save();
 		if ($product_id > 0) {
 			update_post_meta($product_id, '_ca_submission_id', (int) $submission_id);
 			update_post_meta($product_id, '_ca_assessment_type', CA_Assessment_Types::INNER_DIMENSIONS);
+			update_post_meta($product_id, '_ca_full_results_file_path', (string) $results_file_path);
 		}
 
 		return (int) $product_id;
@@ -644,17 +686,14 @@ class CA_Ajax
 	}
 
 	/**
-	 * Generate a PDF file in uploads for this submission.
+	 * Generate an HTML results file in uploads for this submission.
 	 *
 	 * @param int    $submission_id
 	 * @param object $submission
-	 * @return string|false Public URL to generated PDF.
+	 * @return string|false Absolute server path to generated file.
 	 */
-	private function generate_inner_dimensions_pdf_file($submission_id, $submission)
+	private function generate_inner_dimensions_results_file($submission_id, $submission)
 	{
-		require_once CA_PLUGIN_DIR . 'includes/class-ca-pdf.php';
-
-		$pdf = new Rtr_Custom_Assessment_Pdf();
 		$html = $this->build_submission_pdf_html($submission_id, $submission);
 		$upload = wp_upload_dir();
 		if (!empty($upload['error'])) {
@@ -664,17 +703,18 @@ class CA_Ajax
 		$dir_path = trailingslashit($upload['basedir']) . 'ca-results';
 		$dir_url = trailingslashit($upload['baseurl']) . 'ca-results';
 		$timestamp = gmdate('YmdHis');
-		$pdf_filename = 'nac-results-' . (int) $submission_id . '-' . $timestamp . '.pdf';
-		$pdf_path = trailingslashit($dir_path) . $pdf_filename;
+		$file_name = 'nac-results-' . (int) $submission_id . '-' . $timestamp . '.html';
+		$file_path = trailingslashit($dir_path) . $file_name;
 
 		if (!is_dir($dir_path)) {
 			wp_mkdir_p($dir_path);
 		}
 
-		if ($pdf->save_pdf($html, $pdf_path)) {
-			return trailingslashit($dir_url) . $pdf_filename;
+		$html_payload = "<!doctype html>\n" . $html;
+		if (false === file_put_contents($file_path, $html_payload)) {
+			return false;
 		}
-		return false;
+		return $file_path;
 	}
 
 	/**
@@ -796,23 +836,14 @@ class CA_Ajax
 			return;
 		}
 
-		$product_id = (int) $order->get_meta('_ca_full_results_product_id');
-		if ($product_id <= 0) {
-			return;
+		$download_url = (string) $order->get_meta('_ca_full_results_file_path');
+		if ('' === $download_url) {
+			$product_id = (int) $order->get_meta('_ca_full_results_product_id');
+			if ($product_id > 0) {
+				$download_url = (string) get_post_meta($product_id, '_ca_full_results_file_path', true);
+			}
 		}
-
-		$product = wc_get_product($product_id);
-		if (!$product || !$product->is_downloadable()) {
-			return;
-		}
-
-		$downloads = $product->get_downloads();
-		if (empty($downloads) || !is_array($downloads)) {
-			return;
-		}
-
-		$first_download = reset($downloads);
-		$download_url = ($first_download && method_exists($first_download, 'get_file')) ? (string) $first_download->get_file() : '';
+		$download_url = $this->normalize_results_download_url($download_url);
 		if ('' === $download_url) {
 			return;
 		}
@@ -827,6 +858,170 @@ class CA_Ajax
 			</p>
 		</section>
 		<?php
+	}
+
+	/**
+	 * Attach NAC metadata to orders created from checkout/cart flow.
+	 *
+	 * @param WC_Order $order
+	 * @param array    $data
+	 * @return void
+	 */
+	public function attach_inner_dimensions_meta_to_checkout_order($order, $data)
+	{
+		if (!$order || !is_object($order) || !method_exists($order, 'get_items')) {
+			return;
+		}
+
+		$existing_type = (string) $order->get_meta('_ca_assessment_type');
+		if (CA_Assessment_Types::INNER_DIMENSIONS === $existing_type) {
+			return;
+		}
+
+		foreach ($order->get_items() as $item) {
+			if (!is_object($item) || !method_exists($item, 'get_product_id')) {
+				continue;
+			}
+			$product_id = (int) $item->get_product_id();
+			if ($product_id <= 0) {
+				continue;
+			}
+
+			$product_type = (string) get_post_meta($product_id, '_ca_assessment_type', true);
+			if (CA_Assessment_Types::INNER_DIMENSIONS !== $product_type) {
+				continue;
+			}
+
+			$submission_id = (int) get_post_meta($product_id, '_ca_submission_id', true);
+			$file_path = (string) get_post_meta($product_id, '_ca_full_results_file_path', true);
+
+			$order->update_meta_data('_ca_submission_id', $submission_id);
+			$order->update_meta_data('_ca_assessment_type', CA_Assessment_Types::INNER_DIMENSIONS);
+			$order->update_meta_data('_ca_full_results_unlock', 'yes');
+			$order->update_meta_data('_ca_full_results_product_id', $product_id);
+			if ('' !== $file_path) {
+				$order->update_meta_data('_ca_full_results_file_path', $file_path);
+			}
+			break;
+		}
+	}
+
+	/**
+	 * Normalize Woo download file reference to a public URL for frontend rendering.
+	 *
+	 * @param string $file
+	 * @return string
+	 */
+	private function normalize_results_download_url($file)
+	{
+		$file = trim((string) $file);
+		if ('' === $file) {
+			return '';
+		}
+
+		// Already URL.
+		if (false !== strpos($file, '://')) {
+			return $file;
+		}
+
+		$upload = wp_upload_dir();
+		if (empty($upload['basedir']) || empty($upload['baseurl'])) {
+			return '';
+		}
+
+		$basedir = wp_normalize_path((string) $upload['basedir']);
+		$file_normalized = wp_normalize_path($file);
+		if (0 === strpos($file_normalized, $basedir)) {
+			$relative = ltrim(substr($file_normalized, strlen($basedir)), '/');
+			return trailingslashit((string) $upload['baseurl']) . $relative;
+		}
+
+		return '';
+	}
+
+	/**
+	 * Build frontend URL that both matches product link pattern and adds product to cart.
+	 *
+	 * @param int $product_id
+	 * @return string
+	 */
+	private function build_inner_dimensions_checkout_url($product_id)
+	{
+		$product_id = (int) $product_id;
+		if ($product_id <= 0) {
+			$url = function_exists('wc_get_checkout_url') ? wc_get_checkout_url() : home_url('/checkout/');
+			return $this->ensure_www_url($url);
+		}
+
+		$product_url = get_permalink($product_id);
+		if ($product_url) {
+			$url = add_query_arg('add-to-cart', $product_id, $product_url);
+			return $this->ensure_www_url($url);
+		}
+
+		$checkout_url = function_exists('wc_get_checkout_url') ? wc_get_checkout_url() : home_url('/checkout/');
+		$url = add_query_arg('add-to-cart', $product_id, $checkout_url);
+		return $this->ensure_www_url($url);
+	}
+
+	/**
+	 * Ensure URL host includes "www.".
+	 *
+	 * @param string $url
+	 * @return string
+	 */
+	private function ensure_www_url($url)
+	{
+		$url = trim((string) $url);
+		if ('' === $url) {
+			return '';
+		}
+
+		$parts = wp_parse_url($url);
+		if (!is_array($parts) || empty($parts['host'])) {
+			return $url;
+		}
+
+		$host = (string) $parts['host'];
+		if (0 === strpos($host, 'www.')) {
+			return $url;
+		}
+
+		$parts['host'] = 'www.' . $host;
+		$scheme = isset($parts['scheme']) ? $parts['scheme'] . '://' : '';
+		$user = isset($parts['user']) ? $parts['user'] : '';
+		$pass = isset($parts['pass']) ? ':' . $parts['pass'] : '';
+		$auth = $user ? $user . $pass . '@' : '';
+		$port = isset($parts['port']) ? ':' . $parts['port'] : '';
+		$path = isset($parts['path']) ? $parts['path'] : '';
+		$query = isset($parts['query']) ? '?' . $parts['query'] : '';
+		$fragment = isset($parts['fragment']) ? '#' . $parts['fragment'] : '';
+
+		return $scheme . $auth . $parts['host'] . $port . $path . $query . $fragment;
+	}
+
+	/**
+	 * Ensure checkout cart contains only this NAC results product.
+	 *
+	 * @param int $product_id
+	 * @return void
+	 */
+	private function prepare_inner_dimensions_checkout_cart($product_id)
+	{
+		$product_id = (int) $product_id;
+		if ($product_id <= 0 || !function_exists('WC')) {
+			return;
+		}
+
+		$wc = WC();
+		if (!$wc || !isset($wc->cart) || !is_object($wc->cart)) {
+			return;
+		}
+
+		// Keep checkout focused on this order item only.
+		$wc->cart->empty_cart();
+		$wc->cart->add_to_cart($product_id, 1);
+		$wc->cart->calculate_totals();
 	}
 }
 

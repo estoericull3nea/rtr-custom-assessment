@@ -19,10 +19,18 @@ class Rtr_Custom_Assessment_Pdf
 	public function get_pdf_binary($html)
 	{
 		if (class_exists('TCPDF')) {
-			return $this->get_binary_with_tcpdf($html);
+			try {
+				return $this->get_binary_with_tcpdf($html);
+			} catch (\Throwable $e) {
+				// Fallback below.
+			}
 		}
 		if (class_exists('Dompdf\Dompdf')) {
-			return $this->get_binary_with_dompdf($html);
+			try {
+				return $this->get_binary_with_dompdf($html);
+			} catch (\Throwable $e) {
+				// Fallback below.
+			}
 		}
 		return $this->get_binary_with_simple_pdf($html);
 	}
@@ -102,7 +110,8 @@ class Rtr_Custom_Assessment_Pdf
 	private function generate_with_tcpdf($html)
 	{
 		$pdf = new \TCPDF();
-		$pdf->SetDefaultMonospacedFont(PDF_FONT_MONOSPACED);
+		$mono_font = defined('PDF_FONT_MONOSPACED') ? PDF_FONT_MONOSPACED : 'courier';
+		$pdf->SetDefaultMonospacedFont($mono_font);
 		$pdf->SetMargins(15, 15, 15);
 		$pdf->SetAutoPageBreak(true, 15);
 		$pdf->AddPage();
@@ -120,7 +129,8 @@ class Rtr_Custom_Assessment_Pdf
 	private function get_binary_with_tcpdf($html)
 	{
 		$pdf = new \TCPDF();
-		$pdf->SetDefaultMonospacedFont(PDF_FONT_MONOSPACED);
+		$mono_font = defined('PDF_FONT_MONOSPACED') ? PDF_FONT_MONOSPACED : 'courier';
+		$pdf->SetDefaultMonospacedFont($mono_font);
 		$pdf->SetMargins(15, 15, 15);
 		$pdf->SetAutoPageBreak(true, 15);
 		$pdf->AddPage();
@@ -182,7 +192,7 @@ class Rtr_Custom_Assessment_Pdf
 	 */
 	private function get_binary_with_simple_pdf($html)
 	{
-		$lines = $this->extract_structured_lines_from_html((string) $html);
+		$lines = $this->extract_basic_lines_from_html((string) $html);
 		if (empty($lines)) {
 			$lines = array('Assessment Results');
 		}
@@ -249,6 +259,39 @@ class Rtr_Custom_Assessment_Pdf
 	}
 
 	/**
+	 * Very safe HTML-to-lines parser (no DOM/libxml dependency).
+	 *
+	 * @param string $html
+	 * @return string[]
+	 */
+	private function extract_basic_lines_from_html($html)
+	{
+		$normalized = (string) $html;
+		$break_tags = array('</tr>', '</p>', '</div>', '</h1>', '</h2>', '</h3>', '</h4>', '<br>', '<br/>', '<br />');
+		$normalized = str_ireplace($break_tags, "\n", $normalized);
+		$normalized = str_ireplace(array('</td>', '</th>'), ' | ', $normalized);
+		$normalized = wp_strip_all_tags($normalized);
+		$normalized = html_entity_decode($normalized, ENT_QUOTES, 'UTF-8');
+		$normalized = preg_replace('/[ \t]+/', ' ', $normalized);
+		$normalized = preg_replace("/\n{2,}/", "\n", (string) $normalized);
+
+		$raw_lines = explode("\n", (string) $normalized);
+		$lines = array();
+		foreach ($raw_lines as $line) {
+			$line = $this->normalize_text($line);
+			if ('' === $line) {
+				continue;
+			}
+			$wrapped = $this->wrap_text_line($line, 95);
+			foreach ($wrapped as $wline) {
+				$lines[] = $wline;
+			}
+		}
+
+		return $lines;
+	}
+
+	/**
 	 * Convert report HTML into readable lines, preserving table-like structure.
 	 *
 	 * @param string $html
@@ -257,12 +300,18 @@ class Rtr_Custom_Assessment_Pdf
 	private function extract_structured_lines_from_html($html)
 	{
 		$lines = array();
-		if (class_exists('DOMDocument')) {
+		if (class_exists('DOMDocument') && function_exists('libxml_use_internal_errors')) {
 			$dom = new \DOMDocument();
 			$html_doc = '<!doctype html><html><body>' . $html . '</body></html>';
-			libxml_use_internal_errors(true);
-			$loaded = $dom->loadHTML($html_doc);
+			$prev_use_internal_errors = libxml_use_internal_errors(true);
+			$loaded = false;
+			try {
+				$loaded = $dom->loadHTML($html_doc);
+			} catch (\Throwable $e) {
+				$loaded = false;
+			}
 			libxml_clear_errors();
+			libxml_use_internal_errors($prev_use_internal_errors);
 			if ($loaded) {
 				$body = $dom->getElementsByTagName('body')->item(0);
 				if ($body) {
