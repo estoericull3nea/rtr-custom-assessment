@@ -41,6 +41,7 @@ class CA_Ajax
 
 		add_action('woocommerce_order_status_processing', array($this, 'maybe_send_inner_dimensions_results_after_payment'));
 		add_action('woocommerce_order_status_completed', array($this, 'maybe_send_inner_dimensions_results_after_payment'));
+		add_action('woocommerce_thankyou', array($this, 'render_inner_dimensions_download_on_thankyou'), 20);
 	}
 
 	/**
@@ -491,7 +492,7 @@ class CA_Ajax
 			}
 		}
 
-		$price = (float) apply_filters('ca_inner_dimensions_full_results_price', 499.00, $submission_id);
+		$price = (float) apply_filters('ca_inner_dimensions_full_results_price', 99.90, $submission_id);
 		if ($price <= 0) {
 			$this->send_error('ca_prepare_inner_dimensions_checkout', __('The full results price is not configured correctly.', 'rtr-custom-assessment'));
 		}
@@ -771,6 +772,60 @@ class CA_Ajax
 			$order->update_meta_data('_ca_full_results_email_sent', 'yes');
 			$order->save();
 		}
+	}
+
+	/**
+	 * Render download CTA on WooCommerce thank-you page for NAC full results orders.
+	 *
+	 * @param int $order_id WooCommerce order ID.
+	 */
+	public function render_inner_dimensions_download_on_thankyou($order_id)
+	{
+		if (!$this->is_woocommerce_ready()) {
+			return;
+		}
+
+		$order = wc_get_order((int) $order_id);
+		if (!$order) {
+			return;
+		}
+
+		$assessment_type = (string) $order->get_meta('_ca_assessment_type');
+		if (CA_Assessment_Types::INNER_DIMENSIONS !== $assessment_type) {
+			return;
+		}
+
+		$product_id = (int) $order->get_meta('_ca_full_results_product_id');
+		if ($product_id <= 0) {
+			return;
+		}
+
+		$product = wc_get_product($product_id);
+		if (!$product || !$product->is_downloadable()) {
+			return;
+		}
+
+		$downloads = $product->get_downloads();
+		if (empty($downloads) || !is_array($downloads)) {
+			return;
+		}
+
+		$first_download = reset($downloads);
+		$download_url = ($first_download && method_exists($first_download, 'get_file')) ? (string) $first_download->get_file() : '';
+		if ('' === $download_url) {
+			return;
+		}
+		?>
+		<section class="woocommerce-order ca-order-download" style="margin-top:24px;">
+			<h2><?php esc_html_e('Your Full Results', 'rtr-custom-assessment'); ?></h2>
+			<p><?php esc_html_e('Your payment was received. Download your full results below.', 'rtr-custom-assessment'); ?></p>
+			<p>
+				<a class="button button-primary" href="<?php echo esc_url($download_url); ?>" download>
+					<?php esc_html_e('Download PDF', 'rtr-custom-assessment'); ?>
+				</a>
+			</p>
+		</section>
+		<?php
 	}
 }
 
