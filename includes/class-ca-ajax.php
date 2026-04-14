@@ -694,27 +694,37 @@ class CA_Ajax
 		$total_q = CA_Assessment_Registry::get_total_count($sub_type);
 
 		$html = '<html><head><meta charset="UTF-8"><style>
-			body{font-family:Arial,sans-serif;margin:20px;color:#222;}
-			h1{font-size:24px;margin-bottom:10px;}
-			h2{font-size:18px;margin:20px 0 8px;}
-			table{width:100%;border-collapse:collapse;margin-bottom:16px;}
-			th,td{border:1px solid #ddd;padding:8px;vertical-align:top;}
-			th{background:#f6f6f6;}
+			body{font-family:Arial,sans-serif;margin:24px;color:#1f2937;font-size:13px;line-height:1.5;}
+			h1{font-size:26px;margin:0 0 12px;color:#111827;border-bottom:2px solid #e5e7eb;padding-bottom:8px;}
+			h2{font-size:17px;margin:24px 0 10px;color:#111827;}
+			p{margin:0 0 12px;}
+			.report-meta{background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:12px 14px;}
+			.report-meta strong{color:#111827;}
+			table{width:100%;border-collapse:collapse;margin:0 0 18px;background:#fff;}
+			th,td{border:1px solid #e5e7eb;padding:9px 10px;vertical-align:top;text-align:left;}
+			thead th{background:#eef2ff;color:#1f2937;font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.3px;}
+			tbody tr:nth-child(even){background:#f9fafb;}
+			.col-category{width:20%;}
+			.col-score{width:12%;}
+			.col-average{width:12%;}
+			.col-summary{width:56%;}
+			.col-question{width:76%;}
+			.col-response{width:24%;font-weight:700;color:#111827;}
 		</style></head><body>';
 
 		$html .= '<h1>Natural Attributes Cataloging - Full Results</h1>';
-		$html .= '<p><strong>Name:</strong> ' . esc_html($submission->first_name . ' ' . $submission->last_name) . '<br>';
+		$html .= '<p class="report-meta"><strong>Name:</strong> ' . esc_html($submission->first_name . ' ' . $submission->last_name) . '<br>';
 		$html .= '<strong>Email:</strong> ' . esc_html($submission->email) . '<br>';
 		$html .= '<strong>Total Score:</strong> ' . esc_html($submission->total_score . ' / ' . ($total_q * $scale_max)) . '<br>';
 		$html .= '<strong>Average Score:</strong> ' . esc_html(number_format((float) $submission->average_score, 2)) . '</p>';
 
-		$html .= '<h2>Category Scores</h2><table><thead><tr><th>Category</th><th>Subtotal</th><th>Average</th><th>Summary</th></tr></thead><tbody>';
+		$html .= '<h2>Category Scores</h2><table><thead><tr><th class="col-category">Category</th><th class="col-score">Subtotal</th><th class="col-average">Average</th><th class="col-summary">Summary</th></tr></thead><tbody>';
 		foreach ($cat_scores as $cat) {
 			$html .= '<tr><td>' . esc_html($cat->category_name) . '</td><td>' . esc_html($cat->subtotal) . '</td><td>' . esc_html(number_format((float) $cat->average, 2)) . '</td><td>' . esc_html(CA_Scoring::get_category_summary($cat->category_name, (float) $cat->average, $sub_type)) . '</td></tr>';
 		}
 		$html .= '</tbody></table>';
 
-		$html .= '<h2>Question Responses</h2><table><thead><tr><th>Question</th><th>Response</th></tr></thead><tbody>';
+		$html .= '<h2>Question Responses</h2><table><thead><tr><th class="col-question">Question</th><th class="col-response">Response</th></tr></thead><tbody>';
 		foreach ($flat_q as $q) {
 			$idx = isset($q['index']) ? (int) $q['index'] : 0;
 			$answer = isset($answers[$idx]) ? (int) $answers[$idx] : 0;
