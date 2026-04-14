@@ -674,16 +674,7 @@ class CA_Ajax
 		if ($pdf->save_pdf($html, $pdf_path)) {
 			return trailingslashit($dir_url) . $pdf_filename;
 		}
-
-		// Fallback for environments without a PDF library: provide a downloadable HTML report.
-		$html_filename = 'nac-results-' . (int) $submission_id . '-' . $timestamp . '.html';
-		$html_path = trailingslashit($dir_path) . $html_filename;
-		$html_payload = "<!doctype html>\n" . $html;
-		if (false === file_put_contents($html_path, $html_payload)) {
-			return false;
-		}
-
-		return trailingslashit($dir_url) . $html_filename;
+		return false;
 	}
 
 	/**

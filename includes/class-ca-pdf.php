@@ -24,7 +24,7 @@ class Rtr_Custom_Assessment_Pdf
 		if (class_exists('Dompdf\Dompdf')) {
 			return $this->get_binary_with_dompdf($html);
 		}
-		return false;
+		return $this->get_binary_with_simple_pdf($html);
 	}
 
 	/**
@@ -79,16 +79,18 @@ class Rtr_Custom_Assessment_Pdf
 		header('Pragma: no-cache');
 		header('Expires: 0');
 
-		// Try using TCPDF or DomPDF, fallback to HTML print
+		// Try using TCPDF or DomPDF, fallback to a built-in minimal PDF renderer.
 		if (class_exists('TCPDF')) {
 			$this->generate_with_tcpdf($html);
 		} elseif (class_exists('Dompdf\Dompdf')) {
 			$this->generate_with_dompdf($html);
 		} else {
-			// Fallback: Output as HTML
-			header('Content-Type: text/html; charset=utf-8');
-			header('Content-Disposition: inline');
-			$this->generate_simple($html);
+			$binary = $this->get_binary_with_simple_pdf($html);
+			if (false === $binary || '' === $binary) {
+				return;
+			}
+			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Raw PDF binary output.
+			echo $binary;
 		}
 	}
 
@@ -158,40 +160,84 @@ class Rtr_Custom_Assessment_Pdf
 	}
 
 	/**
-	 * Fallback simple PDF generation using DomPDF if available.
+	 * Generate PDF using a minimal built-in text renderer.
 	 *
 	 * @param string $html
 	 */
 	private function generate_simple($html)
 	{
-		// Try to use dompdf if composer installed it
-		if (class_exists('Dompdf\Dompdf')) {
-			$this->generate_with_dompdf($html);
+		$binary = $this->get_binary_with_simple_pdf($html);
+		if (false === $binary || '' === $binary) {
 			return;
 		}
+		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Raw PDF binary output.
+		echo $binary;
+	}
 
-		// Fallback: Output as HTML content with print styling
-		// This allows users to print as PDF from their browser
-		echo '<!DOCTYPE html>
-		<html lang="en">
-		<head>
-			<meta charset="UTF-8">
-			<meta name="viewport" content="width=device-width, initial-scale=1.0">
-			<title>Submission Report</title>
-			<style>
-				@media print {
-					body { margin: 0; }
-					.no-print { display: none; }
+	/**
+	 * Build a valid PDF binary without external libraries (text-only fallback).
+	 *
+	 * @param string $html
+	 * @return string|false
+	 */
+	private function get_binary_with_simple_pdf($html)
+	{
+		$text = trim(wp_strip_all_tags((string) $html));
+		if ('' === $text) {
+			$text = 'Assessment Results';
+		}
+
+		$lines = preg_split('/\r\n|\r|\n/', $text);
+		if (!is_array($lines) || empty($lines)) {
+			$lines = array($text);
+		}
+
+		$content = "BT\n/F1 11 Tf\n50 792 Td\n";
+		$line_count = 0;
+		foreach ($lines as $line) {
+			$line = trim((string) $line);
+			if ('' === $line) {
+				continue;
+			}
+
+			$line = preg_replace('/\s+/', ' ', $line);
+			$chunks = str_split($line, 95);
+			foreach ($chunks as $chunk) {
+				$escaped = str_replace(array('\\', '(', ')'), array('\\\\', '\(', '\)'), $chunk);
+				$content .= '(' . $escaped . ") Tj\n0 -14 Td\n";
+				$line_count++;
+				// Basic single-page safety cap.
+				if ($line_count >= 300) {
+					break 2;
 				}
-				body { font-family: Arial, sans-serif; margin: 20px; }
-				.print-button { margin-bottom: 20px; }
-			</style>
-		</head>
-		<body>
-			<button class="print-button no-print" onclick="window.print()">Print / Save as PDF</button>
-			' . wp_kses_post($html) . '
-		</body>
-		</html>';
+			}
+		}
+		$content .= "ET\n";
+
+		$objects = array();
+		$objects[] = "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n";
+		$objects[] = "2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n";
+		$objects[] = "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>\nendobj\n";
+		$objects[] = "4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n";
+		$objects[] = "5 0 obj\n<< /Length " . strlen($content) . " >>\nstream\n" . $content . "endstream\nendobj\n";
+
+		$pdf = "%PDF-1.4\n";
+		$offsets = array(0);
+		foreach ($objects as $object) {
+			$offsets[] = strlen($pdf);
+			$pdf .= $object;
+		}
+
+		$xref_offset = strlen($pdf);
+		$pdf .= "xref\n0 " . (count($objects) + 1) . "\n";
+		$pdf .= "0000000000 65535 f \n";
+		for ($i = 1; $i <= count($objects); $i++) {
+			$pdf .= sprintf('%010d 00000 n ', $offsets[$i]) . "\n";
+		}
+		$pdf .= "trailer\n<< /Size " . (count($objects) + 1) . " /Root 1 0 R >>\n";
+		$pdf .= "startxref\n" . $xref_offset . "\n%%EOF";
+
+		return $pdf;
 	}
 }
 

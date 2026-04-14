@@ -316,7 +316,7 @@ class CA_Mailer
 		if ($is_nac) {
 			$paywall_email_cta = '
 						<div class="paywall-btn-wrap">
-							<a href="' . esc_url(home_url('/')) . '" class="paywall-btn">please pay to get the full results</a>
+							<a href="' . esc_url(home_url('/')) . '" class="paywall-btn">&#128722; Get the Full Result</a>
 						</div>';
 		}
 
