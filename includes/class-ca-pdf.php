@@ -376,16 +376,26 @@ class Rtr_Custom_Assessment_Pdf
 
 		$matrix = array();
 		$col_count = 0;
+		$header_cells = array();
 		foreach ($rows as $row) {
 			$cols = array();
+			$is_header_row = false;
 			foreach ($row->childNodes as $cell) {
 				$cell_name = strtolower((string) $cell->nodeName);
 				if (!in_array($cell_name, array('th', 'td'), true)) {
 					continue;
 				}
+				if ('th' === $cell_name) {
+					$is_header_row = true;
+				}
 				$cols[] = $this->normalize_text($cell->textContent);
 			}
 			if (!empty($cols)) {
+				if ($is_header_row && empty($header_cells)) {
+					$header_cells = $cols;
+					$col_count = max($col_count, count($cols));
+					continue;
+				}
 				$matrix[] = $cols;
 				$col_count = max($col_count, count($cols));
 			}
@@ -394,44 +404,31 @@ class Rtr_Custom_Assessment_Pdf
 		if (empty($matrix) || $col_count <= 0) {
 			return array();
 		}
-
-		$max_total = 95;
-		$sep = ' | ';
-		$sep_total = ($col_count - 1) * strlen($sep);
-		$usable = max(20, $max_total - $sep_total);
-		$col_width = max(10, (int) floor($usable / $col_count));
-
 		$lines = array();
-		$lines[] = str_repeat('=', min(95, $max_total));
-		foreach ($matrix as $ridx => $cols) {
-			$wrapped_cols = array();
+		if (!empty($header_cells)) {
+			$lines[] = implode(' | ', $header_cells);
+			$lines[] = str_repeat('-', 95);
+		}
+
+		foreach ($matrix as $cols) {
+			$lines[] = str_repeat('-', 95);
 			for ($i = 0; $i < $col_count; $i++) {
-				$cell = isset($cols[$i]) ? $cols[$i] : '';
-				$wrapped_cols[$i] = $this->wrap_text_line($cell, $col_width);
-				if (empty($wrapped_cols[$i])) {
-					$wrapped_cols[$i] = array('');
+				$label = isset($header_cells[$i]) && '' !== $header_cells[$i] ? $header_cells[$i] : ('Column ' . ($i + 1));
+				$value = isset($cols[$i]) ? $cols[$i] : '';
+				if ('' === $value) {
+					continue;
 				}
-			}
-
-			$row_height = 1;
-			foreach ($wrapped_cols as $wcol) {
-				$row_height = max($row_height, count($wcol));
-			}
-
-			for ($line_idx = 0; $line_idx < $row_height; $line_idx++) {
-				$parts = array();
-				for ($i = 0; $i < $col_count; $i++) {
-					$part = isset($wrapped_cols[$i][$line_idx]) ? $wrapped_cols[$i][$line_idx] : '';
-					$parts[] = str_pad($part, $col_width, ' ');
+				$wrapped = $this->wrap_text_line($value, 78);
+				if (empty($wrapped)) {
+					continue;
 				}
-				$lines[] = rtrim(implode($sep, $parts));
-			}
-
-			if (0 === $ridx) {
-				$lines[] = str_repeat('-', min(95, $max_total));
+				$lines[] = $label . ': ' . array_shift($wrapped);
+				foreach ($wrapped as $cont) {
+					$lines[] = '  ' . $cont;
+				}
 			}
 		}
-		$lines[] = str_repeat('=', min(95, $max_total));
+		$lines[] = str_repeat('-', 95);
 
 		return $lines;
 	}
