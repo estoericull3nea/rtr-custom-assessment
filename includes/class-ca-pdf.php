@@ -10,6 +10,44 @@ if (!defined('ABSPATH')) {
 // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedClassFound -- Class uses plugin-specific prefix.
 class Rtr_Custom_Assessment_Pdf
 {
+	/**
+	 * Build PDF binary content from HTML.
+	 *
+	 * @param string $html
+	 * @return string|false
+	 */
+	public function get_pdf_binary($html)
+	{
+		if (class_exists('TCPDF')) {
+			return $this->get_binary_with_tcpdf($html);
+		}
+		if (class_exists('Dompdf\Dompdf')) {
+			return $this->get_binary_with_dompdf($html);
+		}
+		return false;
+	}
+
+	/**
+	 * Save PDF to an absolute path.
+	 *
+	 * @param string $html
+	 * @param string $absolute_path
+	 * @return bool
+	 */
+	public function save_pdf($html, $absolute_path)
+	{
+		$binary = $this->get_pdf_binary($html);
+		if (false === $binary || '' === $binary) {
+			return false;
+		}
+
+		$dir = dirname($absolute_path);
+		if (!is_dir($dir)) {
+			wp_mkdir_p($dir);
+		}
+
+		return false !== file_put_contents($absolute_path, $binary);
+	}
 
 	/**
 	 * Generate PDF from HTML content.
@@ -72,6 +110,24 @@ class Rtr_Custom_Assessment_Pdf
 	}
 
 	/**
+	 * Generate PDF binary via TCPDF.
+	 *
+	 * @param string $html
+	 * @return string
+	 */
+	private function get_binary_with_tcpdf($html)
+	{
+		$pdf = new \TCPDF();
+		$pdf->SetDefaultMonospacedFont(PDF_FONT_MONOSPACED);
+		$pdf->SetMargins(15, 15, 15);
+		$pdf->SetAutoPageBreak(true, 15);
+		$pdf->AddPage();
+		$pdf->SetFont('helvetica', '', 10);
+		$pdf->writeHTML($html, true, false, true, false, '');
+		return $pdf->Output('', 'S');
+	}
+
+	/**
 	 * Generate PDF using DomPDF library.
 	 *
 	 * @param string $html
@@ -84,6 +140,21 @@ class Rtr_Custom_Assessment_Pdf
 		$dompdf->render();
 		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Dompdf returns binary PDF content, not HTML output.
 		echo $dompdf->output();
+	}
+
+	/**
+	 * Generate PDF binary via Dompdf.
+	 *
+	 * @param string $html
+	 * @return string
+	 */
+	private function get_binary_with_dompdf($html)
+	{
+		$dompdf = new \Dompdf\Dompdf();
+		$dompdf->loadHtml($html);
+		$dompdf->setPaper('A4');
+		$dompdf->render();
+		return $dompdf->output();
 	}
 
 	/**

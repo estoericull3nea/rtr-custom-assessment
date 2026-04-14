@@ -12,6 +12,7 @@
     totalQuestions: 0,
     questionOrder: [],
     answersCache: {},
+    checkoutUrl: "",
     isSubmitting: false,
   };
 
@@ -127,6 +128,7 @@
 
     $nextBtn.on("click", handleNext);
     $backBtn.on("click", handleBack);
+    $resultsContent.on("click", ".ca-results-paywall-btn", handlePaywallCheckout);
   }
 
   function openModal(e) {
@@ -198,9 +200,7 @@
 
   function getSavedSession() {
     try {
-      return JSON.parse(
-        localStorage.getItem(sessionStorageKey()) || "null",
-      );
+      return JSON.parse(localStorage.getItem(sessionStorageKey()) || "null");
     } catch (err) {
       return null;
     }
@@ -222,6 +222,7 @@
     state.submissionId = null;
     state.stepIndex = 0;
     state.answersCache = {};
+    state.checkoutUrl = "";
     state.isSubmitting = false;
     state.totalQuestions = cfg.total_questions || 0;
     state.questionOrder = buildQuestionOrder();
@@ -337,10 +338,13 @@
 
   function resumeAssessment(submissionId, answersMap, total) {
     state.submissionId = submissionId;
-    state.answersCache = answersMap && typeof answersMap === "object" ? answersMap : {};
+    state.answersCache =
+      answersMap && typeof answersMap === "object" ? answersMap : {};
 
     saveSession(
-      $("#ca-email").val().trim() || (getSavedSession() && getSavedSession().email) || "",
+      $("#ca-email").val().trim() ||
+        (getSavedSession() && getSavedSession().email) ||
+        "",
       submissionId,
     );
 
@@ -500,17 +504,13 @@
 
   function buildAnswerMarkup(q) {
     var cfg = getCurrentConfig();
-    var scaleMax =
-      (q && q.scale_max) ||
-      (cfg && cfg.scale_max) ||
-      5;
+    var scaleMax = (q && q.scale_max) || (cfg && cfg.scale_max) || 5;
     var style = (q && q.label_style) || "per_number";
     var html = "";
     var i;
 
     if (style === "yes_no") {
-      var yesLbl =
-        (CA_Config.labels && CA_Config.labels.yes_no_yes) || "Yes";
+      var yesLbl = (CA_Config.labels && CA_Config.labels.yes_no_yes) || "Yes";
       var noLbl = (CA_Config.labels && CA_Config.labels.yes_no_no) || "No";
       html +=
         '<label class="ca-answer-option ca-answer-option--yesno" data-value="1">' +
@@ -567,7 +567,12 @@
       }
     }
 
-    return { html: html, scaleMax: scaleMax, style: style, endpoints: (q && q.endpoints) || {} };
+    return {
+      html: html,
+      scaleMax: scaleMax,
+      style: style,
+      endpoints: (q && q.endpoints) || {},
+    };
   }
 
   function loadQuestion(stepIndex) {
@@ -591,12 +596,9 @@
           renderQuestion(response.data, stepIndex, questionIndex);
         } else {
           alert(
-            (response &&
-              response.data &&
-              typeof response.data === "string"
+            (response && response.data && typeof response.data === "string"
               ? response.data
-              : response.data.message) ||
-              CA_Config.labels.error_generic,
+              : response.data.message) || CA_Config.labels.error_generic,
           );
         }
       })
@@ -774,12 +776,9 @@
           loadResultsPreview();
         } else {
           alert(
-            (response &&
-              response.data &&
-              typeof response.data === "string"
+            (response && response.data && typeof response.data === "string"
               ? response.data
-              : response.data.message) ||
-              CA_Config.labels.error_generic,
+              : response.data.message) || CA_Config.labels.error_generic,
           );
           showScreen("questions");
         }
@@ -810,12 +809,9 @@
           renderResults(response.data);
         } else {
           alert(
-            (response &&
-              response.data &&
-              typeof response.data === "string"
+            (response && response.data && typeof response.data === "string"
               ? response.data
-              : response.data.message) ||
-              CA_Config.labels.error_generic,
+              : response.data.message) || CA_Config.labels.error_generic,
           );
         }
       })
@@ -904,7 +900,7 @@
           IR.tagline ||
             "Remember Who You Were Before the World Told You Who to Be.",
         ) +
-        '&rdquo;</p>' +
+        "&rdquo;</p>" +
         '<h2 class="ca-results-nac-subtitle">' +
         escHtml(
           IR.congrats ||
@@ -912,7 +908,9 @@
         ) +
         "</h2>" +
         '<p class="ca-results-nac-email">' +
-        escHtml(IR.email_lead || "Your full report has been emailed to") +
+        escHtml(
+          IR.email_lead || "Your full report will be sent after payment to",
+        ) +
         " <strong>" +
         emailEsc +
         '</strong>. <button type="button" class="ca-results-change-email-btn" id="ca-nac-change-email">' +
@@ -928,7 +926,7 @@
     }
 
     var paywallMessage = isYesNo
-      ? '<div class="ca-results-paywall-text"><button type="button" class="ca-btn ca-btn--primary ca-results-paywall-btn">please pay to get the full results</button></div>'
+      ? '<div class="ca-results-paywall-text"><button type="button" class="ca-btn ca-btn--primary ca-results-paywall-btn">Please Pay to Get The Full Results</button></div>'
       : "";
 
     var ctaBlock = isYesNo
@@ -995,6 +993,10 @@
     hideProgress();
     showScreen("results");
 
+    if (isYesNo) {
+      prepareInnerDimensionsCheckout(false);
+    }
+
     setTimeout(function () {
       $resultsContent.find(".ca-cat-bar-fill").each(function () {
         var $bar = $(this);
@@ -1020,6 +1022,80 @@
             /* ignore */
           }
         }, 100);
+      });
+  }
+
+  function handlePaywallCheckout(e) {
+    e.preventDefault();
+
+    if (!state.submissionId || state.isSubmitting) {
+      return;
+    }
+
+    if (state.checkoutUrl) {
+      window.location.href = state.checkoutUrl;
+      return;
+    }
+
+    prepareInnerDimensionsCheckout(true, e.currentTarget);
+  }
+
+  function prepareInnerDimensionsCheckout(redirectAfterPrepare, buttonEl) {
+    if (!state.submissionId || state.isSubmitting) {
+      return;
+    }
+
+    var $btn = buttonEl ? $(buttonEl) : $();
+    state.isSubmitting = true;
+    if ($btn.length) {
+      setBtnLoading($btn, true);
+    }
+
+    caPost(
+      withAssessment({
+        action: "ca_prepare_inner_dimensions_checkout",
+        nonce: CA_Config.nonce,
+        submission_id: state.submissionId,
+      }),
+    )
+      .done(function (response) {
+        if (response && response.success && response.data) {
+          state.checkoutUrl =
+            response.data.checkout_url ||
+            CA_Config.checkout_url ||
+            "/checkout/";
+          if (redirectAfterPrepare) {
+            window.location.href = state.checkoutUrl;
+          }
+          return;
+        }
+
+        if (redirectAfterPrepare) {
+          alert(
+            (response &&
+              response.data &&
+              (response.data.message || response.data)) ||
+              CA_Config.labels.error_generic,
+          );
+        }
+      })
+      .fail(function (xhr, textStatus, errorThrown) {
+        console.error("CA AJAX ca_prepare_inner_dimensions_checkout failed:", {
+          textStatus: textStatus,
+          errorThrown: errorThrown,
+          status: xhr && xhr.status ? xhr.status : null,
+          responseText:
+            xhr && xhr.responseText ? xhr.responseText.slice(0, 500) : null,
+        });
+        if (redirectAfterPrepare) {
+          alert(getAjaxErrorMessage(xhr));
+        }
+      })
+      .always(function () {
+        if ($btn.length) {
+          setBtnLoading($btn, false);
+        }
+        state.isSubmitting = false;
       });
   }
 
@@ -1064,7 +1140,9 @@
 
     var raw = xhr.responseText ? String(xhr.responseText).trim() : "";
     if (!raw) {
-      return xhr.status ? "Request failed (HTTP " + xhr.status + ")." : fallback;
+      return xhr.status
+        ? "Request failed (HTTP " + xhr.status + ")."
+        : fallback;
     }
 
     try {
