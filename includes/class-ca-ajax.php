@@ -39,9 +39,7 @@ class CA_Ajax
 			add_action('wp_ajax_nopriv_' . $action, array($this, $action));
 		}
 
-		add_action('woocommerce_order_status_processing', array($this, 'maybe_send_inner_dimensions_results_after_payment'));
-		add_action('woocommerce_order_status_completed', array($this, 'maybe_send_inner_dimensions_results_after_payment'));
-		add_action('woocommerce_thankyou', array($this, 'render_inner_dimensions_download_on_thankyou'), 20);
+		add_action('woocommerce_before_thankyou', array($this, 'render_inner_dimensions_download_on_thankyou'), 20);
 		add_action('woocommerce_checkout_create_order', array($this, 'attach_inner_dimensions_meta_to_checkout_order'), 20, 2);
 		add_filter('upload_mimes', array($this, 'allow_results_html_mime_type'));
 	}
@@ -399,10 +397,8 @@ class CA_Ajax
 
 		CA_Database::save_category_scores($submission_id, $scoring['category_scores']);
 
-		// For Natural Attributes Cataloging, send results only after Woo payment.
-		if (CA_Assessment_Types::INNER_DIMENSIONS !== $assessment_type) {
-			CA_Mailer::send_results_email($submission_id);
-		}
+		// Send results email as soon as assessment is completed (all assessment types).
+		CA_Mailer::send_results_email($submission_id);
 
 		$this->send_success('ca_submit_assessment', array(
 			'message' => __('Assessment submitted.', 'rtr-custom-assessment'),
@@ -513,7 +509,7 @@ class CA_Ajax
 				}
 			}
 
-			$price = (float) apply_filters('ca_inner_dimensions_full_results_price', 99.90, $submission_id);
+			$price = (float) apply_filters('ca_inner_dimensions_full_results_price', 9.99, $submission_id);
 			if ($price <= 0) {
 				$this->send_error('ca_prepare_inner_dimensions_checkout', __('The full results price is not configured correctly.', 'rtr-custom-assessment'));
 			}
@@ -828,6 +824,9 @@ class CA_Ajax
 
 		$order = wc_get_order((int) $order_id);
 		if (!$order) {
+			return;
+		}
+		if (!$order->is_paid()) {
 			return;
 		}
 
