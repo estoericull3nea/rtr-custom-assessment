@@ -64,6 +64,7 @@ class CA_Mailer
 		$total_questions = CA_Assessment_Registry::get_total_count($assessment_type);
 		$max_score = $total_questions * $scale_max;
 		$overall_profile = CA_Scoring::get_overall_profile((float) $submission->average_score, $assessment_type);
+		$paywall_url = self::build_inner_dimensions_checkout_url_for_submission((int) $submission->id);
 
 		$body = '
 		<!DOCTYPE html>
@@ -316,7 +317,7 @@ class CA_Mailer
 		if ($is_nac) {
 			$paywall_email_cta = '
 						<div class="paywall-btn-wrap">
-							<a href="' . esc_url(home_url('/')) . '" class="paywall-btn">&#128722; Get the Full Result</a>
+							<a href="' . esc_url($paywall_url) . '" class="paywall-btn">&#128722; Get the Full Result</a>
 						</div>';
 		}
 
@@ -362,5 +363,45 @@ class CA_Mailer
 		</html>';
 
 		return $body;
+	}
+
+	/**
+	 * Build user-specific checkout URL for NAC full results.
+	 *
+	 * @param int $submission_id
+	 * @return string
+	 */
+	private static function build_inner_dimensions_checkout_url_for_submission($submission_id)
+	{
+		$submission_id = (int) $submission_id;
+		$checkout_url = function_exists('wc_get_checkout_url') ? wc_get_checkout_url() : home_url('/checkout/');
+		if ($submission_id <= 0) {
+			return $checkout_url;
+		}
+
+		$product_ids = get_posts(array(
+			'post_type' => 'product',
+			'post_status' => array('publish', 'private', 'draft'),
+			'posts_per_page' => 1,
+			'fields' => 'ids',
+			'meta_key' => '_ca_submission_id',
+			'meta_value' => $submission_id,
+		));
+
+		if (empty($product_ids)) {
+			return $checkout_url;
+		}
+
+		$product_id = (int) $product_ids[0];
+		if ($product_id <= 0) {
+			return $checkout_url;
+		}
+
+		$product_url = get_permalink($product_id);
+		if ($product_url) {
+			return add_query_arg('add-to-cart', $product_id, $product_url);
+		}
+
+		return add_query_arg('add-to-cart', $product_id, $checkout_url);
 	}
 }
