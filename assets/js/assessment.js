@@ -925,8 +925,12 @@
         "</div>";
     }
 
+    var initialCheckoutUrl =
+      state.checkoutUrl || CA_Config.checkout_url || "/checkout/";
     var paywallMessage = isYesNo
-      ? '<div class="ca-results-paywall-text"><button type="button" class="ca-btn ca-btn--primary ca-results-paywall-btn">&#128722; Get the Full Result</button></div>'
+      ? '<div class="ca-results-paywall-text"><a href="' +
+        escHtml(initialCheckoutUrl) +
+        '" class="ca-btn ca-btn--primary ca-results-paywall-btn">&#128722; Get the Full Result</a></div>'
       : "";
 
     var ctaBlock = isYesNo
@@ -1064,6 +1068,9 @@
             response.data.checkout_url ||
             CA_Config.checkout_url ||
             "/checkout/";
+          $resultsContent
+            .find(".ca-results-paywall-btn")
+            .attr("href", state.checkoutUrl);
           if (redirectAfterPrepare) {
             window.location.href = state.checkoutUrl;
           }
