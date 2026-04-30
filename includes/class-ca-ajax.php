@@ -488,6 +488,7 @@ class CA_Ajax
 			}
 
 			$this->prepare_inner_dimensions_checkout_cart($product_id);
+			$this->set_inner_dimensions_checkout_prefill_session($submission);
 			$checkout_url = $this->build_inner_dimensions_checkout_url($product_id);
 			if ('' === $checkout_url) {
 				$this->send_error('ca_prepare_inner_dimensions_checkout', __('Could not build a checkout link. Please try again.', 'rtr-custom-assessment'));
@@ -739,6 +740,15 @@ class CA_Ajax
 			return $value;
 		}
 
+		// First, prefill from session when we are on checkout with NAC cart flow.
+		if (function_exists('is_checkout') && is_checkout()) {
+			$session_value = $this->get_inner_dimensions_checkout_prefill_value($input);
+			if ('' !== $session_value) {
+				return $session_value;
+			}
+		}
+
+		// Fallback for order-pay flow (legacy path).
 		if (!function_exists('is_wc_endpoint_url') || !is_wc_endpoint_url('order-pay')) {
 			return $value;
 		}
@@ -779,6 +789,53 @@ class CA_Ajax
 		}
 
 		return $value;
+	}
+
+	/**
+	 * Store billing fields in Woo session for NAC checkout prefill.
+	 *
+	 * @param object $submission Submission row.
+	 * @return void
+	 */
+	private function set_inner_dimensions_checkout_prefill_session($submission)
+	{
+		if (!$submission || !function_exists('WC')) {
+			return;
+		}
+		$wc = WC();
+		if (!$wc || !isset($wc->session) || !is_object($wc->session)) {
+			return;
+		}
+
+		$prefill = array(
+			'billing_first_name' => isset($submission->first_name) ? (string) $submission->first_name : '',
+			'billing_last_name' => isset($submission->last_name) ? (string) $submission->last_name : '',
+			'billing_email' => isset($submission->email) ? (string) $submission->email : '',
+			'billing_phone' => isset($submission->phone) ? (string) $submission->phone : '',
+		);
+		$wc->session->set('ca_inner_dimensions_checkout_prefill', $prefill);
+	}
+
+	/**
+	 * Read a single billing field from NAC checkout prefill session payload.
+	 *
+	 * @param string $input Billing field key.
+	 * @return string
+	 */
+	private function get_inner_dimensions_checkout_prefill_value($input)
+	{
+		if (!function_exists('WC')) {
+			return '';
+		}
+		$wc = WC();
+		if (!$wc || !isset($wc->session) || !is_object($wc->session)) {
+			return '';
+		}
+		$prefill = $wc->session->get('ca_inner_dimensions_checkout_prefill');
+		if (!is_array($prefill) || !isset($prefill[$input])) {
+			return '';
+		}
+		return trim((string) $prefill[$input]);
 	}
 
 	/**
