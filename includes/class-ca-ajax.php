@@ -476,13 +476,16 @@ class CA_Ajax
 				$order = wc_get_order($existing_order_id);
 				$existing_product_id = $order ? (int) $order->get_meta('_ca_full_results_product_id') : 0;
 				if ($order && $order->needs_payment() && $existing_product_id > 0) {
-				$this->prepare_inner_dimensions_checkout_cart($existing_product_id);
-				$checkout_url = $this->build_inner_dimensions_checkout_url((int) $existing_product_id);
+					$this->clear_wc_cart_for_guest_checkout();
+					$checkout_url = $this->get_inner_dimensions_order_payment_url($order);
+					if ('' === $checkout_url) {
+						$this->send_error('ca_prepare_inner_dimensions_checkout', __('Could not build a checkout link. Please try again.', 'rtr-custom-assessment'));
+					}
 					$this->send_success(
 						'ca_prepare_inner_dimensions_checkout',
 						array(
 							'order_id' => $order->get_id(),
-						'checkout_url' => $checkout_url,
+							'checkout_url' => $checkout_url,
 						),
 						'Existing unpaid order reused.',
 						array('submission_id' => $submission_id, 'order_id' => $order->get_id())
@@ -529,8 +532,11 @@ class CA_Ajax
 			$order->calculate_totals(true);
 			$order->save();
 
-			$this->prepare_inner_dimensions_checkout_cart($product_id);
-			$checkout_url = $this->build_inner_dimensions_checkout_url((int) $product_id);
+			$this->clear_wc_cart_for_guest_checkout();
+			$checkout_url = $this->get_inner_dimensions_order_payment_url($order);
+			if ('' === $checkout_url) {
+				$this->send_error('ca_prepare_inner_dimensions_checkout', __('Could not build a checkout link. Please try again.', 'rtr-custom-assessment'));
+			}
 			$this->send_success(
 				'ca_prepare_inner_dimensions_checkout',
 				array(
@@ -660,6 +666,40 @@ class CA_Ajax
 			return 0;
 		}
 		return (int) $ids[0];
+	}
+
+	/**
+	 * WooCommerce order payment URL (order-pay) — reliable for guests; avoids hidden product single URLs.
+	 *
+	 * @param \WC_Order $order Order instance.
+	 * @return string
+	 */
+	private function get_inner_dimensions_order_payment_url($order)
+	{
+		if (!$order instanceof \WC_Order) {
+			return '';
+		}
+		if (!$order->needs_payment()) {
+			return '';
+		}
+		$url = $order->get_checkout_payment_url(true);
+		$url = is_string($url) ? trim($url) : '';
+		return '' !== $url ? $this->ensure_www_url($url) : '';
+	}
+
+	/**
+	 * Clear cart before sending the customer to order payment (avoids stray line items).
+	 */
+	private function clear_wc_cart_for_guest_checkout()
+	{
+		if (!function_exists('WC')) {
+			return;
+		}
+		$wc = WC();
+		if (!$wc || !isset($wc->cart) || !is_object($wc->cart)) {
+			return;
+		}
+		$wc->cart->empty_cart();
 	}
 
 	/**
@@ -945,7 +985,7 @@ class CA_Ajax
 	}
 
 	/**
-	 * Ensure URL host includes "www.".
+	 * Normalize checkout redirect URLs (do not alter host — forcing "www." breaks many sites and causes 404s).
 	 *
 	 * @param string $url
 	 * @return string
@@ -953,31 +993,7 @@ class CA_Ajax
 	private function ensure_www_url($url)
 	{
 		$url = trim((string) $url);
-		if ('' === $url) {
-			return '';
-		}
-
-		$parts = wp_parse_url($url);
-		if (!is_array($parts) || empty($parts['host'])) {
-			return $url;
-		}
-
-		$host = (string) $parts['host'];
-		if (0 === strpos($host, 'www.')) {
-			return $url;
-		}
-
-		$parts['host'] = 'www.' . $host;
-		$scheme = isset($parts['scheme']) ? $parts['scheme'] . '://' : '';
-		$user = isset($parts['user']) ? $parts['user'] : '';
-		$pass = isset($parts['pass']) ? ':' . $parts['pass'] : '';
-		$auth = $user ? $user . $pass . '@' : '';
-		$port = isset($parts['port']) ? ':' . $parts['port'] : '';
-		$path = isset($parts['path']) ? $parts['path'] : '';
-		$query = isset($parts['query']) ? '?' . $parts['query'] : '';
-		$fragment = isset($parts['fragment']) ? '#' . $parts['fragment'] : '';
-
-		return $scheme . $auth . $parts['host'] . $port . $path . $query . $fragment;
+		return '' === $url ? '' : $url;
 	}
 
 	/**
