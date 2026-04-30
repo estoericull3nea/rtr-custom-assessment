@@ -14,6 +14,8 @@
     answersCache: {},
     checkoutUrl: "",
     isSubmitting: false,
+    /** True while final assessment submit pipeline is running. */
+    isAssessmentSubmitting: false,
     /** Natural Attributes: answers not yet written to server (or draft differs). */
     unsyncedChanges: false,
     /** True while fetching next/previous question without full-screen loading. */
@@ -38,6 +40,7 @@
     $answerGroup,
     $questionError,
     $backBtn,
+    $closeBtn,
     $nextBtn,
     $phoneInput,
     $phoneCountrySelect,
@@ -291,6 +294,9 @@
   }
 
   function attemptCloseModal() {
+    if (state.isAssessmentSubmitting) {
+      return;
+    }
     if (
       $saveProgressDialog.length &&
       !$saveProgressDialog[0].hasAttribute("hidden")
@@ -334,6 +340,7 @@
     $answerGroup = $("#ca-answer-group");
     $questionError = $("#ca-question-error");
     $backBtn = $("#ca-back-btn");
+    $closeBtn = $("#ca-close-modal");
     $nextBtn = $("#ca-next-btn");
     $nextBtnLabel = $("#ca-next-btn-label");
     $phoneInput = $("#ca-phone");
@@ -406,6 +413,10 @@
       if (e.key !== "Escape" || !$modal.hasClass("ca-modal--open")) {
         return;
       }
+      if (state.isAssessmentSubmitting) {
+        e.preventDefault();
+        return;
+      }
       if (
         $saveProgressDialog.length &&
         !$saveProgressDialog[0].hasAttribute("hidden")
@@ -455,6 +466,7 @@
   }
 
   function closeModal() {
+    setAssessmentSubmitting(false);
     hideSaveProgressDialog();
     $modal.removeClass("ca-modal--open");
     $modal.attr("aria-hidden", "true");
@@ -528,6 +540,7 @@
     state.answersCache = {};
     state.checkoutUrl = "";
     state.isSubmitting = false;
+    state.isAssessmentSubmitting = false;
     state.unsyncedChanges = false;
     state.awaitingQuestionFetch = false;
     state.totalQuestions = cfg.total_questions || 0;
@@ -633,7 +646,23 @@
   function hideProgress() {
     $progressContainer.removeClass("ca-visible");
     $progressContainer.attr("aria-hidden", "true");
+    setAssessmentSubmitting(false);
     resetNextButtonSubmitProgress();
+  }
+
+  function setAssessmentSubmitting(isSubmitting) {
+    state.isAssessmentSubmitting = !!isSubmitting;
+    if ($closeBtn && $closeBtn.length) {
+      $closeBtn
+        .prop("disabled", state.isAssessmentSubmitting)
+        .attr("aria-disabled", state.isAssessmentSubmitting ? "true" : "false");
+    }
+    if ($backBtn && $backBtn.length) {
+      $backBtn.prop(
+        "disabled",
+        state.isAssessmentSubmitting || state.stepIndex === 0,
+      );
+    }
   }
 
   function getNextButtonDefaultLabel() {
@@ -703,6 +732,7 @@
 
     if (prog.allAnswered) {
       if (defersServerAnswerSave()) {
+        setAssessmentSubmitting(true);
         showScreen("questions");
         showProgress();
         updateSubmitLoadingProgress(0);
@@ -794,6 +824,7 @@
           if (prog.allAnswered && totalQ > 0) {
             if (defersServerAnswerSave()) {
               state.isSubmitting = true;
+              setAssessmentSubmitting(true);
               showProgress();
               updateSubmitLoadingProgress(0);
               saveAllAnswersFromCache(
@@ -1155,7 +1186,7 @@
     var pct = total > 0 ? Math.round((stepIndex / total) * 100) : 0;
     setProgress(pct);
 
-    $backBtn.prop("disabled", stepIndex === 0);
+    $backBtn.prop("disabled", state.isAssessmentSubmitting || stepIndex === 0);
     var nextLabel = isLast ? CA_Config.labels.submit : CA_Config.labels.next;
     var $lbl =
       $nextBtnLabel && $nextBtnLabel.length
@@ -1203,6 +1234,7 @@
 
       if (isLast) {
         state.isSubmitting = true;
+        setAssessmentSubmitting(true);
         $nextBtn.prop("disabled", true);
         showScreen("questions");
         showProgress();
@@ -1303,6 +1335,7 @@
   }
 
   function handleBack() {
+    if (state.isAssessmentSubmitting) return;
     if (state.stepIndex <= 0) return;
     state.stepIndex--;
     loadQuestion(state.stepIndex, { skipLoadingScreen: true });
@@ -1310,6 +1343,7 @@
 
   function submitAssessment(options) {
     options = options || {};
+    setAssessmentSubmitting(true);
     if (!options.skipShowLoading) {
       showProgress();
     }
