@@ -1379,10 +1379,11 @@
 
     var initialCheckoutUrl =
       state.checkoutUrl || CA_Config.checkout_url || "/checkout/";
-    var paywallMessage = isYesNo
-      ? '<div class="ca-results-paywall-text"><a href="' +
+    var paywallOverlay = isYesNo
+      ? '<div class="ca-results-paywall-overlay" role="presentation">' +
+        '<div class="ca-results-paywall-text"><a href="' +
         escHtml(initialCheckoutUrl) +
-        '" class="ca-btn ca-btn--primary ca-results-paywall-btn">&#128722; Get the Full Result</a></div>'
+        '" class="ca-btn ca-btn--primary ca-results-paywall-btn">&#128722; Get the Full Result</a></div></div>'
       : "";
 
     var ctaBlock = isYesNo
@@ -1394,8 +1395,7 @@
         '<button type="button" class="ca-btn ca-btn--ghost" id="ca-close-results">Close</button>' +
         "</div>";
 
-    var html =
-      nacTop +
+    var heroHtml =
       '<div class="ca-results-hero' +
       (isYesNo ? " ca-results-preview-blocked" : "") +
       '">' +
@@ -1420,7 +1420,9 @@
       avgBlock +
       "</div>" +
       "</div>" +
-      "</div>" +
+      "</div>";
+
+    var bodyHtml =
       '<div class="ca-results-body' +
       (isYesNo ? " ca-results-preview-blocked" : "") +
       '">' +
@@ -1442,8 +1444,16 @@
       '<p class="ca-results-section-title">Category Breakdown</p>' +
       catHtml +
       ctaBlock +
-      "</div>" +
-      paywallMessage;
+      "</div>";
+
+    var html = isYesNo
+      ? nacTop +
+        '<div class="ca-results-preview-wrap">' +
+        heroHtml +
+        bodyHtml +
+        paywallOverlay +
+        "</div>"
+      : nacTop + heroHtml + bodyHtml;
 
     $resultsContent.html(html);
     hideProgress();
