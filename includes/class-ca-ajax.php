@@ -191,32 +191,13 @@ class CA_Ajax
 			$this->require_submission_for_type($submission_id, $assessment_type);
 		}
 
-		$question = CA_Assessment_Registry::get_question($assessment_type, $index);
+		$payload = CA_Assessment_Registry::get_question_display_payload($assessment_type, $index);
 
-		if (!$question) {
+		if (!$payload) {
 			$this->send_error('ca_get_question', __('Question not found.', 'rtr-custom-assessment'), array('question_index' => $index));
 		}
 
-		$scale_max = CA_Assessment_Types::get_scale_max($assessment_type);
-		$payload = $question;
-		$payload['scale_max'] = $scale_max;
-
-		if (CA_Assessment_Types::SOCIAL_FLUENCY === $assessment_type) {
-			$eps = isset($question['endpoints']) && is_array($question['endpoints']) ? $question['endpoints'] : array();
-			$has_eps = !empty($eps['left']) || !empty($eps['right']) || !empty($eps['mid']);
-			if ($has_eps) {
-				$payload['label_style'] = 'endpoints';
-				$payload['endpoints'] = $eps;
-			} else {
-				$payload['label_style'] = 'per_number';
-				$payload['endpoints'] = array();
-			}
-		} elseif (CA_Assessment_Types::INNER_DIMENSIONS === $assessment_type) {
-			$payload['label_style'] = 'yes_no';
-			$payload['scale_max']   = 2;
-		} else {
-			$payload['label_style'] = 'per_number';
-		}
+		$scale_max = isset($payload['scale_max']) ? (int) $payload['scale_max'] : CA_Assessment_Types::get_scale_max($assessment_type);
 
 		$saved_answer = $submission_id ? CA_Database::get_answer($submission_id, $index) : null;
 		$total = CA_Assessment_Registry::get_total_count($assessment_type);

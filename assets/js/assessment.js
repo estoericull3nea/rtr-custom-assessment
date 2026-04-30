@@ -14,6 +14,10 @@
     answersCache: {},
     checkoutUrl: "",
     isSubmitting: false,
+    /** Natural Attributes: answers not yet written to server (or draft differs). */
+    unsyncedChanges: false,
+    /** True while fetching next/previous question without full-screen loading. */
+    awaitingQuestionFetch: false,
   };
 
   var $modal,
@@ -41,7 +45,13 @@
     $resumeDialog,
     $resumeEmailText,
     $resumeContinueBtn,
-    $resumeNewBtn;
+    $resumeNewBtn,
+    $saveProgressDialog,
+    $saveProgressTitle,
+    $saveProgressMessage,
+    $saveProgressSaveBtn,
+    $saveProgressDiscardBtn,
+    $saveProgressCancelBtn;
 
   function getCurrentConfig() {
     if (
@@ -64,6 +74,225 @@
 
   function sessionStorageKey() {
     return "ca_assessment_session_" + state.assessmentType;
+  }
+
+  function defersServerAnswerSave() {
+    var cfg = getCurrentConfig();
+    return !!(cfg && cfg.defer_answer_save);
+  }
+
+  function draftAnswersStorageKey() {
+    return "ca_assessment_draft_" + state.assessmentType;
+  }
+
+  function hasAnswerInCache(questionIndex) {
+    var idx = parseInt(questionIndex, 10);
+    return (
+      Object.prototype.hasOwnProperty.call(state.answersCache, idx) ||
+      Object.prototype.hasOwnProperty.call(state.answersCache, String(idx))
+    );
+  }
+
+  /**
+   * @returns {{ nextStep: number, allAnswered: boolean }}
+   */
+  function computeStepProgress() {
+    var total = state.totalQuestions;
+    var nextStep = 0;
+    var allAnswered = true;
+    for (var step = 0; step < total; step++) {
+      var qIndex = state.questionOrder[step];
+      if (!hasAnswerInCache(qIndex)) {
+        nextStep = step;
+        allAnswered = false;
+        break;
+      }
+    }
+    return { nextStep: nextStep, allAnswered: allAnswered };
+  }
+
+  function persistDraftAnswers() {
+    if (!defersServerAnswerSave() || !state.submissionId) {
+      return;
+    }
+    try {
+      localStorage.setItem(
+        draftAnswersStorageKey(),
+        JSON.stringify({
+          submissionId: state.submissionId,
+          stepIndex: state.stepIndex,
+          answers: state.answersCache,
+        }),
+      );
+    } catch (err) {
+      /* ignore quota / private mode */
+    }
+  }
+
+  function restoreDraftAnswers() {
+    if (!defersServerAnswerSave() || !state.submissionId) {
+      return;
+    }
+    try {
+      var raw = localStorage.getItem(draftAnswersStorageKey());
+      if (!raw) {
+        return;
+      }
+      var d = JSON.parse(raw);
+      if (
+        !d ||
+        parseInt(d.submissionId, 10) !== parseInt(state.submissionId, 10)
+      ) {
+        return;
+      }
+      if (d.answers && typeof d.answers === "object") {
+        var k;
+        var merged = false;
+        for (k in d.answers) {
+          if (Object.prototype.hasOwnProperty.call(d.answers, k)) {
+            var ki = parseInt(k, 10);
+            state.answersCache[ki] = parseInt(d.answers[k], 10);
+            merged = true;
+          }
+        }
+        if (merged) {
+          state.unsyncedChanges = true;
+        }
+      }
+      if (
+        typeof d.stepIndex === "number" &&
+        d.stepIndex >= 0 &&
+        d.stepIndex < state.totalQuestions
+      ) {
+        state.stepIndex = d.stepIndex;
+      }
+    } catch (err) {
+      /* ignore */
+    }
+  }
+
+  function clearDraftAnswers() {
+    try {
+      localStorage.removeItem(draftAnswersStorageKey());
+    } catch (err) {
+      /* ignore */
+    }
+  }
+
+  function saveAllAnswersFromCache(onDone, onFail) {
+    var list = [];
+    var step;
+    for (step = 0; step < state.totalQuestions; step++) {
+      var qix = state.questionOrder[step];
+      var ans = state.answersCache[qix];
+      if (ans == null || ans === "") {
+        continue;
+      }
+      list.push({
+        question_index: qix,
+        answer: parseInt(ans, 10),
+      });
+    }
+
+    function fail(err) {
+      if (typeof onFail === "function") {
+        onFail(err);
+      }
+    }
+
+    function run(i) {
+      if (i >= list.length) {
+        if (typeof onDone === "function") {
+          onDone();
+        }
+        return;
+      }
+      var item = list[i];
+      caPost(
+        withAssessment({
+          action: "ca_save_answer",
+          nonce: CA_Config.nonce,
+          submission_id: state.submissionId,
+          question_index: item.question_index,
+          answer: item.answer,
+        }),
+      )
+        .done(function (response) {
+          if (response && response.success) {
+            run(i + 1);
+          } else {
+            fail(response);
+          }
+        })
+        .fail(function (xhr) {
+          fail(xhr);
+        });
+    }
+
+    run(0);
+  }
+
+  function shouldPromptSaveProgress() {
+    if ($("#ca-screen-loading").hasClass("ca-screen-active")) {
+      return false;
+    }
+    return (
+      defersServerAnswerSave() &&
+      $("#ca-screen-questions").hasClass("ca-screen-active") &&
+      state.submissionId &&
+      state.unsyncedChanges
+    );
+  }
+
+  function hideSaveProgressDialog() {
+    if (!$saveProgressDialog.length) {
+      return;
+    }
+    var wasOpen = !$saveProgressDialog[0].hasAttribute("hidden");
+    $saveProgressDialog.attr("hidden", "true");
+    if (wasOpen) {
+      $screens.removeClass("ca-screen-active");
+      $("#ca-screen-questions").addClass("ca-screen-active");
+    }
+  }
+
+  function showSaveProgressDialog() {
+    if (!$saveProgressDialog.length) {
+      return;
+    }
+    var L = CA_Config.labels || {};
+    if ($saveProgressTitle.length && L.save_progress_title) {
+      $saveProgressTitle.text(L.save_progress_title);
+    }
+    if ($saveProgressMessage.length && L.save_progress_message) {
+      $saveProgressMessage.text(L.save_progress_message);
+    }
+    if ($saveProgressSaveBtn.length && L.save_progress_save) {
+      $saveProgressSaveBtn.text(L.save_progress_save);
+    }
+    if ($saveProgressDiscardBtn.length && L.save_progress_discard) {
+      $saveProgressDiscardBtn.text(L.save_progress_discard);
+    }
+    if ($saveProgressCancelBtn.length && L.save_progress_cancel) {
+      $saveProgressCancelBtn.text(L.save_progress_cancel);
+    }
+    $screens.removeClass("ca-screen-active");
+    $saveProgressDialog.removeAttr("hidden");
+  }
+
+  function attemptCloseModal() {
+    if (
+      $saveProgressDialog.length &&
+      !$saveProgressDialog[0].hasAttribute("hidden")
+    ) {
+      hideSaveProgressDialog();
+      return;
+    }
+    if (shouldPromptSaveProgress()) {
+      showSaveProgressDialog();
+      return;
+    }
+    closeModal();
   }
 
   function withAssessment(payload) {
@@ -103,16 +332,79 @@
     $resumeEmailText = $("#ca-resume-email-text");
     $resumeContinueBtn = $("#ca-resume-continue");
     $resumeNewBtn = $("#ca-resume-new");
+    $saveProgressDialog = $("#ca-save-progress-dialog");
+    $saveProgressTitle = $("#ca-save-progress-title");
+    $saveProgressMessage = $("#ca-save-progress-message");
+    $saveProgressSaveBtn = $("#ca-save-progress-save");
+    $saveProgressDiscardBtn = $("#ca-save-progress-discard");
+    $saveProgressCancelBtn = $("#ca-save-progress-cancel");
 
     $(document).on("click", ".ca-assessment-trigger", openModal);
 
-    $("#ca-close-modal").on("click", closeModal);
-    $overlay.on("click", closeModal);
+    $("#ca-close-modal").on("click", attemptCloseModal);
+    $overlay.on("click", attemptCloseModal);
+
+    $saveProgressSaveBtn.on("click", function () {
+      if (state.isSubmitting) {
+        return;
+      }
+      state.isSubmitting = true;
+      setBtnLoading($saveProgressSaveBtn, true);
+      saveAllAnswersFromCache(
+        function () {
+          state.unsyncedChanges = false;
+          clearDraftAnswers();
+          setBtnLoading($saveProgressSaveBtn, false);
+          state.isSubmitting = false;
+          hideSaveProgressDialog();
+          closeModal();
+        },
+        function (err) {
+          setBtnLoading($saveProgressSaveBtn, false);
+          state.isSubmitting = false;
+          var msg = CA_Config.labels.error_generic;
+          if (err && err.responseText !== undefined) {
+            msg = getAjaxErrorMessage(err);
+          } else if (err && err.data) {
+            msg =
+              typeof err.data === "string"
+                ? err.data
+                : err.data.message || msg;
+          } else if (err && err.responseJSON && err.responseJSON.data) {
+            msg =
+              err.responseJSON.data.message ||
+              (typeof err.responseJSON.data === "string"
+                ? err.responseJSON.data
+                : msg);
+          }
+          alert(msg);
+        },
+      );
+    });
+
+    $saveProgressDiscardBtn.on("click", function () {
+      state.unsyncedChanges = false;
+      clearDraftAnswers();
+      closeModal();
+    });
+
+    $saveProgressCancelBtn.on("click", function () {
+      hideSaveProgressDialog();
+    });
 
     $(document).on("keydown", function (e) {
-      if (e.key === "Escape" && $modal.hasClass("ca-modal--open")) {
-        closeModal();
+      if (e.key !== "Escape" || !$modal.hasClass("ca-modal--open")) {
+        return;
       }
+      if (
+        $saveProgressDialog.length &&
+        !$saveProgressDialog[0].hasAttribute("hidden")
+      ) {
+        e.preventDefault();
+        hideSaveProgressDialog();
+        return;
+      }
+      attemptCloseModal();
     });
 
     $infoForm.on("submit", handleInfoSubmit);
@@ -153,6 +445,7 @@
   }
 
   function closeModal() {
+    hideSaveProgressDialog();
     $modal.removeClass("ca-modal--open");
     $modal.attr("aria-hidden", "true");
     $body.removeClass("ca-modal-open");
@@ -215,6 +508,7 @@
 
   function clearSavedSession() {
     localStorage.removeItem(sessionStorageKey());
+    clearDraftAnswers();
   }
 
   function resetState() {
@@ -224,6 +518,8 @@
     state.answersCache = {};
     state.checkoutUrl = "";
     state.isSubmitting = false;
+    state.unsyncedChanges = false;
+    state.awaitingQuestionFetch = false;
     state.totalQuestions = cfg.total_questions || 0;
     state.questionOrder = buildQuestionOrder();
     $infoForm[0].reset();
@@ -348,32 +644,37 @@
       submissionId,
     );
 
+    restoreDraftAnswers();
+
     var answeredCount = Object.keys(state.answersCache).length;
     setProgress(total > 0 ? Math.round((answeredCount / total) * 100) : 0);
     showProgress();
 
-    function hasAnswer(questionIndex) {
-      var idx = parseInt(questionIndex, 10);
-      return (
-        Object.prototype.hasOwnProperty.call(state.answersCache, idx) ||
-        Object.prototype.hasOwnProperty.call(state.answersCache, String(idx))
-      );
-    }
+    var prog = computeStepProgress();
+    state.stepIndex = prog.nextStep;
 
-    var nextStep = 0;
-    var allAnswered = true;
-    for (var step = 0; step < total; step++) {
-      var qIndex = state.questionOrder[step];
-      if (!hasAnswer(qIndex)) {
-        nextStep = step;
-        allAnswered = false;
-        break;
+    if (prog.allAnswered) {
+      if (defersServerAnswerSave()) {
+        saveAllAnswersFromCache(
+          function () {
+            state.unsyncedChanges = false;
+            clearDraftAnswers();
+            submitAssessment();
+          },
+          function (err) {
+            var msg = CA_Config.labels.error_generic;
+            if (err && err.data) {
+              msg =
+                typeof err.data === "string"
+                  ? err.data
+                  : err.data.message || msg;
+            }
+            alert(msg);
+            loadQuestion(state.stepIndex);
+          },
+        );
+        return;
       }
-    }
-
-    state.stepIndex = nextStep;
-
-    if (allAnswered) {
       submitAssessment();
       return;
     }
@@ -418,8 +719,42 @@
           state.submissionId = response.data.submission_id;
           state.stepIndex = 0;
           saveSession(data.email, state.submissionId);
+          restoreDraftAnswers();
           showScreen("questions");
           showProgress();
+          var prog = computeStepProgress();
+          state.stepIndex = prog.nextStep;
+          var totalQ = state.totalQuestions;
+          var ac = Object.keys(state.answersCache).length;
+          setProgress(totalQ > 0 ? Math.round((ac / totalQ) * 100) : 0);
+
+          if (prog.allAnswered && totalQ > 0) {
+            if (defersServerAnswerSave()) {
+              state.isSubmitting = true;
+              saveAllAnswersFromCache(
+                function () {
+                  state.unsyncedChanges = false;
+                  clearDraftAnswers();
+                  state.isSubmitting = false;
+                  submitAssessment();
+                },
+                function (err) {
+                  state.isSubmitting = false;
+                  var msg = CA_Config.labels.error_generic;
+                  if (err && err.data) {
+                    msg =
+                      typeof err.data === "string"
+                        ? err.data
+                        : err.data.message || msg;
+                  }
+                  alert(msg);
+                  loadQuestion(state.stepIndex);
+                },
+              );
+              return;
+            }
+          }
+
           loadQuestion(state.stepIndex);
         } else {
           showError(
@@ -575,13 +910,71 @@
     };
   }
 
-  function loadQuestion(stepIndex) {
-    showScreen("loading");
+  function hasClientQuestionBank() {
+    var cfg = getCurrentConfig();
+    var b = cfg && cfg.question_bank;
+    return Array.isArray(b) && b.length > 0;
+  }
+
+  /**
+   * Same shape as ca_get_question success data; saved_answer from cache only.
+   */
+  function buildClientQuestionResponseData(stepIndex, questionIndex) {
+    var cfg = getCurrentConfig();
+    var bank = (cfg && cfg.question_bank) || [];
+    var total =
+      (cfg && cfg.total_questions) || bank.length || state.totalQuestions || 0;
+    if (
+      !bank.length ||
+      questionIndex < 0 ||
+      questionIndex >= bank.length ||
+      !total
+    ) {
+      return null;
+    }
+    var q = bank[questionIndex];
+    if (!q || typeof q !== "object") {
+      return null;
+    }
+    return {
+      question: q,
+      saved_answer: null,
+      total: total,
+      progress: total > 0 ? Math.round((questionIndex / total) * 100) : 0,
+      is_last: questionIndex >= total - 1,
+      scale_max: q.scale_max,
+      assessment_type: state.assessmentType,
+    };
+  }
+
+  function loadQuestion(stepIndex, options) {
+    options = options || {};
+    var skipLoading = !!options.skipLoadingScreen;
 
     var questionIndex =
       state.questionOrder && state.questionOrder.length > 0
         ? state.questionOrder[stepIndex]
         : stepIndex;
+
+    var clientData = buildClientQuestionResponseData(stepIndex, questionIndex);
+    if (clientData) {
+      renderQuestion(clientData, stepIndex, questionIndex);
+      if (skipLoading) {
+        state.awaitingQuestionFetch = false;
+        state.isSubmitting = false;
+        $nextBtn.prop("disabled", false);
+        $backBtn.prop("disabled", state.stepIndex === 0);
+      }
+      return;
+    }
+
+    if (!skipLoading) {
+      showScreen("loading");
+    } else {
+      state.awaitingQuestionFetch = true;
+      $nextBtn.prop("disabled", true);
+      $backBtn.prop("disabled", true);
+    }
 
     var data = withAssessment({
       action: "ca_get_question",
@@ -611,6 +1004,15 @@
             xhr && xhr.responseText ? xhr.responseText.slice(0, 500) : null,
         });
         alert(getAjaxErrorMessage(xhr));
+      })
+      .always(function () {
+        if (!skipLoading) {
+          return;
+        }
+        state.awaitingQuestionFetch = false;
+        state.isSubmitting = false;
+        $nextBtn.prop("disabled", false);
+        $backBtn.prop("disabled", state.stepIndex === 0);
       });
   }
 
@@ -682,6 +1084,10 @@
 
     hideError($questionError);
     showScreen("questions");
+
+    if (defersServerAnswerSave()) {
+      persistDraftAnswers();
+    }
   }
 
   function handleNext() {
@@ -702,6 +1108,45 @@
 
     state.answersCache[questionIndex] = answer;
 
+    if (defersServerAnswerSave()) {
+      state.unsyncedChanges = true;
+      persistDraftAnswers();
+
+      var nextStep = stepIndex + 1;
+      var isLast = nextStep >= state.totalQuestions;
+
+      if (isLast) {
+        state.isSubmitting = true;
+        $nextBtn.prop("disabled", true);
+        saveAllAnswersFromCache(
+          function () {
+            state.unsyncedChanges = false;
+            clearDraftAnswers();
+            submitAssessment();
+          },
+          function (err) {
+            var msg = CA_Config.labels.error_generic;
+            if (err && err.responseText !== undefined) {
+              msg = getAjaxErrorMessage(err);
+            } else if (err && err.data) {
+              msg =
+                typeof err.data === "string"
+                  ? err.data
+                  : err.data.message || msg;
+            }
+            showError($questionError, msg);
+            $nextBtn.prop("disabled", false);
+            state.isSubmitting = false;
+          },
+        );
+        return;
+      }
+
+      state.stepIndex = nextStep;
+      loadQuestion(nextStep, { skipLoadingScreen: true });
+      return;
+    }
+
     state.isSubmitting = true;
     $nextBtn.prop("disabled", true);
 
@@ -716,14 +1161,14 @@
     caPost(data)
       .done(function (response) {
         if (response.success) {
-          var nextStep = stepIndex + 1;
-          var isLast = nextStep >= state.totalQuestions;
+          var nextStepDe = stepIndex + 1;
+          var isLastDe = nextStepDe >= state.totalQuestions;
 
-          if (isLast) {
+          if (isLastDe) {
             submitAssessment();
           } else {
-            state.stepIndex = nextStep;
-            loadQuestion(nextStep);
+            state.stepIndex = nextStepDe;
+            loadQuestion(nextStepDe, { skipLoadingScreen: true });
           }
         } else {
           showError(
@@ -748,6 +1193,9 @@
         showError($questionError, getAjaxErrorMessage(xhr));
       })
       .always(function () {
+        if (state.awaitingQuestionFetch) {
+          return;
+        }
         $nextBtn.prop("disabled", false);
         state.isSubmitting = false;
       });
@@ -756,7 +1204,7 @@
   function handleBack() {
     if (state.stepIndex <= 0) return;
     state.stepIndex--;
-    loadQuestion(state.stepIndex);
+    loadQuestion(state.stepIndex, { skipLoadingScreen: true });
   }
 
   function submitAssessment() {
@@ -793,6 +1241,10 @@
         });
         alert(getAjaxErrorMessage(xhr));
         showScreen("questions");
+      })
+      .always(function () {
+        state.isSubmitting = false;
+        $nextBtn.prop("disabled", false);
       });
   }
 

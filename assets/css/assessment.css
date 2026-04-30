@@ -185,6 +185,11 @@ body,
   justify-content: center;
 }
 
+.ca-resume-actions--stack {
+  flex-direction: column;
+  align-items: stretch;
+}
+
 /* --- Header ----------------------------------------------- */
 .ca-modal-header {
   display: flex;
