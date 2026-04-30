@@ -472,45 +472,6 @@ class CA_Ajax
 				$this->send_error('ca_prepare_inner_dimensions_checkout', __('Please complete all questions before proceeding to checkout.', 'rtr-custom-assessment'));
 			}
 
-			$existing_order_id = $this->find_existing_inner_dimensions_order_id($submission_id);
-			if ($existing_order_id > 0) {
-				$order = wc_get_order($existing_order_id);
-				$existing_product_id = $order ? (int) $order->get_meta('_ca_full_results_product_id') : 0;
-				if ($order && $order->needs_payment() && $existing_product_id > 0) {
-					$has_line_items = !empty($order->get_items('line_item'));
-					if (!$has_line_items) {
-						$existing_product = wc_get_product($existing_product_id);
-						if ($existing_product) {
-							$order->add_product($existing_product, 1);
-							$order->calculate_totals(true);
-						}
-					}
-					$this->apply_submission_billing_to_order($order, $submission);
-					$order->save();
-
-					if (empty($order->get_items('line_item'))) {
-						$order = null;
-					}
-				}
-
-				if ($order && $order->needs_payment() && $existing_product_id > 0) {
-					$this->clear_wc_cart_for_guest_checkout();
-					$checkout_url = $this->get_inner_dimensions_order_payment_url($order);
-					if ('' === $checkout_url) {
-						$this->send_error('ca_prepare_inner_dimensions_checkout', __('Could not build a checkout link. Please try again.', 'rtr-custom-assessment'));
-					}
-					$this->send_success(
-						'ca_prepare_inner_dimensions_checkout',
-						array(
-							'order_id' => $order->get_id(),
-							'checkout_url' => $checkout_url,
-						),
-						'Existing unpaid order reused.',
-						array('submission_id' => $submission_id, 'order_id' => $order->get_id())
-					);
-				}
-			}
-
 			$price = (float) apply_filters('ca_inner_dimensions_full_results_price', 9.99, $submission_id);
 			if ($price <= 0) {
 				$this->send_error('ca_prepare_inner_dimensions_checkout', __('The full results price is not configured correctly.', 'rtr-custom-assessment'));
@@ -526,40 +487,19 @@ class CA_Ajax
 				$this->send_error('ca_prepare_inner_dimensions_checkout', __('Could not prepare your downloadable product. Please try again.', 'rtr-custom-assessment'));
 			}
 
-			$order = wc_create_order();
-			if (!$order) {
-				$this->send_error('ca_prepare_inner_dimensions_checkout', __('Could not create an order. Please try again.', 'rtr-custom-assessment'));
-			}
-
-			$product = wc_get_product($product_id);
-			if (!$product) {
-				$this->send_error('ca_prepare_inner_dimensions_checkout', __('Could not load the generated product for checkout.', 'rtr-custom-assessment'));
-			}
-			$order->add_product($product, 1);
-
-			$this->apply_submission_billing_to_order($order, $submission);
-
-			$order->update_meta_data('_ca_submission_id', (int) $submission_id);
-			$order->update_meta_data('_ca_assessment_type', $assessment_type);
-			$order->update_meta_data('_ca_full_results_unlock', 'yes');
-			$order->update_meta_data('_ca_full_results_product_id', (int) $product_id);
-		$order->update_meta_data('_ca_full_results_file_path', (string) $results_file_path);
-			$order->calculate_totals(true);
-			$order->save();
-
-			$this->clear_wc_cart_for_guest_checkout();
-			$checkout_url = $this->get_inner_dimensions_order_payment_url($order);
+			$this->prepare_inner_dimensions_checkout_cart($product_id);
+			$checkout_url = $this->build_inner_dimensions_checkout_url($product_id);
 			if ('' === $checkout_url) {
 				$this->send_error('ca_prepare_inner_dimensions_checkout', __('Could not build a checkout link. Please try again.', 'rtr-custom-assessment'));
 			}
 			$this->send_success(
 				'ca_prepare_inner_dimensions_checkout',
 				array(
-					'order_id' => $order->get_id(),
 					'checkout_url' => $checkout_url,
+					'product_id' => (int) $product_id,
 				),
-				'Order created.',
-				array('submission_id' => $submission_id, 'order_id' => $order->get_id())
+				'Checkout cart prepared.',
+				array('submission_id' => $submission_id, 'product_id' => (int) $product_id)
 			);
 		} catch (\Throwable $e) {
 			$error_message = (string) $e->getMessage();
