@@ -77,6 +77,7 @@ class CA_Shortcode {
 				'assessments' => array(
 					CA_Assessment_Types::MINDSET        => array(
 						'type'               => CA_Assessment_Types::MINDSET,
+						'defer_answer_save'  => true,
 						'modal_title'        => __( 'Entrepreneurial Mindset Assessment', 'rtr-custom-assessment' ),
 						'scale_max'          => 5,
 						'total_questions'    => CA_Questions::get_total_count(),
@@ -98,6 +99,7 @@ class CA_Shortcode {
 					),
 					CA_Assessment_Types::SOCIAL_FLUENCY => array(
 						'type'               => CA_Assessment_Types::SOCIAL_FLUENCY,
+						'defer_answer_save'  => true,
 						'modal_title'        => __( 'Social Fluency Assessment', 'rtr-custom-assessment' ),
 						'scale_max'          => 10,
 						'total_questions'    => CA_Social_Fluency_Questions::get_total_count(),
