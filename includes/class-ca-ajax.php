@@ -42,6 +42,7 @@ class CA_Ajax
 		add_action('woocommerce_before_thankyou', array($this, 'render_inner_dimensions_download_on_thankyou'), 20);
 		add_action('woocommerce_checkout_create_order', array($this, 'attach_inner_dimensions_meta_to_checkout_order'), 20, 2);
 		add_filter('upload_mimes', array($this, 'allow_results_html_mime_type'));
+		add_filter('woocommerce_checkout_get_value', array($this, 'checkout_prefill_billing_from_pay_order'), 20, 2);
 	}
 
 	/**
@@ -476,6 +477,23 @@ class CA_Ajax
 				$order = wc_get_order($existing_order_id);
 				$existing_product_id = $order ? (int) $order->get_meta('_ca_full_results_product_id') : 0;
 				if ($order && $order->needs_payment() && $existing_product_id > 0) {
+					$has_line_items = !empty($order->get_items('line_item'));
+					if (!$has_line_items) {
+						$existing_product = wc_get_product($existing_product_id);
+						if ($existing_product) {
+							$order->add_product($existing_product, 1);
+							$order->calculate_totals(true);
+						}
+					}
+					$this->apply_submission_billing_to_order($order, $submission);
+					$order->save();
+
+					if (empty($order->get_items('line_item'))) {
+						$order = null;
+					}
+				}
+
+				if ($order && $order->needs_payment() && $existing_product_id > 0) {
 					$this->clear_wc_cart_for_guest_checkout();
 					$checkout_url = $this->get_inner_dimensions_order_payment_url($order);
 					if ('' === $checkout_url) {
@@ -519,10 +537,7 @@ class CA_Ajax
 			}
 			$order->add_product($product, 1);
 
-			$order->set_billing_first_name((string) $submission->first_name);
-			$order->set_billing_last_name((string) $submission->last_name);
-			$order->set_billing_email((string) $submission->email);
-			$order->set_billing_phone((string) $submission->phone);
+			$this->apply_submission_billing_to_order($order, $submission);
 
 			$order->update_meta_data('_ca_submission_id', (int) $submission_id);
 			$order->update_meta_data('_ca_assessment_type', $assessment_type);
@@ -700,6 +715,130 @@ class CA_Ajax
 			return;
 		}
 		$wc->cart->empty_cart();
+	}
+
+	/**
+	 * Copy assessment step-1 fields (name, email, phone) onto the order billing address.
+	 * Does not set billing_company (job title is not copied to checkout).
+	 * Fills required WC billing placeholders using store base location and filterable defaults.
+	 *
+	 * @param \WC_Order $order      Order instance.
+	 * @param object    $submission Row from ca_submissions.
+	 * @return void
+	 */
+	private function apply_submission_billing_to_order($order, $submission)
+	{
+		if (!$order instanceof \WC_Order || !$submission) {
+			return;
+		}
+
+		$order->set_billing_first_name((string) $submission->first_name);
+		$order->set_billing_last_name((string) $submission->last_name);
+		$order->set_billing_email((string) $submission->email);
+		$order->set_billing_phone((string) $submission->phone);
+		$order->set_billing_company('');
+
+		$country = '';
+		$state = '';
+		if (function_exists('wc_get_base_location')) {
+			$loc = wc_get_base_location();
+			$country = isset($loc['country']) ? (string) $loc['country'] : '';
+			$state = isset($loc['state']) ? (string) $loc['state'] : '';
+		}
+
+		if ('' === $country && function_exists('WC') && WC()->countries) {
+			$country = (string) WC()->countries->get_base_country();
+			$base_state = WC()->countries->get_base_state();
+			$state = null !== $base_state ? (string) $base_state : '';
+		}
+
+		if ('' !== $country) {
+			$order->set_billing_country($country);
+		}
+		if ('' !== $state) {
+			$order->set_billing_state($state);
+		}
+
+		$line1 = (string) apply_filters('ca_inner_dimensions_default_billing_address_1', '', $submission, $order);
+		if ('' === $line1) {
+			$line1 = __('Natural Attributes Cataloging — digital delivery', 'rtr-custom-assessment');
+		}
+		$order->set_billing_address_1($line1);
+
+		$city = (string) apply_filters('ca_inner_dimensions_default_billing_city', '', $submission, $order);
+		if ('' === $city) {
+			$city = __('Online', 'rtr-custom-assessment');
+		}
+		$order->set_billing_city($city);
+
+		$postcode = (string) apply_filters('ca_inner_dimensions_default_billing_postcode', '', $submission, $order);
+		if ('' === $postcode) {
+			$store_postcode = (string) get_option('woocommerce_store_postcode', '');
+			if ('' !== $store_postcode) {
+				$postcode = $store_postcode;
+			} else {
+				$postcode = (string) apply_filters('ca_inner_dimensions_default_billing_postcode_fallback', '00000', $submission, $order);
+			}
+		}
+		$order->set_billing_postcode($postcode);
+	}
+
+	/**
+	 * On order-pay checkout, default billing fields from the order when the value is still empty.
+	 *
+	 * @param mixed  $value Checkout default.
+	 * @param string $input Field key e.g. billing_first_name.
+	 * @return mixed
+	 */
+	public function checkout_prefill_billing_from_pay_order($value, $input)
+	{
+		if (!is_string($input) || 0 !== strpos($input, 'billing_')) {
+			return $value;
+		}
+		if (null !== $value && false !== $value && '' !== (string) $value) {
+			return $value;
+		}
+
+		if (!function_exists('is_wc_endpoint_url') || !is_wc_endpoint_url('order-pay')) {
+			return $value;
+		}
+
+		global $wp;
+		$order_id = 0;
+		if (isset($wp->query_vars['order-pay'])) {
+			$order_id = absint($wp->query_vars['order-pay']);
+		}
+		if ($order_id <= 0 && function_exists('get_query_var')) {
+			$order_id = absint(get_query_var('order-pay'));
+		}
+		if ($order_id <= 0) {
+			return $value;
+		}
+
+		$order = wc_get_order($order_id);
+		if (!$order instanceof \WC_Order || !$order->needs_payment()) {
+			return $value;
+		}
+
+		if ((int) $order->get_meta('_ca_submission_id', true) <= 0) {
+			return $value;
+		}
+
+		$suffix = substr($input, strlen('billing_'));
+		$getter = 'get_billing_' . $suffix;
+		if (!is_callable(array($order, $getter))) {
+			return $value;
+		}
+
+		$from_order = call_user_func(array($order, $getter));
+		if (is_string($from_order) && '' !== $from_order) {
+			return $from_order;
+		}
+		if (is_numeric($from_order)) {
+			return (string) $from_order;
+		}
+
+		return $value;
 	}
 
 	/**

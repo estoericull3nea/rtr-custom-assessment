@@ -51,7 +51,8 @@
     $saveProgressMessage,
     $saveProgressSaveBtn,
     $saveProgressDiscardBtn,
-    $saveProgressCancelBtn;
+    $saveProgressCancelBtn,
+    $nextBtnLabel;
 
   function getCurrentConfig() {
     if (
@@ -179,7 +180,7 @@
     }
   }
 
-  function saveAllAnswersFromCache(onDone, onFail) {
+  function saveAllAnswersFromCache(onDone, onFail, onProgress) {
     var list = [];
     var step;
     for (step = 0; step < state.totalQuestions; step++) {
@@ -202,6 +203,9 @@
 
     function run(i) {
       if (i >= list.length) {
+        if (typeof onProgress === "function" && list.length > 0) {
+          onProgress(list.length, list.length);
+        }
         if (typeof onDone === "function") {
           onDone();
         }
@@ -219,6 +223,9 @@
       )
         .done(function (response) {
           if (response && response.success) {
+            if (typeof onProgress === "function" && list.length > 0) {
+              onProgress(i + 1, list.length);
+            }
             run(i + 1);
           } else {
             fail(response);
@@ -229,6 +236,9 @@
         });
     }
 
+    if (typeof onProgress === "function" && list.length > 0) {
+      onProgress(0, list.length);
+    }
     run(0);
   }
 
@@ -325,6 +335,7 @@
     $questionError = $("#ca-question-error");
     $backBtn = $("#ca-back-btn");
     $nextBtn = $("#ca-next-btn");
+    $nextBtnLabel = $("#ca-next-btn-label");
     $phoneInput = $("#ca-phone");
     $phoneCountrySelect = $("#ca-phone-country");
     $resultsContent = $("#ca-results-content");
@@ -338,7 +349,6 @@
     $saveProgressSaveBtn = $("#ca-save-progress-save");
     $saveProgressDiscardBtn = $("#ca-save-progress-discard");
     $saveProgressCancelBtn = $("#ca-save-progress-cancel");
-
     $(document).on("click", ".ca-assessment-trigger", openModal);
 
     $("#ca-close-modal").on("click", attemptCloseModal);
@@ -623,6 +633,44 @@
   function hideProgress() {
     $progressContainer.removeClass("ca-visible");
     $progressContainer.attr("aria-hidden", "true");
+    resetNextButtonSubmitProgress();
+  }
+
+  function getNextButtonDefaultLabel() {
+    var total = state.totalQuestions;
+    if (!total || total < 1) {
+      return CA_Config.labels.next;
+    }
+    var isLast = state.stepIndex >= total - 1;
+    return isLast ? CA_Config.labels.submit : CA_Config.labels.next;
+  }
+
+  function resetNextButtonSubmitProgress() {
+    var $label =
+      $nextBtnLabel && $nextBtnLabel.length
+        ? $nextBtnLabel
+        : $nextBtn.find(".ca-next-btn-label");
+    if ($label.length) {
+      $label.text(getNextButtonDefaultLabel());
+    }
+    $nextBtn.find(".ca-next-btn-chevron").removeAttr("hidden");
+  }
+
+  function updateSubmitLoadingProgress(pct) {
+    pct = Math.min(100, Math.max(0, Math.round(pct)));
+    setProgress(pct);
+    var $label =
+      $nextBtnLabel && $nextBtnLabel.length
+        ? $nextBtnLabel
+        : $nextBtn.find(".ca-next-btn-label");
+    if (!$label.length) {
+      return;
+    }
+    var L = CA_Config.labels || {};
+    var lead =
+      L.submitting_assessment || L.loading || "Submitting assessment";
+    $label.text(lead + " — " + pct + "%");
+    $nextBtn.find(".ca-next-btn-chevron").attr("hidden", "hidden");
   }
 
   function setProgress(pct) {
@@ -655,11 +703,19 @@
 
     if (prog.allAnswered) {
       if (defersServerAnswerSave()) {
+        showScreen("questions");
+        showProgress();
+        updateSubmitLoadingProgress(0);
         saveAllAnswersFromCache(
           function () {
             state.unsyncedChanges = false;
             clearDraftAnswers();
-            submitAssessment();
+            submitAssessment({
+              skipShowLoading: true,
+              progressAtStart: 65,
+              progressAfterSubmit: 82,
+              progressPreviewFloor: 90,
+            });
           },
           function (err) {
             var msg = CA_Config.labels.error_generic;
@@ -670,11 +726,18 @@
                   : err.data.message || msg;
             }
             alert(msg);
+            hideProgress();
             loadQuestion(state.stepIndex);
+          },
+          function (done, total) {
+            updateSubmitLoadingProgress(
+              total <= 0 ? 2 : Math.round((done / total) * 62),
+            );
           },
         );
         return;
       }
+      showScreen("questions");
       submitAssessment();
       return;
     }
@@ -731,12 +794,19 @@
           if (prog.allAnswered && totalQ > 0) {
             if (defersServerAnswerSave()) {
               state.isSubmitting = true;
+              showProgress();
+              updateSubmitLoadingProgress(0);
               saveAllAnswersFromCache(
                 function () {
                   state.unsyncedChanges = false;
                   clearDraftAnswers();
                   state.isSubmitting = false;
-                  submitAssessment();
+                  submitAssessment({
+                    skipShowLoading: true,
+                    progressAtStart: 65,
+                    progressAfterSubmit: 82,
+                    progressPreviewFloor: 90,
+                  });
                 },
                 function (err) {
                   state.isSubmitting = false;
@@ -748,7 +818,13 @@
                         : err.data.message || msg;
                   }
                   alert(msg);
+                  hideProgress();
                   loadQuestion(state.stepIndex);
+                },
+                function (done, total) {
+                  updateSubmitLoadingProgress(
+                    total <= 0 ? 2 : Math.round((done / total) * 62),
+                  );
                 },
               );
               return;
@@ -1080,7 +1156,17 @@
     setProgress(pct);
 
     $backBtn.prop("disabled", stepIndex === 0);
-    $nextBtn.text(isLast ? CA_Config.labels.submit : CA_Config.labels.next);
+    var nextLabel = isLast ? CA_Config.labels.submit : CA_Config.labels.next;
+    var $lbl =
+      $nextBtnLabel && $nextBtnLabel.length
+        ? $nextBtnLabel
+        : $nextBtn.find(".ca-next-btn-label");
+    if ($lbl.length) {
+      $lbl.text(nextLabel);
+      $nextBtn.find(".ca-next-btn-chevron").removeAttr("hidden");
+    } else {
+      $nextBtn.text(nextLabel);
+    }
 
     hideError($questionError);
     showScreen("questions");
@@ -1118,11 +1204,19 @@
       if (isLast) {
         state.isSubmitting = true;
         $nextBtn.prop("disabled", true);
+        showScreen("questions");
+        showProgress();
+        updateSubmitLoadingProgress(0);
         saveAllAnswersFromCache(
           function () {
             state.unsyncedChanges = false;
             clearDraftAnswers();
-            submitAssessment();
+            submitAssessment({
+              skipShowLoading: true,
+              progressAtStart: 65,
+              progressAfterSubmit: 82,
+              progressPreviewFloor: 90,
+            });
           },
           function (err) {
             var msg = CA_Config.labels.error_generic;
@@ -1137,6 +1231,13 @@
             showError($questionError, msg);
             $nextBtn.prop("disabled", false);
             state.isSubmitting = false;
+            hideProgress();
+            showScreen("questions");
+          },
+          function (done, total) {
+            updateSubmitLoadingProgress(
+              total <= 0 ? 2 : Math.round((done / total) * 62),
+            );
           },
         );
         return;
@@ -1207,9 +1308,16 @@
     loadQuestion(state.stepIndex, { skipLoadingScreen: true });
   }
 
-  function submitAssessment() {
-    showScreen("loading");
-    setProgress(100);
+  function submitAssessment(options) {
+    options = options || {};
+    if (!options.skipShowLoading) {
+      showProgress();
+    }
+    var p0 =
+      typeof options.progressAtStart === "number"
+        ? options.progressAtStart
+        : 12;
+    updateSubmitLoadingProgress(p0);
 
     var data = withAssessment({
       action: "ca_submit_assessment",
@@ -1217,17 +1325,28 @@
       submission_id: state.submissionId,
     });
 
+    var pAfter =
+      typeof options.progressAfterSubmit === "number"
+        ? options.progressAfterSubmit
+        : 52;
+    var previewFloor =
+      typeof options.progressPreviewFloor === "number"
+        ? options.progressPreviewFloor
+        : Math.min(92, pAfter + 10);
+
     caPost(data)
       .done(function (response) {
         if (response.success) {
+          updateSubmitLoadingProgress(pAfter);
           clearSavedSession();
-          loadResultsPreview();
+          loadResultsPreview(null, previewFloor);
         } else {
           alert(
             (response && response.data && typeof response.data === "string"
               ? response.data
               : response.data.message) || CA_Config.labels.error_generic,
           );
+          hideProgress();
           showScreen("questions");
         }
       })
@@ -1240,6 +1359,7 @@
             xhr && xhr.responseText ? xhr.responseText.slice(0, 500) : null,
         });
         alert(getAjaxErrorMessage(xhr));
+        hideProgress();
         showScreen("questions");
       })
       .always(function () {
@@ -1248,7 +1368,10 @@
       });
   }
 
-  function loadResultsPreview() {
+  function loadResultsPreview(onComplete, startPct) {
+    var sp = typeof startPct === "number" ? startPct : 78;
+    updateSubmitLoadingProgress(sp);
+
     var data = withAssessment({
       action: "ca_get_results_preview",
       nonce: CA_Config.nonce,
@@ -1258,13 +1381,19 @@
     caPost(data)
       .done(function (response) {
         if (response.success) {
+          updateSubmitLoadingProgress(100);
           renderResults(response.data);
+          if (typeof onComplete === "function") {
+            onComplete();
+          }
         } else {
           alert(
             (response && response.data && typeof response.data === "string"
               ? response.data
               : response.data.message) || CA_Config.labels.error_generic,
           );
+          hideProgress();
+          showScreen("questions");
         }
       })
       .fail(function (xhr, textStatus, errorThrown) {
@@ -1276,6 +1405,8 @@
             xhr && xhr.responseText ? xhr.responseText.slice(0, 500) : null,
         });
         alert(getAjaxErrorMessage(xhr));
+        hideProgress();
+        showScreen("questions");
       });
   }
 

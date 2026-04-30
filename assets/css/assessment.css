@@ -1185,10 +1185,19 @@ body,
   color: var(--ca-text-muted);
 }
 
-.ca-loading-spinner p {
+.ca-loading-spinner p,
+.ca-loading-spinner__title {
   font-family: var(--ca-font-ui);
   font-size: 0.9rem;
   margin: 12px 0 0;
+}
+
+#ca-next-btn .ca-next-btn-label {
+  display: inline-block;
+  max-width: min(100%, 220px);
+  line-height: 1.25;
+  text-align: center;
+  white-space: normal;
 }
 
 /* --- Body lock -------------------------------------------- */

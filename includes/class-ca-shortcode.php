@@ -154,7 +154,8 @@ class CA_Shortcode {
 					'back'          => __( 'Back', 'rtr-custom-assessment' ),
 					'submit'        => __( 'Submit Assessment', 'rtr-custom-assessment' ),
 					'start'         => __( 'Start Assessment', 'rtr-custom-assessment' ),
-					'loading'       => __( 'Loading…', 'rtr-custom-assessment' ),
+					'loading'                => __( 'Loading…', 'rtr-custom-assessment' ),
+					'submitting_assessment'  => __( 'Submitting assessment', 'rtr-custom-assessment' ),
 					'error_answer'  => __( 'Please select an answer before continuing.', 'rtr-custom-assessment' ),
 					'error_generic' => __( 'Something went wrong. Please try again.', 'rtr-custom-assessment' ),
 					'yes_no_yes'    => __( 'Yes', 'rtr-custom-assessment' ),
@@ -412,8 +413,8 @@ class CA_Shortcode {
 									<?php esc_html_e( 'Back', 'rtr-custom-assessment' ); ?>
 								</button>
 								<button type="button" class="ca-btn ca-btn--primary" id="ca-next-btn">
-									<?php esc_html_e( 'Next', 'rtr-custom-assessment' ); ?>
-									<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+									<span id="ca-next-btn-label" class="ca-next-btn-label"><?php esc_html_e( 'Next', 'rtr-custom-assessment' ); ?></span>
+									<svg class="ca-next-btn-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
 										stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 										<path d="M5 12h14M12 5l7 7-7 7" />
 									</svg>
@@ -432,7 +433,7 @@ class CA_Shortcode {
 								<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-dasharray="60"
 									stroke-dashoffset="20" stroke-linecap="round" />
 							</svg>
-							<p><?php esc_html_e( 'Loading…', 'rtr-custom-assessment' ); ?></p>
+							<p class="ca-loading-spinner__title"><?php esc_html_e( 'Loading…', 'rtr-custom-assessment' ); ?></p>
 						</div>
 					</div>
 
