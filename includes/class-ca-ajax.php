@@ -9,7 +9,7 @@ if (!defined('ABSPATH')) {
 
 class CA_Ajax
 {
-	private const INNER_RESULTS_TEMPLATE_VERSION = 'v4';
+	private const INNER_RESULTS_TEMPLATE_VERSION = 'v5';
 
 	private function send_error($action, $message, $context = array())
 	{
@@ -835,7 +835,7 @@ class CA_Ajax
 	 */
 	private function generate_inner_dimensions_results_file($submission_id, $submission)
 	{
-		$lines  = $this->build_submission_pdf_lines($submission_id, $submission);
+		$data   = $this->build_submission_pdf_data($submission_id, $submission);
 		$upload = wp_upload_dir();
 		if (!empty($upload['error'])) {
 			return false;
@@ -851,21 +851,20 @@ class CA_Ajax
 		}
 
 		$pdf = new Rtr_Custom_Assessment_Pdf();
-		if (!$pdf->save_pdf_from_lines($lines, $file_path)) {
+		if (!$pdf->save_pdf_from_data($data, $file_path)) {
 			return false;
 		}
 		return $file_path;
 	}
 
 	/**
-	 * Build an ordered array of text lines for the PDF report.
-	 * Lines prefixed ##H1 / ##H2 render as headings; ##HR renders as a separator rule.
+	 * Build structured data array for the graphical PDF report.
 	 *
 	 * @param int    $submission_id
 	 * @param object $submission
-	 * @return string[]
+	 * @return array
 	 */
-	private function build_submission_pdf_lines($submission_id, $submission)
+	private function build_submission_pdf_data($submission_id, $submission)
 	{
 		$answers    = CA_Database::get_answers($submission_id);
 		$cat_scores = CA_Database::get_category_scores($submission_id);
@@ -877,59 +876,41 @@ class CA_Ajax
 		$overall_percent = (int) round(((float) $submission->average_score / max(1, (int) $scale_max)) * 100);
 		$overall_percent = max(0, min(100, $overall_percent));
 
-		$lines = array();
-
-		// Header.
-		$lines[] = '##H1 Natural Attributes Cataloging -- Full Results';
-		$lines[] = '##HR';
-		$lines[] = '##H2 Congratulations on Completing Your Discovery Journey!';
-		$lines[] = 'Your full results and score breakdown are included below.';
-		$lines[] = '';
-		$lines[] = 'Name:         ' . $submission->first_name . ' ' . $submission->last_name;
-		$lines[] = 'Email:        ' . $submission->email;
-		$lines[] = 'Total Score:  ' . $submission->total_score . ' / ' . ($total_q * $scale_max);
-		$lines[] = 'Overall Score: ' . $overall_percent . '%';
-		$lines[] = '';
-		$lines[] = '##HR';
-
-		// Category scores.
-		$lines[] = '##H2 Category Results';
-		$lines[] = '';
+		$categories = array();
 		foreach ($cat_scores as $cat) {
-			$percent = (int) round(((float) $cat->average / max(1, (int) $scale_max)) * 100);
-			$percent = max(0, min(100, $percent));
-			$level   = $this->get_results_level_label($percent);
-			$summary = CA_Scoring::get_category_summary($cat->category_name, (float) $cat->average, $sub_type);
-
-			$lines[] = '##H2 ' . $cat->category_name;
-			$lines[] = 'Your score: ' . $percent . '%  [' . strtoupper($level) . ']';
-			// Word-wrap the summary to ~85 chars so nothing overflows page margin.
-			$wrapped = wordwrap($summary, 85, "\n", false);
-			foreach (explode("\n", $wrapped) as $wline) {
-				$lines[] = $wline;
-			}
-			$lines[] = '';
+			$percent      = (int) round(((float) $cat->average / max(1, (int) $scale_max)) * 100);
+			$percent      = max(0, min(100, $percent));
+			$categories[] = array(
+				'name'    => (string) $cat->category_name,
+				'percent' => $percent,
+				'level'   => $this->get_results_level_label($percent),
+				'summary' => CA_Scoring::get_category_summary($cat->category_name, (float) $cat->average, $sub_type),
+			);
 		}
-		$lines[] = '##HR';
 
-		// Question responses.
-		$lines[] = '##H2 Question Responses';
-		$lines[] = '';
+		$responses = array();
 		foreach ($flat_q as $q) {
 			$idx    = isset($q['index']) ? (int) $q['index'] : 0;
 			$answer = isset($answers[$idx]) ? (int) $answers[$idx] : 0;
 			if (CA_Assessment_Types::INNER_DIMENSIONS === $sub_type) {
-				$answer_text = (1 === $answer) ? 'Yes' : ((2 === $answer) ? 'No' : 'No answer');
+				$answer_text = (1 === $answer) ? 'Yes' : ((2 === $answer) ? 'No' : '-');
 			} else {
-				$answer_text = $answer > 0 ? (string) $answer : 'No answer';
+				$answer_text = $answer > 0 ? (string) $answer : '-';
 			}
-			$question = isset($q['text']) ? (string) $q['text'] : '';
-			// Truncate long question text so line fits; answer appended at end.
-			$q_short = mb_strlen($question) > 80 ? mb_substr($question, 0, 79) . '.' : $question;
-			$lines[] = $q_short . '  ->  ' . $answer_text;
+			$responses[] = array(
+				'question' => isset($q['text']) ? (string) $q['text'] : '',
+				'answer'   => $answer_text,
+			);
 		}
 
-		return $lines;
+		return array(
+			'name'            => trim((string) $submission->first_name . ' ' . (string) $submission->last_name),
+			'email'           => (string) $submission->email,
+			'total_score'     => $submission->total_score . ' / ' . ($total_q * $scale_max),
+			'overall_percent' => $overall_percent,
+			'categories'      => $categories,
+			'responses'       => $responses,
+		);
 	}
 
 	/**

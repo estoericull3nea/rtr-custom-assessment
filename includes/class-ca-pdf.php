@@ -36,6 +36,333 @@ class Rtr_Custom_Assessment_Pdf
 	}
 
 	/**
+	 * Build and save a fully-graphical PDF from structured report data.
+	 * No external library required — uses raw PDF operators.
+	 *
+	 * @param array  $data
+	 * @param string $absolute_path
+	 * @return bool
+	 */
+	public function save_pdf_from_data( array $data, $absolute_path ) {
+		$binary = $this->build_pdf_report_binary( $data );
+		if ( false === $binary || '' === $binary ) {
+			return false;
+		}
+		$dir = dirname( $absolute_path );
+		if ( ! is_dir( $dir ) ) {
+			wp_mkdir_p( $dir );
+		}
+		return false !== file_put_contents( $absolute_path, $binary );
+	}
+
+	/**
+	 * Render a fully-graphical assessment results report as a PDF binary string.
+	 *
+	 * Draws: dark header bar, overall score donut, category cards with coloured
+	 * score badges, and a Q&A table — all using native PDF path/text operators
+	 * (no TCPDF / Dompdf required).
+	 *
+	 * @param array $data Keys: name, email, total_score, overall_percent,
+	 *                    categories[]{name,percent,level,summary},
+	 *                    responses[]{question,answer}
+	 * @return string|false
+	 */
+	private function build_pdf_report_binary( array $data ) {
+		$pw = 612; $ph = 792;
+		$ml = 45;  $mr = 45; $mb = 50;
+		$cw = $pw - $ml - $mr; // 522 pt usable width
+
+		// Colours: [R, G, B] on 0–1 scale
+		$white  = array( 1.00, 1.00, 1.00 );
+		$dark   = array( 0.07, 0.09, 0.13 );
+		$gray   = array( 0.40, 0.43, 0.48 );
+		$lgray  = array( 0.94, 0.95, 0.96 );
+		$navy   = array( 0.11, 0.14, 0.20 );
+		$border = array( 0.83, 0.85, 0.87 );
+		$brand  = array( 0.69, 0.10, 0.10 );
+		$green  = array( 0.12, 0.62, 0.32 );
+		$orange = array( 0.85, 0.35, 0.04 );
+		$red    = array( 0.75, 0.10, 0.10 );
+
+		$level_col = function ( $level ) use ( $green, $orange, $red ) {
+			if ( 'high'   === $level ) { return $green; }
+			if ( 'medium' === $level ) { return $orange; }
+			return $red;
+		};
+
+		// ---- Object pool ----
+		$obj  = array();
+		$aobj = function ( $body ) use ( &$obj ) {
+			$obj[] = $body;
+			return count( $obj );
+		};
+
+		$fr = $aobj( '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>' );
+		$fb = $aobj( '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>' );
+		$po = $aobj( '<< /Type /Pages /Kids [] /Count 0 >>' );
+
+		// ---- Page state ----
+		$pages = array();
+		$s     = '';             // current content stream
+		$y     = (float) $ph;   // current Y (top of page, decreasing)
+
+		$fp = null;
+		$fp = function () use ( &$s, &$y, &$pages, $ph, $mb, $pw, $fr, $fb, $po, $aobj ) {
+			$co      = $aobj( '<< /Length ' . strlen( $s ) . " >>\nstream\n{$s}endstream" );
+			$pages[] = $aobj(
+				"<< /Type /Page /Parent {$po} 0 R"
+				. " /MediaBox [0 0 {$pw} {$ph}]"
+				. " /Resources << /Font << /F1 {$fr} 0 R /F2 {$fb} 0 R >> >>"
+				. " /Contents {$co} 0 R >>"
+			);
+			$s = '';
+			$y = (float) ( $ph - $mb );
+		};
+
+		// Ensure $h pts of vertical space; flush page if needed.
+		$ns = function ( $h ) use ( &$y, $mb, &$fp ) {
+			if ( $y - (float) $h < (float) $mb ) {
+				$fp();
+			}
+		};
+
+		// ---- Drawing helpers (all append to $s) ----
+
+		// Filled rectangle (x,y = bottom-left corner)
+		$rf = function ( $x, $gy, $w, $h, $c ) use ( &$s ) {
+			$s .= sprintf(
+				"q %.3f %.3f %.3f rg %.4f %.4f %.4f %.4f re f Q\n",
+				$c[0], $c[1], $c[2], (float) $x, (float) $gy, (float) $w, (float) $h
+			);
+		};
+
+		// Stroked rectangle
+		$rs = function ( $x, $gy, $w, $h, $c, $lw = 0.5 ) use ( &$s ) {
+			$s .= sprintf(
+				"q %.3f %.3f %.3f RG %.2f w %.4f %.4f %.4f %.4f re S Q\n",
+				$c[0], $c[1], $c[2], (float) $lw, (float) $x, (float) $gy, (float) $w, (float) $h
+			);
+		};
+
+		// Horizontal line
+		$ln = function ( $x1, $y1, $x2, $y2, $c, $lw = 0.5 ) use ( &$s ) {
+			$s .= sprintf(
+				"q %.3f %.3f %.3f RG %.2f w %.4f %.4f m %.4f %.4f l S Q\n",
+				$c[0], $c[1], $c[2], (float) $lw,
+				(float) $x1, (float) $y1, (float) $x2, (float) $y2
+			);
+		};
+
+		// Filled circle via 4 cubic Bézier curves
+		$circle = function ( $cx, $cy, $r, $c ) use ( &$s ) {
+			$cx = (float) $cx; $cy = (float) $cy; $r = (float) $r;
+			$k  = $r * 0.5523;
+			$s .= sprintf( "q %.3f %.3f %.3f rg\n", $c[0], $c[1], $c[2] );
+			$s .= sprintf( "%.4f %.4f m\n", $cx, $cy + $r );
+			$s .= sprintf( "%.4f %.4f %.4f %.4f %.4f %.4f c\n", $cx+$k,$cy+$r, $cx+$r,$cy+$k, $cx+$r,$cy );
+			$s .= sprintf( "%.4f %.4f %.4f %.4f %.4f %.4f c\n", $cx+$r,$cy-$k, $cx+$k,$cy-$r, $cx,$cy-$r );
+			$s .= sprintf( "%.4f %.4f %.4f %.4f %.4f %.4f c\n", $cx-$k,$cy-$r, $cx-$r,$cy-$k, $cx-$r,$cy );
+			$s .= sprintf( "%.4f %.4f %.4f %.4f %.4f %.4f c\n", $cx-$r,$cy+$k, $cx-$k,$cy+$r, $cx,$cy+$r );
+			$s .= "f Q\n";
+		};
+
+		// Single text line at absolute position (Tm = absolute text matrix)
+		$tl = function ( $text, $x, $ty, $fn, $sz, $c ) use ( &$s ) {
+			$e = preg_replace( '/[^\x20-\x7E]/', '', (string) $text );
+			$e = str_replace( array( '\\', '(', ')' ), array( '\\\\', '\(', '\)' ), $e );
+			$s .= sprintf(
+				"BT /%s %.2f Tf %.3f %.3f %.3f rg 1 0 0 1 %.4f %.4f Tm (%s) Tj ET\n",
+				$fn, (float) $sz, $c[0], $c[1], $c[2], (float) $x, (float) $ty, $e
+			);
+		};
+
+		// Word-wrap text to fit within $max_w pts at $pt_sz font size.
+		$ww = function ( $text, $max_w, $pt_sz ) {
+			// Helvetica average char width ≈ 0.52 × point size
+			$chars   = max( 20, (int) ( (float) $max_w / max( 1.0, (float) $pt_sz * 0.52 ) ) );
+			$wrapped = wordwrap( (string) $text, $chars, "\n", false );
+			return array_map( 'trim', explode( "\n", $wrapped ) );
+		};
+
+		// =================== PAGE 1 HEADER ===================
+
+		$hh = 82;
+		$rf( 0, $ph - $hh, $pw, $hh, $navy );
+
+		// Brand logo
+		$tl( 'root.',   $ml,      $ph - 25, 'F2', 15, $brand );
+		$tl( 'to rise', $ml,      $ph - 43, 'F2', 15, $white );
+		// Report title + subtitle
+		$tl( 'Natural Attributes Cataloging', $ml + 78, $ph - 27, 'F2', 12, $white );
+		$tl( 'Full Results Report',            $ml + 78, $ph - 44, 'F1',  9, array( 0.68, 0.70, 0.74 ) );
+		// Meta line
+		$meta_str = ( $data['name'] ?? '' ) . '   |   ' . ( $data['email'] ?? '' )
+		          . '   |   Total Score: ' . ( $data['total_score'] ?? '' );
+		$tl( $meta_str, $ml, $ph - 65, 'F1', 8, array( 0.60, 0.63, 0.68 ) );
+
+		$y = (float) ( $ph - $hh );
+
+		// =================== OVERALL SCORE BAND ===================
+
+		$band_h = 80;
+		$rf( 0, $y - $band_h, $pw, $band_h, $lgray );
+		$ln( 0, $y - $band_h, (float) $pw, $y - $band_h, $border );
+
+		$overall_pct = (int) ( $data['overall_percent'] ?? 0 );
+		$ovr_level   = $overall_pct >= 80 ? 'high' : ( $overall_pct >= 50 ? 'medium' : 'low' );
+		$ovr_col     = $level_col( $ovr_level );
+
+		// Donut circle
+		$cr  = 30.0;
+		$ccx = (float) ( $ml + $cr + 8 );
+		$ccy = $y - $band_h / 2.0;
+		$circle( $ccx, $ccy, $cr, $ovr_col );
+		$circle( $ccx, $ccy, $cr * 0.58, $lgray ); // hole
+
+		// Percentage inside donut
+		$pct_s   = $overall_pct . '%';
+		$pct_off = max( 3.0, ( $cr * 2 - strlen( $pct_s ) * 6.0 ) / 2.0 );
+		$tl( $pct_s, $ccx - $cr + $pct_off, $ccy - 4.5, 'F2', 10, $dark );
+
+		// Congratulations text beside the donut
+		$tx = $ccx + $cr + 18;
+		$tl( 'Congratulations on Completing Your Discovery Journey!', $tx, $y - 18, 'F2', 11, $dark );
+		$tl( 'Your personalized results and score breakdown are included below.', $tx, $y - 34, 'F1', 8.5, $gray );
+		$tl( 'Overall Score: ' . $overall_pct . '%  [' . strtoupper( $ovr_level ) . ']', $tx, $y - 51, 'F2', 9.5, $ovr_col );
+		$name_email = ( $data['name'] ?? '' ) . '   –   ' . ( $data['email'] ?? '' );
+		$tl( $name_email, $tx, $y - 66, 'F1', 8, $gray );
+
+		$y -= (float) ( $band_h + 20 );
+
+		// =================== CATEGORY CARDS ===================
+
+		$tl( 'Category Results', $ml, $y, 'F2', 13, $dark );
+		$ln( $ml, $y - 5, $ml + 148, $y - 5, $brand, 1.5 );
+		$y -= 22.0;
+
+		$badge_w = 94;
+
+		foreach ( ( $data['categories'] ?? array() ) as $cat ) {
+			$pct     = (int) ( $cat['percent'] ?? 0 );
+			$lv      = (string) ( $cat['level']   ?? 'low' );
+			$col     = $level_col( $lv );
+			$name    = (string) ( $cat['name']    ?? '' );
+			$summary = (string) ( $cat['summary'] ?? '' );
+
+			$sum_max_w = (float) ( $cw - $badge_w - 28 );
+			$sum_lines = $ww( $summary, $sum_max_w, 9.0 );
+			$card_h    = (float) max( 78.0, 42.0 + count( $sum_lines ) * 12.5 );
+
+			$ns( $card_h + 10 );
+
+			$cb = $y - $card_h; // card bottom Y
+
+			// Card body
+			$rf( $ml, $cb, $cw, $card_h, $white );
+			$rs( $ml, $cb, $cw, $card_h, $border, 0.6 );
+
+			// Score badge (right column)
+			$bx = (float) ( $ml + $cw - $badge_w );
+			$rf( $bx, $cb, (float) $badge_w, $card_h, $col );
+
+			$tl( 'Your score', $bx + 8, $y - 17, 'F1', 8, $white );
+
+			$pstr   = $pct . '%';
+			$pstr_x = $bx + max( 4.0, ( (float) $badge_w - strlen( $pstr ) * 10.5 ) / 2.0 );
+			$tl( $pstr, $pstr_x, $y - 44, 'F2', 18, $white );
+
+			// Level pill at bottom of badge
+			$pill_w = 58.0; $pill_h = 14.0;
+			$pill_x = $bx + ( (float) $badge_w - $pill_w ) / 2.0;
+			$pill_y = $cb + 8.0;
+			$rf( $pill_x, $pill_y, $pill_w, $pill_h, $white );
+			$lv_label = strtoupper( $lv );
+			$lv_x     = $pill_x + max( 3.0, ( $pill_w - strlen( $lv_label ) * 6.5 ) / 2.0 );
+			$tl( $lv_label, $lv_x, $pill_y + 3.5, 'F2', 8, $col );
+
+			// Category name
+			$tl( $name, $ml + 12, $y - 18, 'F2', 12, $dark );
+
+			// Summary (word-wrapped)
+			$sy = $y - 35.0;
+			foreach ( $sum_lines as $sl ) {
+				if ( '' !== $sl ) {
+					$tl( $sl, $ml + 12, $sy, 'F1', 9.0, $gray );
+				}
+				$sy -= 12.5;
+			}
+
+			$y = $cb - 8.0;
+		}
+
+		// =================== QUESTION RESPONSES ===================
+
+		$ns( 55 );
+		$y -= 14.0;
+		$tl( 'Question Responses', $ml, $y, 'F2', 13, $dark );
+		$ln( $ml, $y - 5, $ml + 174, $y - 5, $brand, 1.5 );
+		$y -= 22.0;
+
+		// Table header
+		$th     = 18.0;
+		$resp_x = (float) ( $ml + $cw - 72 );
+		$rf( $ml, $y - $th, (float) $cw, $th, $navy );
+		$tl( 'Question', $ml + 8,     $y - 13, 'F2', 8.5, $white );
+		$tl( 'Response', $resp_x + 5, $y - 13, 'F2', 8.5, $white );
+		$y -= $th;
+
+		$even = false;
+		foreach ( ( $data['responses'] ?? array() ) as $row ) {
+			$q  = (string) ( $row['question'] ?? '' );
+			$a  = (string) ( $row['answer']   ?? '' );
+			$ql = $ww( $q, (float) ( $cw - 95 ), 8.5 );
+			$rh = (float) max( 18.0, count( $ql ) * 11.0 + 8.0 );
+
+			$ns( $rh );
+
+			if ( $even ) {
+				$rf( $ml, $y - $rh, (float) $cw, $rh, array( 0.96, 0.97, 0.98 ) );
+			}
+			$ln( $ml, $y - $rh, (float) ( $ml + $cw ), $y - $rh, $border, 0.3 );
+
+			$qy = $y - 10.5;
+			foreach ( $ql as $ql_line ) {
+				if ( '' !== $ql_line ) {
+					$tl( $ql_line, $ml + 8, $qy, 'F1', 8.5, $dark );
+				}
+				$qy -= 11.0;
+			}
+			$tl( $a, $resp_x + 5, $y - 10.5, 'F2', 8.5, $dark );
+
+			$y    -= $rh;
+			$even  = ! $even;
+		}
+
+		$fp(); // flush final page
+
+		// ---- Finalise PDF structure ----
+		$kids_str       = implode( ' ', array_map( function ( $p ) { return "{$p} 0 R"; }, $pages ) );
+		$obj[ $po - 1 ] = "<< /Type /Pages /Kids [{$kids_str}] /Count " . count( $pages ) . ' >>';
+		$cat_n          = $aobj( '<< /Type /Catalog /Pages ' . $po . ' 0 R >>' );
+
+		$pdf  = "%PDF-1.4\n";
+		$offs = array( 0 );
+		foreach ( $obj as $i => $b ) {
+			$offs[] = strlen( $pdf );
+			$pdf   .= ( $i + 1 ) . " 0 obj\n{$b}\nendobj\n";
+		}
+		$xoff = strlen( $pdf );
+		$n    = count( $obj ) + 1;
+		$pdf .= "xref\n0 {$n}\n0000000000 65535 f \n";
+		for ( $i = 1; $i < $n; $i++ ) {
+			$pdf .= sprintf( '%010d 00000 n ', $offs[ $i ] ) . "\n";
+		}
+		$pdf .= "trailer\n<< /Size {$n} /Root {$cat_n} 0 R >>\nstartxref\n{$xoff}\n%%EOF";
+
+		return $pdf;
+	}
+
+	/**
 	 * Save PDF to an absolute path.
 	 *
 	 * @param string $html
