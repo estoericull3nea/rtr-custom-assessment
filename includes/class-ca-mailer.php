@@ -375,8 +375,28 @@ class CA_Mailer
 	{
 		$submission_id = (int) $submission_id;
 		$checkout_url = function_exists('wc_get_checkout_url') ? wc_get_checkout_url() : home_url('/checkout/');
-		if ($submission_id <= 0) {
+		if ($submission_id <= 0 || !function_exists('wc_get_orders')) {
 			return $checkout_url;
+		}
+
+		$order_ids = wc_get_orders(array(
+			'limit' => 1,
+			'orderby' => 'date',
+			'order' => 'DESC',
+			'status' => array('pending', 'failed'),
+			'meta_key' => '_ca_submission_id',
+			'meta_value' => $submission_id,
+			'return' => 'ids',
+		));
+
+		if (!empty($order_ids)) {
+			$order = wc_get_order((int) $order_ids[0]);
+			if ($order instanceof \WC_Order && $order->needs_payment()) {
+				$pay_url = $order->get_checkout_payment_url(true);
+				if (is_string($pay_url) && '' !== trim($pay_url)) {
+					return trim($pay_url);
+				}
+			}
 		}
 
 		$product_ids = get_posts(array(
@@ -395,11 +415,6 @@ class CA_Mailer
 		$product_id = (int) $product_ids[0];
 		if ($product_id <= 0) {
 			return $checkout_url;
-		}
-
-		$product_url = get_permalink($product_id);
-		if ($product_url) {
-			return add_query_arg('add-to-cart', $product_id, $product_url);
 		}
 
 		return add_query_arg('add-to-cart', $product_id, $checkout_url);

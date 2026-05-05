@@ -77,9 +77,11 @@ class CA_Shortcode {
 				'assessments' => array(
 					CA_Assessment_Types::MINDSET        => array(
 						'type'               => CA_Assessment_Types::MINDSET,
+						'defer_answer_save'  => true,
 						'modal_title'        => __( 'Entrepreneurial Mindset Assessment', 'rtr-custom-assessment' ),
 						'scale_max'          => 5,
 						'total_questions'    => CA_Questions::get_total_count(),
+						'question_bank'      => CA_Assessment_Registry::get_question_bank_for_client( CA_Assessment_Types::MINDSET ),
 						'scale_note'         => __( 'Rate this statement on a scale of 1 to 5, where <strong>1</strong> means it is least like you and <strong>5</strong> means it is most like you.', 'rtr-custom-assessment' ),
 						'per_number_labels'  => $mindset_labels,
 						'questions_priority' => array_values(
@@ -97,9 +99,11 @@ class CA_Shortcode {
 					),
 					CA_Assessment_Types::SOCIAL_FLUENCY => array(
 						'type'               => CA_Assessment_Types::SOCIAL_FLUENCY,
+						'defer_answer_save'  => true,
 						'modal_title'        => __( 'Social Fluency Assessment', 'rtr-custom-assessment' ),
 						'scale_max'          => 10,
 						'total_questions'    => CA_Social_Fluency_Questions::get_total_count(),
+						'question_bank'      => CA_Assessment_Registry::get_question_bank_for_client( CA_Assessment_Types::SOCIAL_FLUENCY ),
 						'scale_note'         => __( 'Rate each question on a scale of 1 to 10, where 1 is the lowest and 10 is the highest for you.', 'rtr-custom-assessment' ),
 						'questions_priority' => array_values(
 							array_map(
@@ -116,9 +120,11 @@ class CA_Shortcode {
 					),
 					CA_Assessment_Types::INNER_DIMENSIONS => array(
 						'type'               => CA_Assessment_Types::INNER_DIMENSIONS,
+						'defer_answer_save'  => true,
 						'modal_title'        => __( 'Natural Attributes Cataloging', 'rtr-custom-assessment' ),
 						'scale_max'          => 2,
 						'total_questions'    => CA_Inner_Dimensions_Questions::get_total_count(),
+						'question_bank'      => CA_Assessment_Registry::get_question_bank_for_client( CA_Assessment_Types::INNER_DIMENSIONS ),
 						'scale_note'         => __( 'Answer <strong>Yes</strong> or <strong>No</strong> for each statement, based on how true it is for you.', 'rtr-custom-assessment' ),
 						'per_number_labels'  => array(),
 						'questions_priority' => array_values(
@@ -148,11 +154,18 @@ class CA_Shortcode {
 					'back'          => __( 'Back', 'rtr-custom-assessment' ),
 					'submit'        => __( 'Submit Assessment', 'rtr-custom-assessment' ),
 					'start'         => __( 'Start Assessment', 'rtr-custom-assessment' ),
-					'loading'       => __( 'Loading…', 'rtr-custom-assessment' ),
+					'loading'                => __( 'Loading…', 'rtr-custom-assessment' ),
+					'submitting_assessment'  => __( 'Submitting assessment', 'rtr-custom-assessment' ),
 					'error_answer'  => __( 'Please select an answer before continuing.', 'rtr-custom-assessment' ),
 					'error_generic' => __( 'Something went wrong. Please try again.', 'rtr-custom-assessment' ),
 					'yes_no_yes'    => __( 'Yes', 'rtr-custom-assessment' ),
 					'yes_no_no'     => __( 'No', 'rtr-custom-assessment' ),
+					'save_progress_title'   => __( 'Save your progress?', 'rtr-custom-assessment' ),
+					'save_progress_message' => __( 'Your answers are stored in this browser until you save them. Save now so you can continue on another device or after refreshing the page.', 'rtr-custom-assessment' ),
+					'save_progress_save'    => __( 'Save progress', 'rtr-custom-assessment' ),
+					'save_progress_discard' => __( 'Don\'t save', 'rtr-custom-assessment' ),
+					'save_progress_cancel'  => __( 'Keep editing', 'rtr-custom-assessment' ),
+					'save_progress_saving'   => __( 'Saving…', 'rtr-custom-assessment' ),
 				),
 			)
 		);
@@ -400,8 +413,8 @@ class CA_Shortcode {
 									<?php esc_html_e( 'Back', 'rtr-custom-assessment' ); ?>
 								</button>
 								<button type="button" class="ca-btn ca-btn--primary" id="ca-next-btn">
-									<?php esc_html_e( 'Next', 'rtr-custom-assessment' ); ?>
-									<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+									<span id="ca-next-btn-label" class="ca-next-btn-label"><?php esc_html_e( 'Next', 'rtr-custom-assessment' ); ?></span>
+									<svg class="ca-next-btn-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
 										stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 										<path d="M5 12h14M12 5l7 7-7 7" />
 									</svg>
@@ -420,7 +433,7 @@ class CA_Shortcode {
 								<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-dasharray="60"
 									stroke-dashoffset="20" stroke-linecap="round" />
 							</svg>
-							<p><?php esc_html_e( 'Loading…', 'rtr-custom-assessment' ); ?></p>
+							<p class="ca-loading-spinner__title"><?php esc_html_e( 'Loading…', 'rtr-custom-assessment' ); ?></p>
 						</div>
 					</div>
 
@@ -431,6 +444,18 @@ class CA_Shortcode {
 							<div class="ca-resume-actions">
 								<button type="button" id="ca-resume-continue" class="ca-btn ca-btn--primary"><?php esc_html_e( 'Continue assessment', 'rtr-custom-assessment' ); ?></button>
 								<button type="button" id="ca-resume-new" class="ca-btn ca-btn--ghost"><?php esc_html_e( 'Start new assessment', 'rtr-custom-assessment' ); ?></button>
+							</div>
+						</div>
+					</div>
+
+					<div id="ca-save-progress-dialog" class="ca-resume-dialog" hidden>
+						<div class="ca-resume-dialog-panel">
+							<h3 id="ca-save-progress-title"><?php esc_html_e( 'Save your progress?', 'rtr-custom-assessment' ); ?></h3>
+							<p id="ca-save-progress-message"></p>
+							<div class="ca-resume-actions ca-resume-actions--stack">
+								<button type="button" id="ca-save-progress-save" class="ca-btn ca-btn--primary"><?php esc_html_e( 'Save progress', 'rtr-custom-assessment' ); ?></button>
+								<button type="button" id="ca-save-progress-discard" class="ca-btn ca-btn--ghost"><?php esc_html_e( 'Don\'t save', 'rtr-custom-assessment' ); ?></button>
+								<button type="button" id="ca-save-progress-cancel" class="ca-btn ca-btn--ghost"><?php esc_html_e( 'Keep editing', 'rtr-custom-assessment' ); ?></button>
 							</div>
 						</div>
 					</div>

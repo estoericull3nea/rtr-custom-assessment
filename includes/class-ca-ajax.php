@@ -40,8 +40,11 @@ class CA_Ajax
 		}
 
 		add_action('woocommerce_before_thankyou', array($this, 'render_inner_dimensions_download_on_thankyou'), 20);
+		add_action('woocommerce_thankyou', array($this, 'render_inner_dimensions_download_on_thankyou'), 30);
+		add_action('woocommerce_order_details_after_order_table', array($this, 'render_inner_dimensions_download_after_order_table'), 20);
 		add_action('woocommerce_checkout_create_order', array($this, 'attach_inner_dimensions_meta_to_checkout_order'), 20, 2);
 		add_filter('upload_mimes', array($this, 'allow_results_html_mime_type'));
+		add_filter('woocommerce_checkout_get_value', array($this, 'checkout_prefill_billing_from_pay_order'), 20, 2);
 	}
 
 	/**
@@ -191,32 +194,13 @@ class CA_Ajax
 			$this->require_submission_for_type($submission_id, $assessment_type);
 		}
 
-		$question = CA_Assessment_Registry::get_question($assessment_type, $index);
+		$payload = CA_Assessment_Registry::get_question_display_payload($assessment_type, $index);
 
-		if (!$question) {
+		if (!$payload) {
 			$this->send_error('ca_get_question', __('Question not found.', 'rtr-custom-assessment'), array('question_index' => $index));
 		}
 
-		$scale_max = CA_Assessment_Types::get_scale_max($assessment_type);
-		$payload = $question;
-		$payload['scale_max'] = $scale_max;
-
-		if (CA_Assessment_Types::SOCIAL_FLUENCY === $assessment_type) {
-			$eps = isset($question['endpoints']) && is_array($question['endpoints']) ? $question['endpoints'] : array();
-			$has_eps = !empty($eps['left']) || !empty($eps['right']) || !empty($eps['mid']);
-			if ($has_eps) {
-				$payload['label_style'] = 'endpoints';
-				$payload['endpoints'] = $eps;
-			} else {
-				$payload['label_style'] = 'per_number';
-				$payload['endpoints'] = array();
-			}
-		} elseif (CA_Assessment_Types::INNER_DIMENSIONS === $assessment_type) {
-			$payload['label_style'] = 'yes_no';
-			$payload['scale_max']   = 2;
-		} else {
-			$payload['label_style'] = 'per_number';
-		}
+		$scale_max = isset($payload['scale_max']) ? (int) $payload['scale_max'] : CA_Assessment_Types::get_scale_max($assessment_type);
 
 		$saved_answer = $submission_id ? CA_Database::get_answer($submission_id, $index) : null;
 		$total = CA_Assessment_Registry::get_total_count($assessment_type);
@@ -490,25 +474,6 @@ class CA_Ajax
 				$this->send_error('ca_prepare_inner_dimensions_checkout', __('Please complete all questions before proceeding to checkout.', 'rtr-custom-assessment'));
 			}
 
-			$existing_order_id = $this->find_existing_inner_dimensions_order_id($submission_id);
-			if ($existing_order_id > 0) {
-				$order = wc_get_order($existing_order_id);
-				$existing_product_id = $order ? (int) $order->get_meta('_ca_full_results_product_id') : 0;
-				if ($order && $order->needs_payment() && $existing_product_id > 0) {
-				$this->prepare_inner_dimensions_checkout_cart($existing_product_id);
-				$checkout_url = $this->build_inner_dimensions_checkout_url((int) $existing_product_id);
-					$this->send_success(
-						'ca_prepare_inner_dimensions_checkout',
-						array(
-							'order_id' => $order->get_id(),
-						'checkout_url' => $checkout_url,
-						),
-						'Existing unpaid order reused.',
-						array('submission_id' => $submission_id, 'order_id' => $order->get_id())
-					);
-				}
-			}
-
 			$price = (float) apply_filters('ca_inner_dimensions_full_results_price', 9.99, $submission_id);
 			if ($price <= 0) {
 				$this->send_error('ca_prepare_inner_dimensions_checkout', __('The full results price is not configured correctly.', 'rtr-custom-assessment'));
@@ -524,40 +489,20 @@ class CA_Ajax
 				$this->send_error('ca_prepare_inner_dimensions_checkout', __('Could not prepare your downloadable product. Please try again.', 'rtr-custom-assessment'));
 			}
 
-			$order = wc_create_order();
-			if (!$order) {
-				$this->send_error('ca_prepare_inner_dimensions_checkout', __('Could not create an order. Please try again.', 'rtr-custom-assessment'));
-			}
-
-			$product = wc_get_product($product_id);
-			if (!$product) {
-				$this->send_error('ca_prepare_inner_dimensions_checkout', __('Could not load the generated product for checkout.', 'rtr-custom-assessment'));
-			}
-			$order->add_product($product, 1);
-
-			$order->set_billing_first_name((string) $submission->first_name);
-			$order->set_billing_last_name((string) $submission->last_name);
-			$order->set_billing_email((string) $submission->email);
-			$order->set_billing_phone((string) $submission->phone);
-
-			$order->update_meta_data('_ca_submission_id', (int) $submission_id);
-			$order->update_meta_data('_ca_assessment_type', $assessment_type);
-			$order->update_meta_data('_ca_full_results_unlock', 'yes');
-			$order->update_meta_data('_ca_full_results_product_id', (int) $product_id);
-		$order->update_meta_data('_ca_full_results_file_path', (string) $results_file_path);
-			$order->calculate_totals(true);
-			$order->save();
-
 			$this->prepare_inner_dimensions_checkout_cart($product_id);
-			$checkout_url = $this->build_inner_dimensions_checkout_url((int) $product_id);
+			$this->set_inner_dimensions_checkout_prefill_session($submission);
+			$checkout_url = $this->build_inner_dimensions_checkout_url($product_id);
+			if ('' === $checkout_url) {
+				$this->send_error('ca_prepare_inner_dimensions_checkout', __('Could not build a checkout link. Please try again.', 'rtr-custom-assessment'));
+			}
 			$this->send_success(
 				'ca_prepare_inner_dimensions_checkout',
 				array(
-					'order_id' => $order->get_id(),
 					'checkout_url' => $checkout_url,
+					'product_id' => (int) $product_id,
 				),
-				'Order created.',
-				array('submission_id' => $submission_id, 'order_id' => $order->get_id())
+				'Checkout cart prepared.',
+				array('submission_id' => $submission_id, 'product_id' => (int) $product_id)
 			);
 		} catch (\Throwable $e) {
 			$error_message = (string) $e->getMessage();
@@ -679,6 +624,220 @@ class CA_Ajax
 			return 0;
 		}
 		return (int) $ids[0];
+	}
+
+	/**
+	 * WooCommerce order payment URL (order-pay) — reliable for guests; avoids hidden product single URLs.
+	 *
+	 * @param \WC_Order $order Order instance.
+	 * @return string
+	 */
+	private function get_inner_dimensions_order_payment_url($order)
+	{
+		if (!$order instanceof \WC_Order) {
+			return '';
+		}
+		if (!$order->needs_payment()) {
+			return '';
+		}
+		$url = $order->get_checkout_payment_url(true);
+		$url = is_string($url) ? trim($url) : '';
+		return '' !== $url ? $this->ensure_www_url($url) : '';
+	}
+
+	/**
+	 * Clear cart before sending the customer to order payment (avoids stray line items).
+	 */
+	private function clear_wc_cart_for_guest_checkout()
+	{
+		if (!function_exists('WC')) {
+			return;
+		}
+		$wc = WC();
+		if (!$wc || !isset($wc->cart) || !is_object($wc->cart)) {
+			return;
+		}
+		$wc->cart->empty_cart();
+	}
+
+	/**
+	 * Copy assessment step-1 fields (name, email, phone) onto the order billing address.
+	 * Does not set billing_company (job title is not copied to checkout).
+	 * Fills required WC billing placeholders using store base location and filterable defaults.
+	 *
+	 * @param \WC_Order $order      Order instance.
+	 * @param object    $submission Row from ca_submissions.
+	 * @return void
+	 */
+	private function apply_submission_billing_to_order($order, $submission)
+	{
+		if (!$order instanceof \WC_Order || !$submission) {
+			return;
+		}
+
+		$order->set_billing_first_name((string) $submission->first_name);
+		$order->set_billing_last_name((string) $submission->last_name);
+		$order->set_billing_email((string) $submission->email);
+		$order->set_billing_phone((string) $submission->phone);
+		$order->set_billing_company('');
+
+		$country = '';
+		$state = '';
+		if (function_exists('wc_get_base_location')) {
+			$loc = wc_get_base_location();
+			$country = isset($loc['country']) ? (string) $loc['country'] : '';
+			$state = isset($loc['state']) ? (string) $loc['state'] : '';
+		}
+
+		if ('' === $country && function_exists('WC') && WC()->countries) {
+			$country = (string) WC()->countries->get_base_country();
+			$base_state = WC()->countries->get_base_state();
+			$state = null !== $base_state ? (string) $base_state : '';
+		}
+
+		if ('' !== $country) {
+			$order->set_billing_country($country);
+		}
+		if ('' !== $state) {
+			$order->set_billing_state($state);
+		}
+
+		$line1 = (string) apply_filters('ca_inner_dimensions_default_billing_address_1', '', $submission, $order);
+		if ('' === $line1) {
+			$line1 = __('Natural Attributes Cataloging — digital delivery', 'rtr-custom-assessment');
+		}
+		$order->set_billing_address_1($line1);
+
+		$city = (string) apply_filters('ca_inner_dimensions_default_billing_city', '', $submission, $order);
+		if ('' === $city) {
+			$city = __('Online', 'rtr-custom-assessment');
+		}
+		$order->set_billing_city($city);
+
+		$postcode = (string) apply_filters('ca_inner_dimensions_default_billing_postcode', '', $submission, $order);
+		if ('' === $postcode) {
+			$store_postcode = (string) get_option('woocommerce_store_postcode', '');
+			if ('' !== $store_postcode) {
+				$postcode = $store_postcode;
+			} else {
+				$postcode = (string) apply_filters('ca_inner_dimensions_default_billing_postcode_fallback', '00000', $submission, $order);
+			}
+		}
+		$order->set_billing_postcode($postcode);
+	}
+
+	/**
+	 * On order-pay checkout, default billing fields from the order when the value is still empty.
+	 *
+	 * @param mixed  $value Checkout default.
+	 * @param string $input Field key e.g. billing_first_name.
+	 * @return mixed
+	 */
+	public function checkout_prefill_billing_from_pay_order($value, $input)
+	{
+		if (!is_string($input) || 0 !== strpos($input, 'billing_')) {
+			return $value;
+		}
+		if (null !== $value && false !== $value && '' !== (string) $value) {
+			return $value;
+		}
+
+		// First, prefill from session when we are on checkout with NAC cart flow.
+		if (function_exists('is_checkout') && is_checkout()) {
+			$session_value = $this->get_inner_dimensions_checkout_prefill_value($input);
+			if ('' !== $session_value) {
+				return $session_value;
+			}
+		}
+
+		// Fallback for order-pay flow (legacy path).
+		if (!function_exists('is_wc_endpoint_url') || !is_wc_endpoint_url('order-pay')) {
+			return $value;
+		}
+
+		global $wp;
+		$order_id = 0;
+		if (isset($wp->query_vars['order-pay'])) {
+			$order_id = absint($wp->query_vars['order-pay']);
+		}
+		if ($order_id <= 0 && function_exists('get_query_var')) {
+			$order_id = absint(get_query_var('order-pay'));
+		}
+		if ($order_id <= 0) {
+			return $value;
+		}
+
+		$order = wc_get_order($order_id);
+		if (!$order instanceof \WC_Order || !$order->needs_payment()) {
+			return $value;
+		}
+
+		if ((int) $order->get_meta('_ca_submission_id', true) <= 0) {
+			return $value;
+		}
+
+		$suffix = substr($input, strlen('billing_'));
+		$getter = 'get_billing_' . $suffix;
+		if (!is_callable(array($order, $getter))) {
+			return $value;
+		}
+
+		$from_order = call_user_func(array($order, $getter));
+		if (is_string($from_order) && '' !== $from_order) {
+			return $from_order;
+		}
+		if (is_numeric($from_order)) {
+			return (string) $from_order;
+		}
+
+		return $value;
+	}
+
+	/**
+	 * Store billing fields in Woo session for NAC checkout prefill.
+	 *
+	 * @param object $submission Submission row.
+	 * @return void
+	 */
+	private function set_inner_dimensions_checkout_prefill_session($submission)
+	{
+		if (!$submission || !function_exists('WC')) {
+			return;
+		}
+		$wc = WC();
+		if (!$wc || !isset($wc->session) || !is_object($wc->session)) {
+			return;
+		}
+
+		$prefill = array(
+			'billing_first_name' => isset($submission->first_name) ? (string) $submission->first_name : '',
+			'billing_last_name' => isset($submission->last_name) ? (string) $submission->last_name : '',
+			'billing_email' => isset($submission->email) ? (string) $submission->email : '',
+			'billing_phone' => isset($submission->phone) ? (string) $submission->phone : '',
+		);
+		$wc->session->set('ca_inner_dimensions_checkout_prefill', $prefill);
+	}
+
+	/**
+	 * Read a single billing field from NAC checkout prefill session payload.
+	 *
+	 * @param string $input Billing field key.
+	 * @return string
+	 */
+	private function get_inner_dimensions_checkout_prefill_value($input)
+	{
+		if (!function_exists('WC')) {
+			return '';
+		}
+		$wc = WC();
+		if (!$wc || !isset($wc->session) || !is_object($wc->session)) {
+			return '';
+		}
+		$prefill = $wc->session->get('ca_inner_dimensions_checkout_prefill');
+		if (!is_array($prefill) || !isset($prefill[$input])) {
+			return '';
+		}
+		return trim((string) $prefill[$input]);
 	}
 
 	/**
@@ -818,11 +977,17 @@ class CA_Ajax
 	 */
 	public function render_inner_dimensions_download_on_thankyou($order_id)
 	{
+		static $rendered_order_ids = array();
+		$order_id = (int) $order_id;
+		if ($order_id > 0 && in_array($order_id, $rendered_order_ids, true)) {
+			return;
+		}
+
 		if (!$this->is_woocommerce_ready()) {
 			return;
 		}
 
-		$order = wc_get_order((int) $order_id);
+		$order = wc_get_order($order_id);
 		if (!$order) {
 			return;
 		}
@@ -846,6 +1011,9 @@ class CA_Ajax
 		if ('' === $download_url) {
 			return;
 		}
+		if ($order_id > 0) {
+			$rendered_order_ids[] = $order_id;
+		}
 		?>
 		<section class="woocommerce-order ca-order-download" style="margin-top:24px;">
 			<h2><?php esc_html_e('Your Full Results', 'rtr-custom-assessment'); ?></h2>
@@ -857,6 +1025,21 @@ class CA_Ajax
 			</p>
 		</section>
 		<?php
+	}
+
+	/**
+	 * Render download CTA on order details blocks (order-received / view-order).
+	 *
+	 * @param WC_Order|int $order Order instance or ID (hook dependent).
+	 * @return void
+	 */
+	public function render_inner_dimensions_download_after_order_table($order)
+	{
+		if (is_object($order) && method_exists($order, 'get_id')) {
+			$this->render_inner_dimensions_download_on_thankyou((int) $order->get_id());
+			return;
+		}
+		$this->render_inner_dimensions_download_on_thankyou((int) $order);
 	}
 
 	/**
@@ -964,7 +1147,7 @@ class CA_Ajax
 	}
 
 	/**
-	 * Ensure URL host includes "www.".
+	 * Normalize checkout redirect URLs (do not alter host — forcing "www." breaks many sites and causes 404s).
 	 *
 	 * @param string $url
 	 * @return string
@@ -972,31 +1155,7 @@ class CA_Ajax
 	private function ensure_www_url($url)
 	{
 		$url = trim((string) $url);
-		if ('' === $url) {
-			return '';
-		}
-
-		$parts = wp_parse_url($url);
-		if (!is_array($parts) || empty($parts['host'])) {
-			return $url;
-		}
-
-		$host = (string) $parts['host'];
-		if (0 === strpos($host, 'www.')) {
-			return $url;
-		}
-
-		$parts['host'] = 'www.' . $host;
-		$scheme = isset($parts['scheme']) ? $parts['scheme'] . '://' : '';
-		$user = isset($parts['user']) ? $parts['user'] : '';
-		$pass = isset($parts['pass']) ? ':' . $parts['pass'] : '';
-		$auth = $user ? $user . $pass . '@' : '';
-		$port = isset($parts['port']) ? ':' . $parts['port'] : '';
-		$path = isset($parts['path']) ? $parts['path'] : '';
-		$query = isset($parts['query']) ? '?' . $parts['query'] : '';
-		$fragment = isset($parts['fragment']) ? '#' . $parts['fragment'] : '';
-
-		return $scheme . $auth . $parts['host'] . $port . $path . $query . $fragment;
+		return '' === $url ? '' : $url;
 	}
 
 	/**
