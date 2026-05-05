@@ -40,6 +40,8 @@ class CA_Ajax
 		}
 
 		add_action('woocommerce_before_thankyou', array($this, 'render_inner_dimensions_download_on_thankyou'), 20);
+		add_action('woocommerce_thankyou', array($this, 'render_inner_dimensions_download_on_thankyou'), 30);
+		add_action('woocommerce_order_details_after_order_table', array($this, 'render_inner_dimensions_download_after_order_table'), 20);
 		add_action('woocommerce_checkout_create_order', array($this, 'attach_inner_dimensions_meta_to_checkout_order'), 20, 2);
 		add_filter('upload_mimes', array($this, 'allow_results_html_mime_type'));
 		add_filter('woocommerce_checkout_get_value', array($this, 'checkout_prefill_billing_from_pay_order'), 20, 2);
@@ -975,11 +977,17 @@ class CA_Ajax
 	 */
 	public function render_inner_dimensions_download_on_thankyou($order_id)
 	{
+		static $rendered_order_ids = array();
+		$order_id = (int) $order_id;
+		if ($order_id > 0 && in_array($order_id, $rendered_order_ids, true)) {
+			return;
+		}
+
 		if (!$this->is_woocommerce_ready()) {
 			return;
 		}
 
-		$order = wc_get_order((int) $order_id);
+		$order = wc_get_order($order_id);
 		if (!$order) {
 			return;
 		}
@@ -1003,6 +1011,9 @@ class CA_Ajax
 		if ('' === $download_url) {
 			return;
 		}
+		if ($order_id > 0) {
+			$rendered_order_ids[] = $order_id;
+		}
 		?>
 		<section class="woocommerce-order ca-order-download" style="margin-top:24px;">
 			<h2><?php esc_html_e('Your Full Results', 'rtr-custom-assessment'); ?></h2>
@@ -1014,6 +1025,21 @@ class CA_Ajax
 			</p>
 		</section>
 		<?php
+	}
+
+	/**
+	 * Render download CTA on order details blocks (order-received / view-order).
+	 *
+	 * @param WC_Order|int $order Order instance or ID (hook dependent).
+	 * @return void
+	 */
+	public function render_inner_dimensions_download_after_order_table($order)
+	{
+		if (is_object($order) && method_exists($order, 'get_id')) {
+			$this->render_inner_dimensions_download_on_thankyou((int) $order->get_id());
+			return;
+		}
+		$this->render_inner_dimensions_download_on_thankyou((int) $order);
 	}
 
 	/**
