@@ -29,6 +29,7 @@ require_once CA_PLUGIN_DIR . 'includes/class-ca-inner-dimensions-questions.php';
 require_once CA_PLUGIN_DIR . 'includes/class-ca-assessment-registry.php';
 require_once CA_PLUGIN_DIR . 'includes/class-ca-scoring.php';
 require_once CA_PLUGIN_DIR . 'includes/class-ca-logger.php';
+require_once CA_PLUGIN_DIR . 'includes/class-ca-pdf.php';
 require_once CA_PLUGIN_DIR . 'includes/class-ca-ajax.php';
 require_once CA_PLUGIN_DIR . 'includes/class-ca-shortcode.php';
 require_once CA_PLUGIN_DIR . 'includes/class-ca-mailer.php';

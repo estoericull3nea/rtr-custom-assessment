@@ -43,24 +43,7 @@ class CA_Ajax
 		add_action('woocommerce_thankyou', array($this, 'render_inner_dimensions_download_on_thankyou'), 30);
 		add_action('woocommerce_order_details_after_order_table', array($this, 'render_inner_dimensions_download_after_order_table'), 20);
 		add_action('woocommerce_checkout_create_order', array($this, 'attach_inner_dimensions_meta_to_checkout_order'), 20, 2);
-		add_filter('upload_mimes', array($this, 'allow_results_html_mime_type'));
 		add_filter('woocommerce_checkout_get_value', array($this, 'checkout_prefill_billing_from_pay_order'), 20, 2);
-	}
-
-	/**
-	 * Allow HTML files for generated NAC downloadable results.
-	 *
-	 * @param array $mimes
-	 * @return array
-	 */
-	public function allow_results_html_mime_type($mimes)
-	{
-		if (!is_array($mimes)) {
-			$mimes = array();
-		}
-		$mimes['html'] = 'text/html';
-		$mimes['htm'] = 'text/html';
-		return $mimes;
 	}
 
 	/**
@@ -841,7 +824,7 @@ class CA_Ajax
 	}
 
 	/**
-	 * Generate an HTML results file in uploads for this submission.
+	 * Generate a PDF results file in uploads for this submission.
 	 *
 	 * @param int    $submission_id
 	 * @param object $submission
@@ -856,17 +839,16 @@ class CA_Ajax
 		}
 
 		$dir_path = trailingslashit($upload['basedir']) . 'ca-results';
-		$dir_url = trailingslashit($upload['baseurl']) . 'ca-results';
 		$timestamp = gmdate('YmdHis');
-		$file_name = 'nac-results-' . (int) $submission_id . '-' . $timestamp . '.html';
+		$file_name = 'nac-results-' . (int) $submission_id . '-' . $timestamp . '.pdf';
 		$file_path = trailingslashit($dir_path) . $file_name;
 
 		if (!is_dir($dir_path)) {
 			wp_mkdir_p($dir_path);
 		}
 
-		$html_payload = "<!doctype html>\n" . $html;
-		if (false === file_put_contents($file_path, $html_payload)) {
+		$pdf = new Rtr_Custom_Assessment_Pdf();
+		if (!$pdf->save_pdf($html, $file_path)) {
 			return false;
 		}
 		return $file_path;
