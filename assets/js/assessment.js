@@ -1530,9 +1530,7 @@
         ) +
         " <strong>" +
         emailEsc +
-        '</strong>. <button type="button" class="ca-results-change-email-btn" id="ca-nac-change-email">' +
-        escHtml(IR.change_email || "Change email address") +
-        "</button></p>" +
+        "</strong>.</p>" +
         '<p class="ca-results-nac-intro">' +
         escHtml(
           IR.intro ||
@@ -1638,22 +1636,6 @@
     $resultsContent
       .off("click.caCloseResults")
       .on("click.caCloseResults", "#ca-close-results", closeModal);
-
-    $resultsContent
-      .off("click.caNacChangeEmail")
-      .on("click.caNacChangeEmail", "#ca-nac-change-email", function (e) {
-        e.preventDefault();
-        showScreen("info");
-        hideProgress();
-        setTimeout(function () {
-          $("#ca-email").trigger("focus");
-          try {
-            document.getElementById("ca-email").select();
-          } catch (err) {
-            /* ignore */
-          }
-        }, 100);
-      });
   }
 
   function handlePaywallCheckout(e) {

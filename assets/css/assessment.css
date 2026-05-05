@@ -926,27 +926,6 @@ body,
   word-break: break-word;
 }
 
-.ca-results-change-email-btn {
-  display: inline;
-  background: none;
-  border: none;
-  padding: 0;
-  margin: 0;
-  color: var(--ca-primary);
-  font-weight: 700;
-  text-decoration: underline;
-  cursor: pointer;
-  font-family: inherit;
-  font-size: inherit;
-  vertical-align: baseline;
-}
-
-.ca-results-change-email-btn:hover,
-.ca-results-change-email-btn:focus-visible {
-  color: #8a2120;
-  text-decoration: underline;
-}
-
 .ca-results-nac-intro {
   font-family: var(--ca-font);
   font-size: 0.95rem;
