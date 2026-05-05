@@ -58,6 +58,159 @@ class Rtr_Custom_Assessment_Pdf
 	}
 
 	/**
+	 * Build and save a PDF directly from an array of pre-formatted text lines.
+	 * Bypasses all HTML parsing; the binary builder is called directly.
+	 *
+	 * @param string[] $lines
+	 * @param string   $absolute_path
+	 * @return bool
+	 */
+	public function save_pdf_from_lines( array $lines, $absolute_path ) {
+		if ( empty( $lines ) ) {
+			$lines = array( 'No content.' );
+		}
+
+		$binary = $this->build_binary_from_lines( $lines );
+		if ( false === $binary || '' === $binary ) {
+			return false;
+		}
+
+		$dir = dirname( $absolute_path );
+		if ( ! is_dir( $dir ) ) {
+			wp_mkdir_p( $dir );
+		}
+
+		return false !== file_put_contents( $absolute_path, $binary );
+	}
+
+	/**
+	 * Build PDF binary from pre-formatted lines (font size aware, bold markers).
+	 *
+	 * Lines prefixed with "##H1 " use 14pt Helvetica-Bold.
+	 * Lines prefixed with "##H2 " use 11pt Helvetica-Bold.
+	 * Lines of "##HR" render as a visual separator.
+	 * All other lines use 10pt Helvetica.
+	 *
+	 * @param string[] $lines
+	 * @return string|false
+	 */
+	private function build_binary_from_lines( array $lines ) {
+		$page_width  = 612;
+		$page_height = 792;
+		$margin_x    = 50;
+		$margin_y    = 50;
+		$usable_h    = $page_height - ( 2 * $margin_y );
+
+		$objects    = array();
+		$add_object = function ( $body ) use ( &$objects ) {
+			$objects[] = $body;
+			return count( $objects );
+		};
+
+		$font_reg  = $add_object( '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>' );
+		$font_bold = $add_object( '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>' );
+		$pages_obj = $add_object( '<< /Type /Pages /Kids [] /Count 0 >>' );
+
+		// Split lines into pages based on accumulated height.
+		$pages_lines  = array();
+		$current_page = array();
+		$used_h       = 0;
+
+		foreach ( $lines as $line ) {
+			if ( strncmp( $line, '##H1 ', 5 ) === 0 ) {
+				$lh = 22;
+			} elseif ( strncmp( $line, '##H2 ', 5 ) === 0 ) {
+				$lh = 18;
+			} elseif ( '##HR' === $line ) {
+				$lh = 12;
+			} else {
+				$lh = 14;
+			}
+
+			if ( $used_h + $lh > $usable_h && ! empty( $current_page ) ) {
+				$pages_lines[] = $current_page;
+				$current_page  = array();
+				$used_h        = 0;
+			}
+
+			$current_page[] = array( 'line' => $line, 'lh' => $lh );
+			$used_h        += $lh;
+		}
+		if ( ! empty( $current_page ) ) {
+			$pages_lines[] = $current_page;
+		}
+
+		$page_objects = array();
+		foreach ( $pages_lines as $page_entries ) {
+			$content = "BT\n";
+			$y       = $page_height - $margin_y;
+
+			foreach ( $page_entries as $entry ) {
+				$line = $entry['line'];
+				$lh   = $entry['lh'];
+
+				if ( strncmp( $line, '##H1 ', 5 ) === 0 ) {
+					$text    = substr( $line, 5 );
+					$font_sz = "/F2 14 Tf\n";
+				} elseif ( strncmp( $line, '##H2 ', 5 ) === 0 ) {
+					$text    = substr( $line, 5 );
+					$font_sz = "/F2 11 Tf\n";
+				} elseif ( '##HR' === $line ) {
+					$text    = str_repeat( '_', 88 );
+					$font_sz = "/F1 8 Tf\n";
+				} else {
+					$text    = $line;
+					$font_sz = "/F1 10 Tf\n";
+				}
+
+				// Use Tm (text matrix) for absolute positioning — avoids
+				// cumulative-offset bugs that Td causes with variable line heights.
+				$escaped  = $this->pdf_escape_text( $text );
+				$content .= $font_sz;
+				$content .= "1 0 0 1 " . $margin_x . ' ' . $y . " Tm\n";
+				$content .= '(' . $escaped . ") Tj\n";
+				$y       -= $lh;
+			}
+
+			$content .= "ET\n";
+
+			$content_obj  = $add_object( "<< /Length " . strlen( $content ) . " >>\nstream\n" . $content . "endstream" );
+			$page_objects[] = $add_object(
+				"<< /Type /Page /Parent " . $pages_obj . " 0 R"
+				. " /MediaBox [0 0 " . $page_width . ' ' . $page_height . "]"
+				. " /Resources << /Font << /F1 " . $font_reg . " 0 R /F2 " . $font_bold . " 0 R >> >>"
+				. " /Contents " . $content_obj . " 0 R >>"
+			);
+		}
+
+		$kids = array();
+		foreach ( $page_objects as $po ) {
+			$kids[] = $po . ' 0 R';
+		}
+		$objects[ $pages_obj - 1 ] = "<< /Type /Pages /Kids [ " . implode( ' ', $kids ) . " ] /Count " . count( $page_objects ) . " >>";
+
+		$catalog_obj = $add_object( "<< /Type /Catalog /Pages " . $pages_obj . " 0 R >>" );
+
+		$pdf     = "%PDF-1.4\n";
+		$offsets = array( 0 );
+		for ( $i = 0, $len = count( $objects ); $i < $len; $i++ ) {
+			$offsets[] = strlen( $pdf );
+			$pdf      .= ( $i + 1 ) . " 0 obj\n" . $objects[ $i ] . "\nendobj\n";
+		}
+
+		$xref_offset = strlen( $pdf );
+		$pdf        .= "xref\n0 " . ( count( $objects ) + 1 ) . "\n";
+		$pdf        .= "0000000000 65535 f \n";
+		for ( $i = 1; $i <= count( $objects ); $i++ ) {
+			$pdf .= sprintf( '%010d 00000 n ', $offsets[ $i ] ) . "\n";
+		}
+		$pdf .= "trailer\n<< /Size " . ( count( $objects ) + 1 ) . " /Root " . $catalog_obj . " 0 R >>\n";
+		$pdf .= "startxref\n" . $xref_offset . "\n%%EOF";
+
+		return $pdf;
+	}
+
+	/**
 	 * Generate PDF from HTML content.
 	 *
 	 * @param string $html
@@ -192,7 +345,10 @@ class Rtr_Custom_Assessment_Pdf
 	 */
 	private function get_binary_with_simple_pdf($html)
 	{
-		$lines = $this->extract_basic_lines_from_html((string) $html);
+		$lines = $this->extract_structured_lines_from_html((string) $html);
+		if (empty($lines)) {
+			$lines = $this->extract_basic_lines_from_html((string) $html);
+		}
 		if (empty($lines)) {
 			$lines = array('Assessment Results');
 		}
@@ -491,6 +647,10 @@ class Rtr_Custom_Assessment_Pdf
 	private function normalize_text($text)
 	{
 		$text = html_entity_decode((string) $text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+		// Preserve readability for flattened inline nodes (e.g., "score33%low").
+		$text = preg_replace('/([A-Za-z])(\d)/', '$1 $2', $text);
+		$text = preg_replace('/(\d)([A-Za-z])/', '$1 $2', $text);
+		$text = preg_replace('/(%)([A-Za-z])/', '$1 $2', $text);
 		$text = preg_replace('/\s+/', ' ', $text);
 		$text = trim((string) $text);
 		if ('' === $text) {

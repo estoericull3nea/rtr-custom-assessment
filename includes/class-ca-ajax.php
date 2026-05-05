@@ -9,6 +9,8 @@ if (!defined('ABSPATH')) {
 
 class CA_Ajax
 {
+	private const INNER_RESULTS_TEMPLATE_VERSION = 'v4';
+
 	private function send_error($action, $message, $context = array())
 	{
 		CA_Logger::log($action, 'error', $message, $context);
@@ -581,6 +583,7 @@ class CA_Ajax
 			update_post_meta($product_id, '_ca_submission_id', (int) $submission_id);
 			update_post_meta($product_id, '_ca_assessment_type', CA_Assessment_Types::INNER_DIMENSIONS);
 			update_post_meta($product_id, '_ca_full_results_file_path', (string) $results_file_path);
+			update_post_meta($product_id, '_ca_full_results_template_version', self::INNER_RESULTS_TEMPLATE_VERSION);
 		}
 
 		return (int) $product_id;
@@ -832,13 +835,13 @@ class CA_Ajax
 	 */
 	private function generate_inner_dimensions_results_file($submission_id, $submission)
 	{
-		$html = $this->build_submission_pdf_html($submission_id, $submission);
+		$lines  = $this->build_submission_pdf_lines($submission_id, $submission);
 		$upload = wp_upload_dir();
 		if (!empty($upload['error'])) {
 			return false;
 		}
 
-		$dir_path = trailingslashit($upload['basedir']) . 'ca-results';
+		$dir_path  = trailingslashit($upload['basedir']) . 'ca-results';
 		$timestamp = gmdate('YmdHis');
 		$file_name = 'nac-results-' . (int) $submission_id . '-' . $timestamp . '.pdf';
 		$file_path = trailingslashit($dir_path) . $file_name;
@@ -848,73 +851,103 @@ class CA_Ajax
 		}
 
 		$pdf = new Rtr_Custom_Assessment_Pdf();
-		if (!$pdf->save_pdf($html, $file_path)) {
+		if (!$pdf->save_pdf_from_lines($lines, $file_path)) {
 			return false;
 		}
 		return $file_path;
 	}
 
 	/**
-	 * Build submission report HTML used for PDF generation.
+	 * Build an ordered array of text lines for the PDF report.
+	 * Lines prefixed ##H1 / ##H2 render as headings; ##HR renders as a separator rule.
 	 *
 	 * @param int    $submission_id
 	 * @param object $submission
-	 * @return string
+	 * @return string[]
 	 */
-	private function build_submission_pdf_html($submission_id, $submission)
+	private function build_submission_pdf_lines($submission_id, $submission)
 	{
-		$answers = CA_Database::get_answers($submission_id);
+		$answers    = CA_Database::get_answers($submission_id);
 		$cat_scores = CA_Database::get_category_scores($submission_id);
-		$sub_type = CA_Assessment_Types::from_submission($submission);
-		$scale_max = CA_Assessment_Types::get_scale_max($sub_type);
-		$flat_q = CA_Assessment_Registry::get_flat($sub_type);
-		$total_q = CA_Assessment_Registry::get_total_count($sub_type);
+		$sub_type   = CA_Assessment_Types::from_submission($submission);
+		$scale_max  = CA_Assessment_Types::get_scale_max($sub_type);
+		$flat_q     = CA_Assessment_Registry::get_flat($sub_type);
+		$total_q    = CA_Assessment_Registry::get_total_count($sub_type);
 
-		$html = '<html><head><meta charset="UTF-8"><style>
-			body{font-family:Arial,sans-serif;margin:24px;color:#1f2937;font-size:13px;line-height:1.5;}
-			h1{font-size:26px;margin:0 0 12px;color:#111827;border-bottom:2px solid #e5e7eb;padding-bottom:8px;}
-			h2{font-size:17px;margin:24px 0 10px;color:#111827;}
-			p{margin:0 0 12px;}
-			.report-meta{background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:12px 14px;}
-			.report-meta strong{color:#111827;}
-			table{width:100%;border-collapse:collapse;margin:0 0 18px;background:#fff;}
-			th,td{border:1px solid #e5e7eb;padding:9px 10px;vertical-align:top;text-align:left;}
-			thead th{background:#eef2ff;color:#1f2937;font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.3px;}
-			tbody tr:nth-child(even){background:#f9fafb;}
-			.col-category{width:20%;}
-			.col-score{width:12%;}
-			.col-average{width:12%;}
-			.col-summary{width:56%;}
-			.col-question{width:76%;}
-			.col-response{width:24%;font-weight:700;color:#111827;}
-		</style></head><body>';
+		$overall_percent = (int) round(((float) $submission->average_score / max(1, (int) $scale_max)) * 100);
+		$overall_percent = max(0, min(100, $overall_percent));
 
-		$html .= '<h1>Natural Attributes Cataloging - Full Results</h1>';
-		$html .= '<p class="report-meta"><strong>Name:</strong> ' . esc_html($submission->first_name . ' ' . $submission->last_name) . '<br>';
-		$html .= '<strong>Email:</strong> ' . esc_html($submission->email) . '<br>';
-		$html .= '<strong>Total Score:</strong> ' . esc_html($submission->total_score . ' / ' . ($total_q * $scale_max)) . '<br>';
-		$html .= '<strong>Average Score:</strong> ' . esc_html(number_format((float) $submission->average_score, 2)) . '</p>';
+		$lines = array();
 
-		$html .= '<h2>Category Scores</h2><table><thead><tr><th class="col-category">Category</th><th class="col-score">Subtotal</th><th class="col-average">Average</th><th class="col-summary">Summary</th></tr></thead><tbody>';
+		// Header.
+		$lines[] = '##H1 Natural Attributes Cataloging -- Full Results';
+		$lines[] = '##HR';
+		$lines[] = '##H2 Congratulations on Completing Your Discovery Journey!';
+		$lines[] = 'Your full results and score breakdown are included below.';
+		$lines[] = '';
+		$lines[] = 'Name:         ' . $submission->first_name . ' ' . $submission->last_name;
+		$lines[] = 'Email:        ' . $submission->email;
+		$lines[] = 'Total Score:  ' . $submission->total_score . ' / ' . ($total_q * $scale_max);
+		$lines[] = 'Overall Score: ' . $overall_percent . '%';
+		$lines[] = '';
+		$lines[] = '##HR';
+
+		// Category scores.
+		$lines[] = '##H2 Category Results';
+		$lines[] = '';
 		foreach ($cat_scores as $cat) {
-			$html .= '<tr><td>' . esc_html($cat->category_name) . '</td><td>' . esc_html($cat->subtotal) . '</td><td>' . esc_html(number_format((float) $cat->average, 2)) . '</td><td>' . esc_html(CA_Scoring::get_category_summary($cat->category_name, (float) $cat->average, $sub_type)) . '</td></tr>';
-		}
-		$html .= '</tbody></table>';
+			$percent = (int) round(((float) $cat->average / max(1, (int) $scale_max)) * 100);
+			$percent = max(0, min(100, $percent));
+			$level   = $this->get_results_level_label($percent);
+			$summary = CA_Scoring::get_category_summary($cat->category_name, (float) $cat->average, $sub_type);
 
-		$html .= '<h2>Question Responses</h2><table><thead><tr><th class="col-question">Question</th><th class="col-response">Response</th></tr></thead><tbody>';
+			$lines[] = '##H2 ' . $cat->category_name;
+			$lines[] = 'Your score: ' . $percent . '%  [' . strtoupper($level) . ']';
+			// Word-wrap the summary to ~85 chars so nothing overflows page margin.
+			$wrapped = wordwrap($summary, 85, "\n", false);
+			foreach (explode("\n", $wrapped) as $wline) {
+				$lines[] = $wline;
+			}
+			$lines[] = '';
+		}
+		$lines[] = '##HR';
+
+		// Question responses.
+		$lines[] = '##H2 Question Responses';
+		$lines[] = '';
 		foreach ($flat_q as $q) {
-			$idx = isset($q['index']) ? (int) $q['index'] : 0;
+			$idx    = isset($q['index']) ? (int) $q['index'] : 0;
 			$answer = isset($answers[$idx]) ? (int) $answers[$idx] : 0;
 			if (CA_Assessment_Types::INNER_DIMENSIONS === $sub_type) {
-				$answer_text = (1 === $answer) ? __('Yes', 'rtr-custom-assessment') : ((2 === $answer) ? __('No', 'rtr-custom-assessment') : __('No answer', 'rtr-custom-assessment'));
+				$answer_text = (1 === $answer) ? 'Yes' : ((2 === $answer) ? 'No' : 'No answer');
 			} else {
-				$answer_text = $answer > 0 ? (string) $answer : __('No answer', 'rtr-custom-assessment');
+				$answer_text = $answer > 0 ? (string) $answer : 'No answer';
 			}
-			$html .= '<tr><td>' . esc_html($q['text']) . '</td><td>' . esc_html($answer_text) . '</td></tr>';
+			$question = isset($q['text']) ? (string) $q['text'] : '';
+			// Truncate long question text so line fits; answer appended at end.
+			$q_short = mb_strlen($question) > 80 ? mb_substr($question, 0, 79) . '.' : $question;
+			$lines[] = $q_short . '  ->  ' . $answer_text;
 		}
-		$html .= '</tbody></table></body></html>';
 
-		return $html;
+		return $lines;
+	}
+
+	/**
+	 * Human-friendly score level for result badges.
+	 *
+	 * @param int $percent Score as percentage.
+	 * @return string
+	 */
+	private function get_results_level_label($percent)
+	{
+		$percent = (int) $percent;
+		if ($percent >= 80) {
+			return 'high';
+		}
+		if ($percent >= 50) {
+			return 'medium';
+		}
+		return 'low';
 	}
 
 	/**
@@ -981,6 +1014,8 @@ class CA_Ajax
 		if (CA_Assessment_Types::INNER_DIMENSIONS !== $assessment_type) {
 			return;
 		}
+
+		$this->ensure_inner_dimensions_order_results_file($order);
 
 		$download_url = (string) $order->get_meta('_ca_full_results_file_path');
 		if ('' === $download_url) {
@@ -1058,6 +1093,7 @@ class CA_Ajax
 
 			$submission_id = (int) get_post_meta($product_id, '_ca_submission_id', true);
 			$file_path = (string) get_post_meta($product_id, '_ca_full_results_file_path', true);
+			$template_version = (string) get_post_meta($product_id, '_ca_full_results_template_version', true);
 
 			$order->update_meta_data('_ca_submission_id', $submission_id);
 			$order->update_meta_data('_ca_assessment_type', CA_Assessment_Types::INNER_DIMENSIONS);
@@ -1066,7 +1102,64 @@ class CA_Ajax
 			if ('' !== $file_path) {
 				$order->update_meta_data('_ca_full_results_file_path', $file_path);
 			}
+			if ('' !== $template_version) {
+				$order->update_meta_data('_ca_full_results_template_version', $template_version);
+			}
 			break;
+		}
+	}
+
+	/**
+	 * Ensure order/product points to latest styled PDF file.
+	 *
+	 * @param WC_Order $order
+	 * @return void
+	 */
+	private function ensure_inner_dimensions_order_results_file($order)
+	{
+		if (!$order || !is_object($order) || !method_exists($order, 'get_meta')) {
+			return;
+		}
+
+		$assessment_type = (string) $order->get_meta('_ca_assessment_type');
+		if (CA_Assessment_Types::INNER_DIMENSIONS !== $assessment_type) {
+			return;
+		}
+
+		$current_path = (string) $order->get_meta('_ca_full_results_file_path');
+		$current_version = (string) $order->get_meta('_ca_full_results_template_version');
+		$needs_new_file = (
+			'' === $current_path
+			|| !preg_match('/\.pdf$/i', $current_path)
+			|| self::INNER_RESULTS_TEMPLATE_VERSION !== $current_version
+		);
+		if (!$needs_new_file) {
+			return;
+		}
+
+		$submission_id = (int) $order->get_meta('_ca_submission_id');
+		if ($submission_id <= 0) {
+			return;
+		}
+
+		$submission = CA_Database::get_submission($submission_id);
+		if (!$submission) {
+			return;
+		}
+
+		$new_path = $this->generate_inner_dimensions_results_file($submission_id, $submission);
+		if (!$new_path) {
+			return;
+		}
+
+		$order->update_meta_data('_ca_full_results_file_path', (string) $new_path);
+		$order->update_meta_data('_ca_full_results_template_version', self::INNER_RESULTS_TEMPLATE_VERSION);
+		$order->save();
+
+		$product_id = (int) $order->get_meta('_ca_full_results_product_id');
+		if ($product_id > 0) {
+			update_post_meta($product_id, '_ca_full_results_file_path', (string) $new_path);
+			update_post_meta($product_id, '_ca_full_results_template_version', self::INNER_RESULTS_TEMPLATE_VERSION);
 		}
 	}
 
