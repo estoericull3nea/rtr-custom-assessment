@@ -9,7 +9,7 @@ if (!defined('ABSPATH')) {
 
 class CA_Ajax
 {
-	private const INNER_RESULTS_TEMPLATE_VERSION = 'v5';
+	private const INNER_RESULTS_TEMPLATE_VERSION = 'v6';
 
 	private function send_error($action, $message, $context = array())
 	{
@@ -903,6 +903,9 @@ class CA_Ajax
 			);
 		}
 
+		$logo_path = '/wp-content/uploads/2026/02/cropped-cropped-Logo_Red@2x-1-e1771817601241-1.png';
+		$logo_url  = home_url($logo_path);
+
 		return array(
 			'name'            => trim((string) $submission->first_name . ' ' . (string) $submission->last_name),
 			'email'           => (string) $submission->email,
@@ -910,6 +913,7 @@ class CA_Ajax
 			'overall_percent' => $overall_percent,
 			'categories'      => $categories,
 			'responses'       => $responses,
+			'logo_url'        => $logo_url,
 		);
 	}
 

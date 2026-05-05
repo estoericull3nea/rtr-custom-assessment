@@ -99,6 +99,11 @@ class Rtr_Custom_Assessment_Pdf
 
 		$fr = $aobj( '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>' );
 		$fb = $aobj( '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>' );
+		$logo = $this->build_pdf_logo_image_object( isset( $data['logo_url'] ) ? (string) $data['logo_url'] : '' );
+		$logo_obj_id = 0;
+		if ( is_array( $logo ) && ! empty( $logo['object_body'] ) ) {
+			$logo_obj_id = $aobj( (string) $logo['object_body'] );
+		}
 		$po = $aobj( '<< /Type /Pages /Kids [] /Count 0 >>' );
 
 		// ---- Page state ----
@@ -107,12 +112,13 @@ class Rtr_Custom_Assessment_Pdf
 		$y     = (float) $ph;   // current Y (top of page, decreasing)
 
 		$fp = null;
-		$fp = function () use ( &$s, &$y, &$pages, $ph, $mb, $pw, $fr, $fb, $po, $aobj ) {
+		$fp = function () use ( &$s, &$y, &$pages, $ph, $mb, $pw, $fr, $fb, $po, $aobj, $logo_obj_id ) {
+			$xobject = $logo_obj_id > 0 ? ' /XObject << /Im1 ' . $logo_obj_id . ' 0 R >>' : '';
 			$co      = $aobj( '<< /Length ' . strlen( $s ) . " >>\nstream\n{$s}endstream" );
 			$pages[] = $aobj(
 				"<< /Type /Page /Parent {$po} 0 R"
 				. " /MediaBox [0 0 {$pw} {$ph}]"
-				. " /Resources << /Font << /F1 {$fr} 0 R /F2 {$fb} 0 R >> >>"
+				. " /Resources << /Font << /F1 {$fr} 0 R /F2 {$fb} 0 R >>{$xobject} >>"
 				. " /Contents {$co} 0 R >>"
 			);
 			$s = '';
@@ -189,9 +195,31 @@ class Rtr_Custom_Assessment_Pdf
 		$hh = 82;
 		$rf( 0, $ph - $hh, $pw, $hh, $navy );
 
-		// Brand logo
-		$tl( 'root.',   $ml,      $ph - 25, 'F2', 15, $brand );
-		$tl( 'to rise', $ml,      $ph - 43, 'F2', 15, $white );
+		// Brand logo image (fallback to text if unavailable).
+		$logo_drawn = false;
+		if ( $logo_obj_id > 0 && is_array( $logo ) && ! empty( $logo['width'] ) && ! empty( $logo['height'] ) ) {
+			$src_w = max( 1.0, (float) $logo['width'] );
+			$src_h = max( 1.0, (float) $logo['height'] );
+			$max_w = 72.0;
+			$max_h = 44.0;
+			$scale = min( $max_w / $src_w, $max_h / $src_h );
+			$dw = $src_w * $scale;
+			$dh = $src_h * $scale;
+			$dx = $ml;
+			$dy = $ph - 54.0;
+			$s .= sprintf(
+				"q %.4f 0 0 %.4f %.4f %.4f cm /Im1 Do Q\n",
+				(float) $dw,
+				(float) $dh,
+				(float) $dx,
+				(float) $dy
+			);
+			$logo_drawn = true;
+		}
+		if ( ! $logo_drawn ) {
+			$tl( 'root.',   $ml,      $ph - 25, 'F2', 15, $brand );
+			$tl( 'to rise', $ml,      $ph - 43, 'F2', 15, $white );
+		}
 		// Report title + subtitle
 		$tl( 'Natural Attributes Cataloging', $ml + 78, $ph - 27, 'F2', 12, $white );
 		$tl( 'Full Results Report',            $ml + 78, $ph - 44, 'F1',  9, array( 0.68, 0.70, 0.74 ) );
@@ -963,6 +991,98 @@ class Rtr_Custom_Assessment_Pdf
 		$lines[] = str_repeat('-', 95);
 
 		return $lines;
+	}
+
+	/**
+	 * Build an image XObject body for a PNG/JPEG logo URL.
+	 *
+	 * Converts PNG to JPEG via GD when possible to keep PDF embedding simple.
+	 *
+	 * @param string $logo_url
+	 * @return array|null
+	 */
+	private function build_pdf_logo_image_object( $logo_url ) {
+		$path = $this->resolve_local_logo_path( (string) $logo_url );
+		if ( '' === $path || ! is_readable( $path ) ) {
+			return null;
+		}
+
+		$info = @getimagesize( $path );
+		if ( ! is_array( $info ) || empty( $info[0] ) || empty( $info[1] ) ) {
+			return null;
+		}
+
+		$mime = isset( $info['mime'] ) ? strtolower( (string) $info['mime'] ) : '';
+		$w = (int) $info[0];
+		$h = (int) $info[1];
+		$jpeg_binary = '';
+
+		if ( 'image/jpeg' === $mime || 'image/jpg' === $mime ) {
+			$jpeg_binary = (string) @file_get_contents( $path );
+		} elseif ( 'image/png' === $mime && function_exists( 'imagecreatefrompng' ) && function_exists( 'imagejpeg' ) ) {
+			$img = @imagecreatefrompng( $path );
+			if ( $img ) {
+				if ( function_exists( 'imagecreatetruecolor' ) ) {
+					$bg = imagecreatetruecolor( (int) $w, (int) $h );
+					$white = imagecolorallocate( $bg, 255, 255, 255 );
+					imagefilledrectangle( $bg, 0, 0, (int) $w, (int) $h, $white );
+					imagecopy( $bg, $img, 0, 0, 0, 0, (int) $w, (int) $h );
+					imagedestroy( $img );
+					$img = $bg;
+				}
+				ob_start();
+				imagejpeg( $img, null, 90 );
+				$jpeg_binary = (string) ob_get_clean();
+				imagedestroy( $img );
+			}
+		}
+
+		if ( '' === $jpeg_binary ) {
+			return null;
+		}
+
+		$body = "<< /Type /XObject /Subtype /Image /Width {$w} /Height {$h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length " . strlen( $jpeg_binary ) . " >>\nstream\n" . $jpeg_binary . "\nendstream";
+		return array(
+			'object_body' => $body,
+			'width'       => $w,
+			'height'      => $h,
+		);
+	}
+
+	/**
+	 * Resolve logo URL into an absolute local filesystem path.
+	 *
+	 * @param string $logo_url
+	 * @return string
+	 */
+	private function resolve_local_logo_path( $logo_url ) {
+		$logo_url = trim( (string) $logo_url );
+		if ( '' === $logo_url ) {
+			return '';
+		}
+
+		if ( 0 === strpos( $logo_url, '/' ) ) {
+			$logo_url = home_url( $logo_url );
+		}
+
+		$uploads = wp_upload_dir();
+		$baseurl = isset( $uploads['baseurl'] ) ? (string) $uploads['baseurl'] : '';
+		$basedir = isset( $uploads['basedir'] ) ? (string) $uploads['basedir'] : '';
+
+		if ( '' !== $baseurl && '' !== $basedir && 0 === strpos( $logo_url, $baseurl ) ) {
+			$rel = ltrim( substr( $logo_url, strlen( $baseurl ) ), '/' );
+			return trailingslashit( $basedir ) . $rel;
+		}
+
+		$site_url = (string) home_url( '/' );
+		if ( '' !== $site_url && 0 === strpos( $logo_url, $site_url ) ) {
+			$rel_path = ltrim( substr( $logo_url, strlen( $site_url ) ), '/' );
+			if ( '' !== $rel_path && defined( 'ABSPATH' ) ) {
+				return rtrim( ABSPATH, '/\\' ) . '/' . $rel_path;
+			}
+		}
+
+		return '';
 	}
 
 	/**
