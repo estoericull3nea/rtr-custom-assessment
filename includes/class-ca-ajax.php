@@ -9,7 +9,7 @@ if (!defined('ABSPATH')) {
 
 class CA_Ajax
 {
-	private const INNER_RESULTS_TEMPLATE_VERSION = 'v6';
+	private const INNER_RESULTS_TEMPLATE_VERSION = 'v7';
 
 	private function send_error($action, $message, $context = array())
 	{

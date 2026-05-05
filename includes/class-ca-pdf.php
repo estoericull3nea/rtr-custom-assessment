@@ -1024,8 +1024,9 @@ class Rtr_Custom_Assessment_Pdf
 			if ( $img ) {
 				if ( function_exists( 'imagecreatetruecolor' ) ) {
 					$bg = imagecreatetruecolor( (int) $w, (int) $h );
-					$white = imagecolorallocate( $bg, 255, 255, 255 );
-					imagefilledrectangle( $bg, 0, 0, (int) $w, (int) $h, $white );
+					// Match the report header background so transparent PNG areas blend in.
+					$navy = imagecolorallocate( $bg, 28, 36, 51 );
+					imagefilledrectangle( $bg, 0, 0, (int) $w, (int) $h, $navy );
 					imagecopy( $bg, $img, 0, 0, 0, 0, (int) $w, (int) $h );
 					imagedestroy( $img );
 					$img = $bg;
