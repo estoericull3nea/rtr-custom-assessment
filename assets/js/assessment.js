@@ -261,6 +261,14 @@
     if ($("#ca-screen-loading").hasClass("ca-screen-active")) {
       return false;
     }
+    if (
+      state.bundleMode &&
+      state.bundleStage === 0 &&
+      $("#ca-screen-results").hasClass("ca-screen-active") &&
+      !!state.bundleSubmissionIds[state.bundleFirstType || ""]
+    ) {
+      return true;
+    }
     return (
       defersServerAnswerSave() &&
       $("#ca-screen-questions").hasClass("ca-screen-active") &&
@@ -277,7 +285,11 @@
     $saveProgressDialog.attr("hidden", "true");
     if (wasOpen) {
       $screens.removeClass("ca-screen-active");
-      $("#ca-screen-questions").addClass("ca-screen-active");
+      if ($("#ca-screen-results").length && state.bundleMode && state.bundleStage === 0) {
+        $("#ca-screen-results").addClass("ca-screen-active");
+      } else {
+        $("#ca-screen-questions").addClass("ca-screen-active");
+      }
     }
   }
 
@@ -382,6 +394,15 @@
       if (state.isSubmitting) {
         return;
       }
+      if (
+        state.bundleMode &&
+        state.bundleStage === 0 &&
+        $("#ca-screen-results").hasClass("ca-screen-active")
+      ) {
+        saveBundleProgress();
+        closeModal();
+        return;
+      }
       state.isSubmitting = true;
       setBtnLoading($saveProgressSaveBtn, true);
       saveAllAnswersFromCache(
@@ -419,6 +440,9 @@
     $saveProgressDiscardBtn.on("click", function () {
       state.unsyncedChanges = false;
       clearDraftAnswers();
+      if (state.bundleMode) {
+        clearBundleProgress();
+      }
       closeModal();
     });
 
@@ -639,6 +663,42 @@
     }
   }
 
+  function bundleProgressStorageKey() {
+    return "ca_bundle_progress";
+  }
+
+  function getSavedBundleProgress() {
+    try {
+      return JSON.parse(localStorage.getItem(bundleProgressStorageKey()) || "null");
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function saveBundleProgress() {
+    if (!state.bundleMode) {
+      return;
+    }
+    var email = ($("#ca-email").val() || "").trim();
+    if (!email || !state.bundleFirstType || !state.bundleSecondType) {
+      return;
+    }
+    localStorage.setItem(
+      bundleProgressStorageKey(),
+      JSON.stringify({
+        email: email,
+        bundleStage: state.bundleStage,
+        bundleFirstType: state.bundleFirstType,
+        bundleSecondType: state.bundleSecondType,
+        bundleSubmissionIds: state.bundleSubmissionIds || {},
+      }),
+    );
+  }
+
+  function clearBundleProgress() {
+    localStorage.removeItem(bundleProgressStorageKey());
+  }
+
   function saveSession(email, submissionId) {
     localStorage.setItem(
       sessionStorageKey(),
@@ -649,6 +709,9 @@
   function clearSavedSession() {
     localStorage.removeItem(sessionStorageKey());
     clearDraftAnswers();
+    if (state.bundleMode) {
+      clearBundleProgress();
+    }
   }
 
   function resetState(options) {
@@ -1050,6 +1113,47 @@
     setBtnLoading($startBtn, true);
 
     if (state.bundleMode) {
+      var savedBundle = getSavedBundleProgress();
+      if (
+        savedBundle &&
+        savedBundle.email &&
+        savedBundle.email.toLowerCase() === email.toLowerCase() &&
+        savedBundle.bundleFirstType &&
+        savedBundle.bundleSecondType &&
+        savedBundle.bundleSubmissionIds
+      ) {
+        state.bundleMode = true;
+        state.bundleStage = parseInt(savedBundle.bundleStage, 10) || 0;
+        state.bundleFirstType = savedBundle.bundleFirstType;
+        state.bundleSecondType = savedBundle.bundleSecondType;
+        state.bundleSubmissionIds = savedBundle.bundleSubmissionIds || {};
+        state.assessmentType =
+          state.bundleStage >= 1 ? state.bundleSecondType : state.bundleFirstType;
+
+        if (state.bundleSubmissionIds[state.bundleFirstType]) {
+          alert(
+            "Your first bundle assessment is already done. You will proceed to the next assessment.",
+          );
+          startBundleSecondAssessment();
+          return;
+        }
+
+        showResumeDialog(
+          email,
+          function () {
+            startBundleSecondAssessment();
+          },
+          function () {
+            clearBundleProgress();
+            state.isSubmitting = false;
+            setBtnLoading($startBtn, false);
+            hideProgress();
+            showScreen("bundle-order");
+          },
+        );
+        return;
+      }
+
       state.isSubmitting = false;
       setBtnLoading($startBtn, false);
       hideProgress();
@@ -1920,14 +2024,26 @@
       ctaBlock +
       "</div>";
 
-    var html = requiresPaidDownload
-      ? paidTop +
-        '<div class="ca-results-preview-wrap">' +
-        heroHtml +
-        bodyHtml +
-        paywallOverlay +
-        "</div>"
-      : paidTop + heroHtml + bodyHtml;
+    var html = "";
+    if (isBundle && state.bundleStage === 0) {
+      // Bundle first-assessment screen: show teaser only, not the full detailed card stack.
+      html =
+        paidTop +
+        '<div class="ca-results-body">' +
+        '<div class="ca-results-cta">' +
+        ctaBlock.replace(/^<div class="ca-results-cta">/, "").replace(/<\/div>$/, "") +
+        "</div>" +
+        "</div>";
+    } else {
+      html = requiresPaidDownload
+        ? paidTop +
+          '<div class="ca-results-preview-wrap">' +
+          heroHtml +
+          bodyHtml +
+          paywallOverlay +
+          "</div>"
+        : paidTop + heroHtml + bodyHtml;
+    }
 
     $resultsContent.html(html);
     hideProgress();
@@ -1950,7 +2066,7 @@
 
     $resultsContent
       .off("click.caCloseResults")
-      .on("click.caCloseResults", "#ca-close-results", closeModal);
+      .on("click.caCloseResults", "#ca-close-results", attemptCloseModal);
 
     if (isBundle) {
       $resultsContent
