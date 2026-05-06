@@ -59,12 +59,29 @@ class CA_Mailer
 		$blog_name = get_bloginfo('name');
 		$assessment_type = CA_Assessment_Types::from_submission($submission);
 		$is_nac = ($assessment_type === CA_Assessment_Types::INNER_DIMENSIONS);
-		$results_mask_style = $is_nac ? ' style="filter: blur(8px); opacity: 0.22; user-select: none; pointer-events: none;"' : '';
 		$scale_max = CA_Assessment_Types::get_scale_max($assessment_type);
 		$total_questions = CA_Assessment_Registry::get_total_count($assessment_type);
 		$max_score = $total_questions * $scale_max;
 		$overall_profile = CA_Scoring::get_overall_profile((float) $submission->average_score, $assessment_type);
-		$paywall_url = self::build_inner_dimensions_checkout_url_for_submission((int) $submission->id);
+
+		$nac_paid = $is_nac && self::submission_has_paid_nac_order((int) $submission->id);
+		$paywall_url = '';
+		if ($is_nac && !$nac_paid) {
+			$ajax = CA_Ajax::get_instance();
+			if ($ajax) {
+				$paywall_url = $ajax->get_inner_dimensions_order_pay_url_for_submission((int) $submission->id);
+			}
+			if ('' === $paywall_url && function_exists('wc_get_checkout_url')) {
+				$paywall_url = wc_get_checkout_url();
+			}
+		}
+
+		$header_tagline = $is_nac
+			? esc_html__('Unlock your full report', 'rtr-custom-assessment')
+			: esc_html__('Your Results Summary', 'rtr-custom-assessment');
+		$intro_follow = $is_nac
+			? esc_html__('Thank you for completing the assessment. Use the secure link below to open your personal checkout page and unlock your full results—the same link you get after finishing the assessment.', 'rtr-custom-assessment')
+			: esc_html__('Thank you for completing the assessment. Below is your detailed results summary.', 'rtr-custom-assessment');
 
 		$body = '
 		<!DOCTYPE html>
@@ -264,18 +281,20 @@ class CA_Mailer
 				<!-- Header -->
 				<div class="email-header">
 					<h1>Assessment Complete!</h1>
-					<p>Your Results Summary</p>
+					<p>' . $header_tagline . '</p>
 				</div>
 
 				<!-- Content -->
 				<div class="email-content">
 					<div class="intro-text">
 						<p>Dear <strong>' . esc_html($submission->first_name . ' ' . $submission->last_name) . '</strong>,</p>
-						<p style="margin-top: 10px;">Thank you for completing the assessment. Below is your detailed results summary.</p>
-					</div>
+						<p style="margin-top: 10px;">' . $intro_follow . '</p>
+					</div>';
 
+		if (!$is_nac) {
+			$body .= '
 					<!-- Overall Scores -->
-					<div class="section"' . $results_mask_style . '>
+					<div class="section">
 						<div class="section-title">📊 Overall Performance</div>
 						
 						<div class="overall-stats">
@@ -296,14 +315,14 @@ class CA_Mailer
 					</div>
 
 					<!-- Category Breakdown -->
-					<div class="section"' . $results_mask_style . '>
+					<div class="section">
 						<div class="section-title">📈 Category Breakdown</div>
 						<div class="categories-list">';
 
-		foreach ($cat_scores as $cat) {
-			$q_count = ($cat->average > 0) ? (int) round((float) $cat->subtotal / (float) $cat->average) : 0;
-			$cat_max = $q_count * $scale_max;
-			$body .= '
+			foreach ($cat_scores as $cat) {
+				$q_count = ($cat->average > 0) ? (int) round((float) $cat->subtotal / (float) $cat->average) : 0;
+				$cat_max = $q_count * $scale_max;
+				$body .= '
 						<div class="category-item">
 							<div class="category-header">
 								<span class="category-name">' . esc_html($cat->category_name) . '</span>
@@ -311,10 +330,18 @@ class CA_Mailer
 							</div>
 							<div class="score-summary">' . esc_html(CA_Scoring::get_category_summary($cat->category_name, (float) $cat->average, $assessment_type)) . '</div>
 						</div>';
+			}
+
+			$body .= '
+						</div>
+					</div>';
 		}
 
 		$paywall_email_cta = '';
-		if ($is_nac) {
+		if ($is_nac && $nac_paid) {
+			$paywall_email_cta = '
+						<p style="margin: 12px 0 0; color: #666; font-size: 14px;">' . esc_html__('Your payment is complete. Your full results are available from your order confirmation and in your account order details.', 'rtr-custom-assessment') . '</p>';
+		} elseif ($is_nac && !$nac_paid && '' !== trim($paywall_url)) {
 			$paywall_email_cta = '
 						<div class="paywall-btn-wrap">
 							<a href="' . esc_url($paywall_url) . '" class="paywall-btn">&#128722; Get the Full Result</a>
@@ -322,9 +349,6 @@ class CA_Mailer
 		}
 
 		$body .= '
-						</div>
-					</div>
-
 					<!-- Submission Details -->
 					<div class="section">
 						<div class="section-title" style="color: #666;">Submission Details</div>
@@ -366,61 +390,45 @@ class CA_Mailer
 	}
 
 	/**
-	 * Build user-specific checkout URL for NAC full results.
+	 * Whether this submission already has a paid NAC WooCommerce order.
 	 *
-	 * @param int $submission_id
-	 * @return string
+	 * @param int $submission_id Submission ID.
+	 * @return bool
 	 */
-	private static function build_inner_dimensions_checkout_url_for_submission($submission_id)
+	private static function submission_has_paid_nac_order($submission_id)
 	{
 		$submission_id = (int) $submission_id;
-		$checkout_url = function_exists('wc_get_checkout_url') ? wc_get_checkout_url() : home_url('/checkout/');
 		if ($submission_id <= 0 || !function_exists('wc_get_orders')) {
-			return $checkout_url;
+			return false;
 		}
 
 		$order_ids = wc_get_orders(array(
 			'limit' => 1,
 			'orderby' => 'date',
 			'order' => 'DESC',
-			'status' => array('pending', 'failed'),
+			'status' => array('completed', 'processing'),
 			'meta_query' => array(
 				array(
 					'key' => '_ca_submission_id',
 					'value' => $submission_id,
 				),
+				array(
+					'key' => '_ca_assessment_type',
+					'value' => CA_Assessment_Types::INNER_DIMENSIONS,
+				),
 			),
 			'return' => 'ids',
 		));
 
-		if (!empty($order_ids)) {
-			$order = wc_get_order((int) $order_ids[0]);
-			if ($order instanceof \WC_Order && $order->needs_payment()) {
-				$pay_url = $order->get_checkout_payment_url(false);
-				if (is_string($pay_url) && '' !== trim($pay_url)) {
-					return trim($pay_url);
-				}
-			}
+		if (empty($order_ids)) {
+			return false;
 		}
 
-		$product_ids = get_posts(array(
-			'post_type' => 'product',
-			'post_status' => array('publish', 'private', 'draft'),
-			'posts_per_page' => 1,
-			'fields' => 'ids',
-			'meta_key' => '_ca_submission_id',
-			'meta_value' => $submission_id,
-		));
-
-		if (empty($product_ids)) {
-			return $checkout_url;
+		$order = wc_get_order((int) $order_ids[0]);
+		if (!$order instanceof \WC_Order) {
+			return false;
 		}
 
-		$product_id = (int) $product_ids[0];
-		if ($product_id <= 0) {
-			return $checkout_url;
-		}
-
-		return add_query_arg('add-to-cart', $product_id, $checkout_url);
+		return $order->is_paid();
 	}
 }

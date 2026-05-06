@@ -11,6 +11,19 @@ class CA_Ajax
 {
 	private const INNER_RESULTS_TEMPLATE_VERSION = 'v7';
 
+	/**
+	 * @var self|null
+	 */
+	private static $instance = null;
+
+	/**
+	 * @return self|null Set after the plugin boots {@see custom-assessment.php}.
+	 */
+	public static function get_instance()
+	{
+		return self::$instance;
+	}
+
 	private function send_error($action, $message, $context = array())
 	{
 		CA_Logger::log($action, 'error', $message, $context);
@@ -25,6 +38,8 @@ class CA_Ajax
 
 	public function __construct()
 	{
+		self::$instance = $this;
+
 		$actions = array(
 			'ca_save_user_info',
 			'ca_save_answer',
@@ -518,6 +533,47 @@ class CA_Ajax
 				)
 			);
 		}
+	}
+
+	/**
+	 * Build the same order-pay URL as {@see ca_prepare_inner_dimensions_checkout()} (no nonce). For emails and deep links.
+	 *
+	 * @param int $submission_id Submission ID.
+	 * @return string Pay URL or empty string on failure.
+	 */
+	public function get_inner_dimensions_order_pay_url_for_submission($submission_id)
+	{
+		$submission_id = (int) $submission_id;
+		if ($submission_id <= 0 || !$this->is_woocommerce_ready()) {
+			return '';
+		}
+
+		$submission = CA_Database::get_submission($submission_id);
+		if (!$submission || 'completed' !== $submission->status) {
+			return '';
+		}
+
+		if (CA_Assessment_Types::INNER_DIMENSIONS !== CA_Assessment_Types::from_submission($submission)) {
+			return '';
+		}
+
+		$price = (float) apply_filters('ca_inner_dimensions_full_results_price', 9.99, $submission_id);
+		if ($price <= 0) {
+			return '';
+		}
+
+		$results_file_path = $this->generate_inner_dimensions_results_file($submission_id, $submission);
+		if (!$results_file_path) {
+			return '';
+		}
+
+		$product_id = $this->upsert_inner_dimensions_product($submission, $submission_id, $price, $results_file_path);
+		if ($product_id <= 0) {
+			return '';
+		}
+
+		$url = $this->build_inner_dimensions_order_pay_checkout_url($submission, $submission_id, $product_id);
+		return is_string($url) ? $url : '';
 	}
 
 	/**
