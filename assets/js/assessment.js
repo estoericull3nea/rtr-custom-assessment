@@ -1454,6 +1454,9 @@
     var cats = data.category_scores;
     var scaleMax = parseInt(data.scale_max, 10) || 5;
     var isYesNo = data.assessment_type === "inner_dimensions";
+    var requiresPaidDownload =
+      data.assessment_type === "inner_dimensions" ||
+      data.assessment_type === "social_fluency";
 
     var initials = (
       user.first_name.charAt(0) + user.last_name.charAt(0)
@@ -1503,38 +1506,56 @@
         "</sup></span>" +
         '<span class="ca-results-score-label">Average Score</span>';
 
-    var IR = CA_Config.inner_results || {};
-    var nacTop = "";
-    if (isYesNo) {
+    var Pack =
+      data.assessment_type === "inner_dimensions"
+        ? CA_Config.inner_results || {}
+        : CA_Config.social_results || {};
+    var paidTop = "";
+    if (requiresPaidDownload) {
       var emailEsc = escHtml(user.email);
-      nacTop =
+      var quoteHtml = "";
+      if (data.assessment_type === "inner_dimensions") {
+        quoteHtml =
+          '<p class="ca-results-nac-quote">&ldquo;' +
+          escHtml(
+            Pack.tagline ||
+              "Remember Who You Were Before the World Told You Who to Be.",
+          ) +
+          "&rdquo;</p>";
+      } else if (Pack.tagline) {
+        quoteHtml =
+          '<p class="ca-results-nac-quote">' +
+          escHtml(Pack.tagline) +
+          "</p>";
+      }
+      paidTop =
         '<div class="ca-results-nac-completion">' +
         '<h1 class="ca-results-nac-title">' +
-        escHtml(IR.title || "Natural Attributes Cataloging") +
-        "</h1>" +
-        '<p class="ca-results-nac-quote">&ldquo;' +
         escHtml(
-          IR.tagline ||
-            "Remember Who You Were Before the World Told You Who to Be.",
+          Pack.title ||
+            (data.assessment_type === "social_fluency"
+              ? "Social Fluency Assessment"
+              : "Natural Attributes Cataloging"),
         ) +
-        "&rdquo;</p>" +
+        "</h1>" +
+        quoteHtml +
         '<h2 class="ca-results-nac-subtitle">' +
         escHtml(
-          IR.congrats ||
-            "Congratulations on Completing Your Discovery Journey!",
+          Pack.congrats ||
+            "Congratulations on completing your assessment!",
         ) +
         "</h2>" +
         '<p class="ca-results-nac-email">' +
         escHtml(
-          IR.email_lead || "Your full report will be sent after payment to",
+          Pack.email_lead || "Your full report will be sent after payment to",
         ) +
         " <strong>" +
         emailEsc +
         "</strong>.</p>" +
         '<p class="ca-results-nac-intro">' +
         escHtml(
-          IR.intro ||
-            "You've taken an important step towards unlocking your potential. Dive into your personalized results below to uncover insights and next steps on your path to enhancing leadership skills and embracing new opportunities.",
+          Pack.intro ||
+            "Complete checkout to unlock and download your full PDF report.",
         ) +
         "</p>" +
         "</div>";
@@ -1542,14 +1563,14 @@
 
     var initialCheckoutUrl =
       state.checkoutUrl || CA_Config.checkout_url || "/checkout/";
-    var paywallOverlay = isYesNo
+    var paywallOverlay = requiresPaidDownload
       ? '<div class="ca-results-paywall-overlay" role="presentation">' +
         '<div class="ca-results-paywall-text"><a href="' +
         escHtml(initialCheckoutUrl) +
         '" class="ca-btn ca-btn--primary ca-results-paywall-btn">&#128722; Get the Full Result</a></div></div>'
       : "";
 
-    var ctaBlock = isYesNo
+    var ctaBlock = requiresPaidDownload
       ? '<div class="ca-results-cta">' +
         '<button type="button" class="ca-btn ca-btn--ghost" id="ca-close-results">Close</button>' +
         "</div>"
@@ -1560,7 +1581,7 @@
 
     var heroHtml =
       '<div class="ca-results-hero' +
-      (isYesNo ? " ca-results-preview-blocked" : "") +
+      (requiresPaidDownload ? " ca-results-preview-blocked" : "") +
       '">' +
       '<p class="ca-results-hero-name">' +
       escHtml(user.first_name + " " + user.last_name) +
@@ -1587,7 +1608,7 @@
 
     var bodyHtml =
       '<div class="ca-results-body' +
-      (isYesNo ? " ca-results-preview-blocked" : "") +
+      (requiresPaidDownload ? " ca-results-preview-blocked" : "") +
       '">' +
       '<div class="ca-results-user-card">' +
       '<div class="ca-results-user-avatar">' +
@@ -1609,21 +1630,21 @@
       ctaBlock +
       "</div>";
 
-    var html = isYesNo
-      ? nacTop +
+    var html = requiresPaidDownload
+      ? paidTop +
         '<div class="ca-results-preview-wrap">' +
         heroHtml +
         bodyHtml +
         paywallOverlay +
         "</div>"
-      : nacTop + heroHtml + bodyHtml;
+      : paidTop + heroHtml + bodyHtml;
 
     $resultsContent.html(html);
     hideProgress();
     showScreen("results");
 
-    if (isYesNo) {
-      prepareInnerDimensionsCheckout(false);
+    if (requiresPaidDownload) {
+      preparePaidFullResultsCheckout(false);
     }
 
     setTimeout(function () {
@@ -1650,10 +1671,10 @@
       return;
     }
 
-    prepareInnerDimensionsCheckout(true, e.currentTarget);
+    preparePaidFullResultsCheckout(true, e.currentTarget);
   }
 
-  function prepareInnerDimensionsCheckout(redirectAfterPrepare, buttonEl) {
+  function preparePaidFullResultsCheckout(redirectAfterPrepare, buttonEl) {
     if (!state.submissionId || state.isSubmitting) {
       return;
     }
@@ -1666,7 +1687,7 @@
 
     caPost(
       withAssessment({
-        action: "ca_prepare_inner_dimensions_checkout",
+        action: "ca_prepare_paid_full_results_checkout",
         nonce: CA_Config.nonce,
         submission_id: state.submissionId,
       }),
@@ -1696,7 +1717,7 @@
         }
       })
       .fail(function (xhr, textStatus, errorThrown) {
-        console.error("CA AJAX ca_prepare_inner_dimensions_checkout failed:", {
+        console.error("CA AJAX ca_prepare_paid_full_results_checkout failed:", {
           textStatus: textStatus,
           errorThrown: errorThrown,
           status: xhr && xhr.status ? xhr.status : null,

@@ -432,28 +432,28 @@ class CA_Mailer
 	{
 		$blog_name = get_bloginfo('name');
 		$assessment_type = CA_Assessment_Types::from_submission($submission);
-		$is_nac = ($assessment_type === CA_Assessment_Types::INNER_DIMENSIONS);
+		$needs_paywall = CA_Assessment_Types::requires_paid_full_results($assessment_type);
 		$scale_max = CA_Assessment_Types::get_scale_max($assessment_type);
 		$total_questions = CA_Assessment_Registry::get_total_count($assessment_type);
 		$max_score = $total_questions * $scale_max;
 		$overall_profile = CA_Scoring::get_overall_profile((float) $submission->average_score, $assessment_type);
 
-		$nac_paid = $is_nac && self::submission_has_paid_nac_order((int) $submission->id);
+		$paid_unlocked = $needs_paywall && self::submission_has_paid_full_results_order($submission);
 		$paywall_url = '';
-		if ($is_nac && !$nac_paid) {
+		if ($needs_paywall && !$paid_unlocked) {
 			$ajax = CA_Ajax::get_instance();
 			if ($ajax) {
-				$paywall_url = $ajax->get_inner_dimensions_order_pay_url_for_submission((int) $submission->id);
+				$paywall_url = $ajax->get_paid_full_results_order_pay_url_for_submission((int) $submission->id);
 			}
 			if ('' === $paywall_url && function_exists('wc_get_checkout_url')) {
 				$paywall_url = wc_get_checkout_url();
 			}
 		}
 
-		$header_tagline = $is_nac
+		$header_tagline = $needs_paywall
 			? esc_html__('Unlock your full report', 'rtr-custom-assessment')
 			: esc_html__('Your Results Summary', 'rtr-custom-assessment');
-		$intro_follow = $is_nac
+		$intro_follow = $needs_paywall
 			? esc_html__('Thank you for completing the assessment. Use the secure link below to open your personal checkout page and unlock your full results—the same link you get after finishing the assessment.', 'rtr-custom-assessment')
 			: esc_html__('Thank you for completing the assessment. Below is your detailed results summary.', 'rtr-custom-assessment');
 
@@ -665,7 +665,7 @@ class CA_Mailer
 						<p style="margin-top: 10px;">' . $intro_follow . '</p>
 					</div>';
 
-		if (!$is_nac) {
+		if (!$needs_paywall) {
 			$body .= '
 					<!-- Overall Scores -->
 					<div class="section">
@@ -712,10 +712,10 @@ class CA_Mailer
 		}
 
 		$paywall_email_cta = '';
-		if ($is_nac && $nac_paid) {
+		if ($needs_paywall && $paid_unlocked) {
 			$paywall_email_cta = '
 						<p style="margin: 12px 0 0; color: #666; font-size: 14px;">' . esc_html__('Your payment is complete. Your full results are available from your order confirmation and in your account order details.', 'rtr-custom-assessment') . '</p>';
-		} elseif ($is_nac && !$nac_paid && '' !== trim($paywall_url)) {
+		} elseif ($needs_paywall && !$paid_unlocked && '' !== trim($paywall_url)) {
 			$paywall_email_cta = '
 						<div class="paywall-btn-wrap">
 							<a href="' . esc_url($paywall_url) . '" class="paywall-btn">&#128722; Get the Full Result</a>
@@ -764,15 +764,20 @@ class CA_Mailer
 	}
 
 	/**
-	 * Whether this submission already has a paid NAC WooCommerce order.
+	 * Whether this submission already has a paid WooCommerce order for the same paid-results assessment type.
 	 *
-	 * @param int $submission_id Submission ID.
+	 * @param object $submission Submission row.
 	 * @return bool
 	 */
-	private static function submission_has_paid_nac_order($submission_id)
+	private static function submission_has_paid_full_results_order($submission)
 	{
-		$submission_id = (int) $submission_id;
-		if ($submission_id <= 0 || !function_exists('wc_get_orders')) {
+		if (!$submission || empty($submission->id) || !function_exists('wc_get_orders')) {
+			return false;
+		}
+
+		$submission_id = (int) $submission->id;
+		$atype = CA_Assessment_Types::from_submission($submission);
+		if (!CA_Assessment_Types::requires_paid_full_results($atype)) {
 			return false;
 		}
 
@@ -788,7 +793,7 @@ class CA_Mailer
 				),
 				array(
 					'key' => '_ca_assessment_type',
-					'value' => CA_Assessment_Types::INNER_DIMENSIONS,
+					'value' => $atype,
 				),
 			),
 			'return' => 'ids',

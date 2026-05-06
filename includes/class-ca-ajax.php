@@ -9,7 +9,7 @@ if (!defined('ABSPATH')) {
 
 class CA_Ajax
 {
-	private const INNER_RESULTS_TEMPLATE_VERSION = 'v7';
+	private const FULL_RESULTS_TEMPLATE_VERSION = 'v7';
 
 	/**
 	 * @var self|null
@@ -49,6 +49,7 @@ class CA_Ajax
 			'ca_submit_assessment',
 			'ca_get_results_preview',
 			'ca_prepare_inner_dimensions_checkout',
+			'ca_prepare_paid_full_results_checkout',
 		);
 
 		foreach ($actions as $action) {
@@ -449,60 +450,100 @@ class CA_Ajax
 	}
 
 	/**
-	 * Create/reuse WooCommerce order for Natural Attributes Cataloging payment.
+	 * Price for downloadable full-results PDF (per assessment type).
+	 *
+	 * @param int    $submission_id Submission ID.
+	 * @param string $assessment_type Normalized type.
+	 * @return float
+	 */
+	private function get_paid_full_results_price($submission_id, $assessment_type)
+	{
+		$submission_id = (int) $submission_id;
+		$t = CA_Assessment_Types::normalize($assessment_type);
+		if (CA_Assessment_Types::INNER_DIMENSIONS === $t) {
+			return (float) apply_filters('ca_inner_dimensions_full_results_price', 9.99, $submission_id);
+		}
+		if (CA_Assessment_Types::SOCIAL_FLUENCY === $t) {
+			return (float) apply_filters('ca_social_fluency_full_results_price', 9.99, $submission_id);
+		}
+		return 0;
+	}
+
+	/**
+	 * Create/reuse WooCommerce order for Natural Attributes Cataloging payment (backward compatible alias).
 	 */
 	public function ca_prepare_inner_dimensions_checkout()
 	{
+		$this->run_ca_prepare_paid_full_results_checkout('ca_prepare_inner_dimensions_checkout', CA_Assessment_Types::INNER_DIMENSIONS);
+	}
+
+	/**
+	 * Create/reuse WooCommerce order for Social Fluency or Natural Attributes paid full-results flow.
+	 */
+	public function ca_prepare_paid_full_results_checkout()
+	{
+		$this->run_ca_prepare_paid_full_results_checkout('ca_prepare_paid_full_results_checkout', $this->get_assessment_type_from_request());
+	}
+
+	/**
+	 * Shared paid checkout processor for assessments that unlock PDF after WooCommerce payment.
+	 *
+	 * @param string $action_key AJAX action label for logs / errors.
+	 * @param string $assessment_type Normalized assessment type (must match submission).
+	 */
+	private function run_ca_prepare_paid_full_results_checkout($action_key, $assessment_type)
+	{
 		try {
-			$this->verify_nonce('ca_prepare_inner_dimensions_checkout');
+			$this->verify_nonce($action_key);
 
 			// phpcs:disable WordPress.Security.NonceVerification.Missing -- Nonce already verified via $this->verify_nonce().
 			$submission_id = isset($_POST['submission_id']) ? absint($_POST['submission_id']) : 0;
-			$assessment_type = $this->get_assessment_type_from_request();
 			// phpcs:enable WordPress.Security.NonceVerification.Missing
 
 			if (!$submission_id) {
-				$this->send_error('ca_prepare_inner_dimensions_checkout', __('Invalid session.', 'rtr-custom-assessment'));
+				$this->send_error($action_key, __('Invalid session.', 'rtr-custom-assessment'));
 			}
 
-			if (CA_Assessment_Types::INNER_DIMENSIONS !== $assessment_type) {
-				$this->send_error('ca_prepare_inner_dimensions_checkout', __('This payment flow is only available for Natural Attributes Cataloging.', 'rtr-custom-assessment'));
+			$want = CA_Assessment_Types::normalize($assessment_type);
+			if (!CA_Assessment_Types::requires_paid_full_results($want)) {
+				$this->send_error(
+					$action_key,
+					__('This checkout is only available for assessments that use paid full results.', 'rtr-custom-assessment')
+				);
 			}
 
 			if (!$this->is_woocommerce_ready()) {
-				$this->send_error('ca_prepare_inner_dimensions_checkout', __('WooCommerce is required for checkout, but it is not active.', 'rtr-custom-assessment'));
+				$this->send_error($action_key, __('WooCommerce is required for checkout, but it is not active.', 'rtr-custom-assessment'));
 			}
 
-			$submission = $this->require_submission_for_type($submission_id, $assessment_type);
+			$submission = $this->require_submission_for_type($submission_id, $want);
 			if ('completed' !== $submission->status) {
-				$this->send_error('ca_prepare_inner_dimensions_checkout', __('Please complete all questions before proceeding to checkout.', 'rtr-custom-assessment'));
+				$this->send_error($action_key, __('Please complete all questions before proceeding to checkout.', 'rtr-custom-assessment'));
 			}
 
-			$price = (float) apply_filters('ca_inner_dimensions_full_results_price', 9.99, $submission_id);
+			$price = $this->get_paid_full_results_price($submission_id, $want);
 			if ($price <= 0) {
-				$this->send_error('ca_prepare_inner_dimensions_checkout', __('The full results price is not configured correctly.', 'rtr-custom-assessment'));
+				$this->send_error($action_key, __('The full results price is not configured correctly.', 'rtr-custom-assessment'));
 			}
 
-		$results_file_path = $this->generate_inner_dimensions_results_file($submission_id, $submission);
-		if (!$results_file_path) {
-				$this->send_error('ca_prepare_inner_dimensions_checkout', __('Could not generate your results file. Please try again.', 'rtr-custom-assessment'));
+			$results_file_path = $this->generate_paid_full_results_pdf_file($submission_id, $submission);
+			if (!$results_file_path) {
+				$this->send_error($action_key, __('Could not generate your results file. Please try again.', 'rtr-custom-assessment'));
 			}
 
-		$product_id = $this->upsert_inner_dimensions_product($submission, $submission_id, $price, $results_file_path);
+			$product_id = $this->upsert_paid_full_results_product($submission, $submission_id, $price, $results_file_path, $want);
 			if ($product_id <= 0) {
-				$this->send_error('ca_prepare_inner_dimensions_checkout', __('Could not prepare your downloadable product. Please try again.', 'rtr-custom-assessment'));
+				$this->send_error($action_key, __('Could not prepare your downloadable product. Please try again.', 'rtr-custom-assessment'));
 			}
 
 			$this->set_inner_dimensions_checkout_prefill_session($submission);
 
-			// Pending order + checkout order-pay URL works for guests without a WooCommerce session cookie
-			// (cart-only flows often fail when not logged in). Same endpoint as checkout: /checkout/order-pay/{id}/…
-			$checkout_url = $this->build_inner_dimensions_order_pay_checkout_url($submission, $submission_id, $product_id);
+			$checkout_url = $this->build_paid_full_results_order_pay_checkout_url($submission, $submission_id, $product_id, $want);
 			if ('' === $checkout_url) {
-				$this->send_error('ca_prepare_inner_dimensions_checkout', __('Could not build a checkout link. Please try again.', 'rtr-custom-assessment'));
+				$this->send_error($action_key, __('Could not build a checkout link. Please try again.', 'rtr-custom-assessment'));
 			}
 			$this->send_success(
-				'ca_prepare_inner_dimensions_checkout',
+				$action_key,
 				array(
 					'checkout_url' => $checkout_url,
 					'product_id' => (int) $product_id,
@@ -516,7 +557,7 @@ class CA_Ajax
 				$error_message = 'Unknown error';
 			}
 			CA_Logger::log(
-				'ca_prepare_inner_dimensions_checkout',
+				$action_key,
 				'error',
 				'Unhandled checkout preparation error.',
 				array(
@@ -526,7 +567,7 @@ class CA_Ajax
 				)
 			);
 			$this->send_error(
-				'ca_prepare_inner_dimensions_checkout',
+				$action_key,
 				sprintf(
 					/* translators: %s: backend error message */
 					__('We could not start checkout right now. %s', 'rtr-custom-assessment'),
@@ -537,12 +578,12 @@ class CA_Ajax
 	}
 
 	/**
-	 * Build the same order-pay URL as {@see ca_prepare_inner_dimensions_checkout()} (no nonce). For emails and deep links.
+	 * Build the same order-pay URL as paid checkout (no nonce). For emails and deep links.
 	 *
 	 * @param int $submission_id Submission ID.
 	 * @return string Pay URL or empty string on failure.
 	 */
-	public function get_inner_dimensions_order_pay_url_for_submission($submission_id)
+	public function get_paid_full_results_order_pay_url_for_submission($submission_id)
 	{
 		$submission_id = (int) $submission_id;
 		if ($submission_id <= 0 || !$this->is_woocommerce_ready()) {
@@ -554,40 +595,54 @@ class CA_Ajax
 			return '';
 		}
 
-		if (CA_Assessment_Types::INNER_DIMENSIONS !== CA_Assessment_Types::from_submission($submission)) {
+		$want = CA_Assessment_Types::from_submission($submission);
+		if (!CA_Assessment_Types::requires_paid_full_results($want)) {
 			return '';
 		}
 
-		$price = (float) apply_filters('ca_inner_dimensions_full_results_price', 9.99, $submission_id);
+		$price = $this->get_paid_full_results_price($submission_id, $want);
 		if ($price <= 0) {
 			return '';
 		}
 
-		$results_file_path = $this->generate_inner_dimensions_results_file($submission_id, $submission);
+		$results_file_path = $this->generate_paid_full_results_pdf_file($submission_id, $submission);
 		if (!$results_file_path) {
 			return '';
 		}
 
-		$product_id = $this->upsert_inner_dimensions_product($submission, $submission_id, $price, $results_file_path);
+		$product_id = $this->upsert_paid_full_results_product($submission, $submission_id, $price, $results_file_path, $want);
 		if ($product_id <= 0) {
 			return '';
 		}
 
-		$url = $this->build_inner_dimensions_order_pay_checkout_url($submission, $submission_id, $product_id);
+		$url = $this->build_paid_full_results_order_pay_checkout_url($submission, $submission_id, $product_id, $want);
 		return is_string($url) ? $url : '';
 	}
 
 	/**
-	 * Find latest unpaid order for this submission.
-	 *
+	 * @deprecated Use {@see get_paid_full_results_order_pay_url_for_submission()}; kept for call sites expecting this name.
 	 * @param int $submission_id Submission ID.
+	 * @return string
+	 */
+	public function get_inner_dimensions_order_pay_url_for_submission($submission_id)
+	{
+		return $this->get_paid_full_results_order_pay_url_for_submission($submission_id);
+	}
+
+	/**
+	 * Latest unpaid Woo order for submission + assessment (paid-results flow).
+	 *
+	 * @param int    $submission_id Submission ID.
+	 * @param string $assessment_type Normalized type.
 	 * @return int
 	 */
-	private function find_existing_inner_dimensions_order_id($submission_id)
+	private function find_existing_paid_full_results_order_id($submission_id, $assessment_type)
 	{
 		if (!function_exists('wc_get_orders')) {
 			return 0;
 		}
+
+		$assessment_type = CA_Assessment_Types::normalize($assessment_type);
 
 		$orders = wc_get_orders(array(
 			'limit' => 1,
@@ -598,6 +653,10 @@ class CA_Ajax
 				array(
 					'key' => '_ca_submission_id',
 					'value' => (int) $submission_id,
+				),
+				array(
+					'key' => '_ca_assessment_type',
+					'value' => $assessment_type,
 				),
 			),
 			'return' => 'ids',
@@ -611,26 +670,33 @@ class CA_Ajax
 	}
 
 	/**
-	 * Create/update hidden downloadable Woo product for this submission.
+	 * Create/update hidden downloadable Woo product for paid full-results flow.
 	 *
 	 * @param object $submission
 	 * @param int    $submission_id
 	 * @param float  $price
 	 * @param string $results_file_path
+	 * @param string $assessment_type Normalized type.
 	 * @return int
 	 */
-	private function upsert_inner_dimensions_product($submission, $submission_id, $price, $results_file_path)
+	private function upsert_paid_full_results_product($submission, $submission_id, $price, $results_file_path, $assessment_type)
 	{
-		$product_id = $this->find_existing_inner_dimensions_product_id($submission_id);
+		$assessment_type = CA_Assessment_Types::normalize($assessment_type);
+		$product_id = $this->find_existing_paid_full_results_product_id($submission_id, $assessment_type);
 		$product = $product_id > 0 ? wc_get_product($product_id) : new WC_Product_Simple();
 		if (!$product) {
 			$product = new WC_Product_Simple();
 		}
 
+		if (CA_Assessment_Types::SOCIAL_FLUENCY === $assessment_type) {
+			$name_tpl = __('Social Fluency Full Results #%1$d - %2$s %3$s', 'rtr-custom-assessment');
+		} else {
+			$name_tpl = __('Natural Attributes Cataloging Full Results #%1$d - %2$s %3$s', 'rtr-custom-assessment');
+		}
+
 		$product->set_name(
 			sprintf(
-				/* translators: 1: submission id, 2: first name, 3: last name */
-				__('NAC Full Results File #%1$d - %2$s %3$s', 'rtr-custom-assessment'),
+				$name_tpl,
 				(int) $submission_id,
 				(string) $submission->first_name,
 				(string) $submission->last_name
@@ -647,29 +713,40 @@ class CA_Ajax
 		$product_id = $product->save();
 		if ($product_id > 0) {
 			update_post_meta($product_id, '_ca_submission_id', (int) $submission_id);
-			update_post_meta($product_id, '_ca_assessment_type', CA_Assessment_Types::INNER_DIMENSIONS);
+			update_post_meta($product_id, '_ca_assessment_type', $assessment_type);
 			update_post_meta($product_id, '_ca_full_results_file_path', (string) $results_file_path);
-			update_post_meta($product_id, '_ca_full_results_template_version', self::INNER_RESULTS_TEMPLATE_VERSION);
+			update_post_meta($product_id, '_ca_full_results_template_version', self::FULL_RESULTS_TEMPLATE_VERSION);
 		}
 
 		return (int) $product_id;
 	}
 
 	/**
-	 * Find hidden product generated for submission.
+	 * Find hidden paid-results product for submission + assessment.
 	 *
-	 * @param int $submission_id
+	 * @param int    $submission_id
+	 * @param string $assessment_type Normalized type.
 	 * @return int
 	 */
-	private function find_existing_inner_dimensions_product_id($submission_id)
+	private function find_existing_paid_full_results_product_id($submission_id, $assessment_type)
 	{
+		$assessment_type = CA_Assessment_Types::normalize($assessment_type);
+
 		$ids = get_posts(array(
 			'post_type' => 'product',
 			'post_status' => array('publish', 'private', 'draft'),
 			'posts_per_page' => 1,
 			'fields' => 'ids',
-			'meta_key' => '_ca_submission_id',
-			'meta_value' => (int) $submission_id,
+			'meta_query' => array(
+				array(
+					'key' => '_ca_submission_id',
+					'value' => (int) $submission_id,
+				),
+				array(
+					'key' => '_ca_assessment_type',
+					'value' => $assessment_type,
+				),
+			),
 		));
 
 		if (empty($ids)) {
@@ -720,13 +797,16 @@ class CA_Ajax
 	 *
 	 * @param object $submission    Submission row.
 	 * @param int    $submission_id Submission ID.
-	 * @param int    $product_id    Hidden NAC product ID.
+	 * @param int    $product_id    Hidden product ID.
+	 * @param string $assessment_type Normalized assessment type.
 	 * @return string Checkout order-pay URL or empty string.
 	 */
-	private function build_inner_dimensions_order_pay_checkout_url($submission, $submission_id, $product_id)
+	private function build_paid_full_results_order_pay_checkout_url($submission, $submission_id, $product_id, $assessment_type)
 	{
 		$submission_id = (int) $submission_id;
 		$product_id = (int) $product_id;
+		$assessment_type = CA_Assessment_Types::normalize($assessment_type);
+
 		if (!$submission || $submission_id <= 0 || $product_id <= 0) {
 			return '';
 		}
@@ -739,7 +819,7 @@ class CA_Ajax
 		$customer_id = is_user_logged_in() ? (int) get_current_user_id() : 0;
 
 		$order = null;
-		$existing_id = $this->find_existing_inner_dimensions_order_id($submission_id);
+		$existing_id = $this->find_existing_paid_full_results_order_id($submission_id, $assessment_type);
 		if ($existing_id > 0) {
 			$candidate = wc_get_order($existing_id);
 			if ($candidate instanceof \WC_Order && $candidate->needs_payment()) {
@@ -751,11 +831,12 @@ class CA_Ajax
 		}
 
 		if (!$order instanceof \WC_Order) {
+			$created_via = CA_Assessment_Types::SOCIAL_FLUENCY === $assessment_type ? 'ca_social_fluency_full_results' : 'ca_inner_dimensions_full_results';
 			$created = wc_create_order(
 				array(
 					'status' => 'pending',
 					'customer_id' => $customer_id,
-					'created_via' => 'ca_inner_dimensions',
+					'created_via' => $created_via,
 				)
 			);
 			if (is_wp_error($created) || !($created instanceof \WC_Order)) {
@@ -773,7 +854,7 @@ class CA_Ajax
 		$template_version = (string) get_post_meta($product_id, '_ca_full_results_template_version', true);
 
 		$order->update_meta_data('_ca_submission_id', $submission_id);
-		$order->update_meta_data('_ca_assessment_type', CA_Assessment_Types::INNER_DIMENSIONS);
+		$order->update_meta_data('_ca_assessment_type', $assessment_type);
 		$order->update_meta_data('_ca_full_results_unlock', 'yes');
 		$order->update_meta_data('_ca_full_results_product_id', $product_id);
 		if ('' !== $file_path) {
@@ -783,7 +864,12 @@ class CA_Ajax
 			$order->update_meta_data('_ca_full_results_template_version', $template_version);
 		}
 
-		$expiry_seconds = (int) apply_filters('ca_nac_order_pay_link_expiry_seconds', 2 * HOUR_IN_SECONDS);
+		$expiry_seconds = (int) apply_filters(
+			'ca_paid_full_results_order_pay_link_expiry_seconds',
+			apply_filters('ca_nac_order_pay_link_expiry_seconds', 2 * HOUR_IN_SECONDS),
+			$assessment_type,
+			$submission_id
+		);
 		$expiry_seconds = max(60, $expiry_seconds);
 		$order->update_meta_data('_ca_order_pay_expires_at', time() + $expiry_seconds);
 
@@ -827,7 +913,7 @@ class CA_Ajax
 			return;
 		}
 
-		if (CA_Assessment_Types::INNER_DIMENSIONS !== (string) $order->get_meta('_ca_assessment_type')) {
+		if (!CA_Assessment_Types::requires_paid_full_results((string) $order->get_meta('_ca_assessment_type'))) {
 			return;
 		}
 
@@ -840,7 +926,12 @@ class CA_Ajax
 			$this->nac_order_pay_send_404();
 		}
 
-		$expiry_seconds = (int) apply_filters('ca_nac_order_pay_link_expiry_seconds', 2 * HOUR_IN_SECONDS);
+		$expiry_seconds = (int) apply_filters(
+			'ca_paid_full_results_order_pay_link_expiry_seconds',
+			apply_filters('ca_nac_order_pay_link_expiry_seconds', 2 * HOUR_IN_SECONDS),
+			(string) $order->get_meta('_ca_assessment_type'),
+			(int) $order->get_meta('_ca_submission_id')
+		);
 		$expiry_seconds = max(60, $expiry_seconds);
 
 		$expires_at = (int) $order->get_meta('_ca_order_pay_expires_at');
@@ -916,9 +1007,12 @@ class CA_Ajax
 			$order->set_billing_state($state);
 		}
 
-		$line1 = (string) apply_filters('ca_inner_dimensions_default_billing_address_1', '', $submission, $order);
+		$line1 = (string) apply_filters('ca_paid_full_results_default_billing_address_1', '', $submission, $order);
 		if ('' === $line1) {
-			$line1 = __('Natural Attributes Cataloging — digital delivery', 'rtr-custom-assessment');
+			$line1 = (string) apply_filters('ca_inner_dimensions_default_billing_address_1', '', $submission, $order);
+		}
+		if ('' === $line1) {
+			$line1 = __('Digital delivery — paid full results', 'rtr-custom-assessment');
 		}
 		$order->set_billing_address_1($line1);
 
@@ -1061,7 +1155,7 @@ class CA_Ajax
 	 * @param object $submission
 	 * @return string|false Absolute server path to generated file.
 	 */
-	private function generate_inner_dimensions_results_file($submission_id, $submission)
+	private function generate_paid_full_results_pdf_file($submission_id, $submission)
 	{
 		$data   = $this->build_submission_pdf_data($submission_id, $submission);
 		$upload = wp_upload_dir();
@@ -1069,9 +1163,12 @@ class CA_Ajax
 			return false;
 		}
 
+		$sub_type = CA_Assessment_Types::from_submission($submission);
+		$prefix = CA_Assessment_Types::SOCIAL_FLUENCY === $sub_type ? 'sf-results-' : 'nac-results-';
+
 		$dir_path  = trailingslashit($upload['basedir']) . 'ca-results';
 		$timestamp = gmdate('YmdHis');
-		$file_name = 'nac-results-' . (int) $submission_id . '-' . $timestamp . '.pdf';
+		$file_name = $prefix . (int) $submission_id . '-' . $timestamp . '.pdf';
 		$file_path = trailingslashit($dir_path) . $file_name;
 
 		if (!is_dir($dir_path)) {
@@ -1142,6 +1239,7 @@ class CA_Ajax
 			'categories'      => $categories,
 			'responses'       => $responses,
 			'logo_url'        => $logo_url,
+			'assessment_type' => $sub_type,
 		);
 	}
 
@@ -1185,7 +1283,7 @@ class CA_Ajax
 
 		if (
 			$submission_id <= 0
-			|| CA_Assessment_Types::INNER_DIMENSIONS !== $assessment_type
+			|| !CA_Assessment_Types::requires_paid_full_results($assessment_type)
 			|| 'yes' === $already_sent
 		) {
 			return;
@@ -1224,7 +1322,7 @@ class CA_Ajax
 		}
 
 		$assessment_type = (string) $order->get_meta('_ca_assessment_type');
-		if (CA_Assessment_Types::INNER_DIMENSIONS !== $assessment_type) {
+		if (!CA_Assessment_Types::requires_paid_full_results($assessment_type)) {
 			return;
 		}
 
@@ -1265,7 +1363,7 @@ class CA_Ajax
 			return;
 		}
 
-		if (CA_Assessment_Types::INNER_DIMENSIONS !== (string) $order->get_meta('_ca_assessment_type')) {
+		if (!CA_Assessment_Types::requires_paid_full_results((string) $order->get_meta('_ca_assessment_type'))) {
 			return;
 		}
 
@@ -1303,7 +1401,7 @@ class CA_Ajax
 		if (!$order instanceof \WC_Order) {
 			return '';
 		}
-		if (CA_Assessment_Types::INNER_DIMENSIONS !== (string) $order->get_meta('_ca_assessment_type')) {
+		if (!CA_Assessment_Types::requires_paid_full_results((string) $order->get_meta('_ca_assessment_type'))) {
 			return '';
 		}
 		if (!$order->is_paid()) {
@@ -1352,7 +1450,7 @@ class CA_Ajax
 		}
 
 		$existing_type = (string) $order->get_meta('_ca_assessment_type');
-		if (CA_Assessment_Types::INNER_DIMENSIONS === $existing_type) {
+		if ('' !== $existing_type && CA_Assessment_Types::requires_paid_full_results($existing_type)) {
 			return;
 		}
 
@@ -1366,7 +1464,7 @@ class CA_Ajax
 			}
 
 			$product_type = (string) get_post_meta($product_id, '_ca_assessment_type', true);
-			if (CA_Assessment_Types::INNER_DIMENSIONS !== $product_type) {
+			if (!CA_Assessment_Types::requires_paid_full_results($product_type)) {
 				continue;
 			}
 
@@ -1375,7 +1473,7 @@ class CA_Ajax
 			$template_version = (string) get_post_meta($product_id, '_ca_full_results_template_version', true);
 
 			$order->update_meta_data('_ca_submission_id', $submission_id);
-			$order->update_meta_data('_ca_assessment_type', CA_Assessment_Types::INNER_DIMENSIONS);
+			$order->update_meta_data('_ca_assessment_type', CA_Assessment_Types::normalize($product_type));
 			$order->update_meta_data('_ca_full_results_unlock', 'yes');
 			$order->update_meta_data('_ca_full_results_product_id', $product_id);
 			if ('' !== $file_path) {
@@ -1405,7 +1503,7 @@ class CA_Ajax
 			return $status;
 		}
 
-		if (CA_Assessment_Types::INNER_DIMENSIONS !== (string) $order->get_meta('_ca_assessment_type')) {
+		if (!CA_Assessment_Types::requires_paid_full_results((string) $order->get_meta('_ca_assessment_type'))) {
 			return $status;
 		}
 
@@ -1429,7 +1527,7 @@ class CA_Ajax
 			return;
 		}
 
-		if (CA_Assessment_Types::INNER_DIMENSIONS !== (string) $order->get_meta('_ca_assessment_type')) {
+		if (!CA_Assessment_Types::requires_paid_full_results((string) $order->get_meta('_ca_assessment_type'))) {
 			return;
 		}
 
@@ -1480,7 +1578,7 @@ class CA_Ajax
 			return;
 		}
 
-		if (CA_Assessment_Types::INNER_DIMENSIONS !== (string) $product->get_meta('_ca_assessment_type')) {
+		if (!CA_Assessment_Types::requires_paid_full_results((string) $product->get_meta('_ca_assessment_type'))) {
 			return;
 		}
 
@@ -1505,7 +1603,7 @@ class CA_Ajax
 		}
 
 		$assessment_type = (string) $order->get_meta('_ca_assessment_type');
-		if (CA_Assessment_Types::INNER_DIMENSIONS !== $assessment_type) {
+		if (!CA_Assessment_Types::requires_paid_full_results($assessment_type)) {
 			return;
 		}
 
@@ -1514,7 +1612,7 @@ class CA_Ajax
 		$needs_new_file = (
 			'' === $current_path
 			|| !preg_match('/\.pdf$/i', $current_path)
-			|| self::INNER_RESULTS_TEMPLATE_VERSION !== $current_version
+			|| self::FULL_RESULTS_TEMPLATE_VERSION !== $current_version
 		);
 		if (!$needs_new_file) {
 			return;
@@ -1530,19 +1628,19 @@ class CA_Ajax
 			return;
 		}
 
-		$new_path = $this->generate_inner_dimensions_results_file($submission_id, $submission);
+		$new_path = $this->generate_paid_full_results_pdf_file($submission_id, $submission);
 		if (!$new_path) {
 			return;
 		}
 
 		$order->update_meta_data('_ca_full_results_file_path', (string) $new_path);
-		$order->update_meta_data('_ca_full_results_template_version', self::INNER_RESULTS_TEMPLATE_VERSION);
+		$order->update_meta_data('_ca_full_results_template_version', self::FULL_RESULTS_TEMPLATE_VERSION);
 		$order->save();
 
 		$product_id = (int) $order->get_meta('_ca_full_results_product_id');
 		if ($product_id > 0) {
 			update_post_meta($product_id, '_ca_full_results_file_path', (string) $new_path);
-			update_post_meta($product_id, '_ca_full_results_template_version', self::INNER_RESULTS_TEMPLATE_VERSION);
+			update_post_meta($product_id, '_ca_full_results_template_version', self::FULL_RESULTS_TEMPLATE_VERSION);
 		}
 	}
 

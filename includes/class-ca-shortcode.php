@@ -148,6 +148,13 @@ class CA_Shortcode {
 					'email_lead'   => __( 'Your full report will be sent after payment to', 'rtr-custom-assessment' ),
 					'intro'        => __( 'You\'ve taken an important step towards unlocking your potential. Dive into your personalized results below to uncover insights and next steps on your path to enhancing leadership skills and embracing new opportunities.', 'rtr-custom-assessment' ),
 				),
+				'social_results' => array(
+					'title'        => __( 'Social Fluency Assessment', 'rtr-custom-assessment' ),
+					'tagline'      => __( 'Unlock the full picture of how you show up in social and professional settings.', 'rtr-custom-assessment' ),
+					'congrats'     => __( 'Congratulations on completing your assessment!', 'rtr-custom-assessment' ),
+					'email_lead'   => __( 'Your full report will be sent after payment to', 'rtr-custom-assessment' ),
+					'intro'        => __( 'Complete checkout to download your full PDF report with category insights and your question responses.', 'rtr-custom-assessment' ),
+				),
 				'labels'      => array(
 					'next'          => __( 'Next', 'rtr-custom-assessment' ),
 					'back'          => __( 'Back', 'rtr-custom-assessment' ),

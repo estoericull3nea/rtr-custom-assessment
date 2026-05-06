@@ -74,10 +74,22 @@ class Rtr_Custom_Assessment_Pdf
 		$ovr_color     = $this->pdf_html_level_color( $ovr_level );
 		$ovr_label     = strtoupper( esc_html( $ovr_level ) );
 
-		$title = esc_html( __( 'Natural Attributes Cataloging', 'rtr-custom-assessment' ) );
-		$q1    = '&quot;<em style="color:#994433;font-style:italic;">' . esc_html( __( 'Remember', 'rtr-custom-assessment' ) ) . '</em> '
-			. esc_html( __( 'Who You Were Before the World', 'rtr-custom-assessment' ) );
-		$q2    = esc_html( __( 'Told You Who to Be.', 'rtr-custom-assessment' ) ) . '&quot;';
+		$atype = isset( $data['assessment_type'] )
+			? CA_Assessment_Types::normalize( (string) $data['assessment_type'] )
+			: CA_Assessment_Types::INNER_DIMENSIONS;
+
+		if ( CA_Assessment_Types::SOCIAL_FLUENCY === $atype ) {
+			$title = esc_html( __( 'Social Fluency Assessment', 'rtr-custom-assessment' ) );
+			$q1    = esc_html(
+				__( 'Your personalized results summarize how you responded across categories and question prompts.', 'rtr-custom-assessment' )
+			);
+			$q2    = '';
+		} else {
+			$title = esc_html( __( 'Natural Attributes Cataloging', 'rtr-custom-assessment' ) );
+			$q1    = '&quot;<em style="color:#994433;font-style:italic;">' . esc_html( __( 'Remember', 'rtr-custom-assessment' ) ) . '</em> '
+				. esc_html( __( 'Who You Were Before the World', 'rtr-custom-assessment' ) );
+			$q2    = esc_html( __( 'Told You Who to Be.', 'rtr-custom-assessment' ) ) . '&quot;';
+		}
 
 		$logo_html = '';
 		$logo_path = $this->resolve_local_logo_path( isset( $data['logo_url'] ) ? (string) $data['logo_url'] : '' );
@@ -169,7 +181,8 @@ th.qh2 { background:#1c2433; color:#fff; font-size:8.5pt; padding:7pt 8pt; text-
 </style></head><body>'
 			. '<div class="hdr"><table class="hdr-table"><tr><td style="width:38%;vertical-align:middle;">' . $logo_html
 			. '</td><td class="hdr-right"><div class="hdr-title">' . $title . '</div>'
-			. '<div class="hdr-quote">' . $q1 . '<span class="l2">' . $q2 . '</span></div></td></tr></table>'
+			. '<div class="hdr-quote">' . $q1
+			. ( '' !== $q2 ? '<span class="l2">' . $q2 . '</span>' : '' ) . '</div></td></tr></table>'
 			. '<div class="meta">' . $meta . '</div></div>'
 			. '<div class="band"><table class="band-table"><tr><td style="width:88pt;text-align:center;vertical-align:middle;">'
 			. '<div style="display:table;margin:0 auto;width:56pt;height:56pt;border-radius:50%;background:'
