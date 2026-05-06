@@ -60,7 +60,10 @@ class CA_Ajax
 
 		add_action('woocommerce_before_thankyou', array($this, 'render_inner_dimensions_download_on_thankyou'), 20);
 		add_action('woocommerce_thankyou', array($this, 'render_inner_dimensions_download_on_thankyou'), 30);
+		add_action('woocommerce_before_thankyou', array($this, 'render_bundle_download_on_thankyou'), 25);
+		add_action('woocommerce_thankyou', array($this, 'render_bundle_download_on_thankyou'), 35);
 		add_action('woocommerce_order_details_after_order_table', array($this, 'render_inner_dimensions_download_after_order_table'), 20);
+		add_action('woocommerce_order_details_after_order_table', array($this, 'render_bundle_download_after_order_table'), 25);
 		add_action('woocommerce_checkout_create_order', array($this, 'attach_inner_dimensions_meta_to_checkout_order'), 20, 2);
 		add_filter('woocommerce_checkout_get_value', array($this, 'checkout_prefill_billing_from_pay_order'), 20, 2);
 		add_filter('woocommerce_payment_complete_order_status', array($this, 'inner_dimensions_payment_complete_order_status'), 10, 3);
