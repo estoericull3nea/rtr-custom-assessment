@@ -883,6 +883,23 @@ body,
   border-bottom: 1px solid var(--ca-border);
 }
 
+/* Bundle order selection */
+.ca-bundle-order-grid {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 18px;
+}
+
+.ca-bundle-order-btn {
+  min-width: 260px;
+}
+
+.ca-bundle-order-btn.ca-selected {
+  border: 2px solid #aa3130;
+}
+
 .ca-results-nac-title {
   font-family: var(--ca-font);
   font-size: 1.6rem;

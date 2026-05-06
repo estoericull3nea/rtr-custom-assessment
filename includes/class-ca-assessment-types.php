@@ -11,6 +11,7 @@ class CA_Assessment_Types {
 
 	public const MINDSET          = 'mindset';
 	public const SOCIAL_FLUENCY   = 'social_fluency';
+	public const BUNDLE          = 'bundle';
 
 	/**
 	 * Natural Attributes Cataloging (Yes/No). Stored in DB as inner_dimensions for compatibility.
@@ -29,6 +30,9 @@ class CA_Assessment_Types {
 		if ( self::SOCIAL_FLUENCY === $t ) {
 			return self::SOCIAL_FLUENCY;
 		}
+		if ( self::BUNDLE === $t ) {
+			return self::BUNDLE;
+		}
 		return self::MINDSET;
 	}
 
@@ -40,6 +44,9 @@ class CA_Assessment_Types {
 		$t = self::normalize( $assessment_type );
 		if ( self::INNER_DIMENSIONS === $t ) {
 			return 1;
+		}
+		if ( self::BUNDLE === $t ) {
+			return 0;
 		}
 		return self::SOCIAL_FLUENCY === $t ? 10 : 5;
 	}
@@ -62,6 +69,9 @@ class CA_Assessment_Types {
 	 */
 	public static function requires_paid_full_results( $assessment_type ) {
 		$t = self::normalize( $assessment_type );
+		if ( self::BUNDLE === $t ) {
+			return false;
+		}
 		return self::MINDSET === $t
 			|| self::INNER_DIMENSIONS === $t
 			|| self::SOCIAL_FLUENCY === $t;

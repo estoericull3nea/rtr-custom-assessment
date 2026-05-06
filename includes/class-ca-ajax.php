@@ -50,6 +50,7 @@ class CA_Ajax
 			'ca_get_results_preview',
 			'ca_prepare_inner_dimensions_checkout',
 			'ca_prepare_paid_full_results_checkout',
+			'ca_prepare_bundle_checkout',
 		);
 
 		foreach ($actions as $action) {
@@ -59,11 +60,15 @@ class CA_Ajax
 
 		add_action('woocommerce_before_thankyou', array($this, 'render_inner_dimensions_download_on_thankyou'), 20);
 		add_action('woocommerce_thankyou', array($this, 'render_inner_dimensions_download_on_thankyou'), 30);
+		add_action('woocommerce_before_thankyou', array($this, 'render_bundle_download_on_thankyou'), 25);
+		add_action('woocommerce_thankyou', array($this, 'render_bundle_download_on_thankyou'), 35);
 		add_action('woocommerce_order_details_after_order_table', array($this, 'render_inner_dimensions_download_after_order_table'), 20);
+		add_action('woocommerce_order_details_after_order_table', array($this, 'render_bundle_download_after_order_table'), 25);
 		add_action('woocommerce_checkout_create_order', array($this, 'attach_inner_dimensions_meta_to_checkout_order'), 20, 2);
 		add_filter('woocommerce_checkout_get_value', array($this, 'checkout_prefill_billing_from_pay_order'), 20, 2);
 		add_filter('woocommerce_payment_complete_order_status', array($this, 'inner_dimensions_payment_complete_order_status'), 10, 3);
 		add_action('woocommerce_payment_complete', array($this, 'mark_inner_dimensions_product_out_of_stock_on_payment'), 10, 1);
+		add_action('woocommerce_payment_complete', array($this, 'maybe_send_customer_paid_bundle_pdf_email'), 15, 1);
 		add_action('woocommerce_payment_complete', array($this, 'maybe_send_customer_paid_pdf_email'), 15, 1);
 		add_action('template_redirect', array($this, 'maybe_nac_order_pay_404_or_expired'), 5);
 	}
@@ -575,6 +580,338 @@ class CA_Ajax
 				)
 			);
 		}
+	}
+
+	// -------------------------------------------------------------------------
+	// Action: bundle checkout (two assessments, one purchase)
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Prepare WooCommerce checkout that unlocks both Natural Attributes + Social Fluency reports.
+	 */
+	public function ca_prepare_bundle_checkout()
+	{
+		try {
+			$this->verify_nonce('ca_prepare_bundle_checkout');
+
+			$inner_submission_id = isset($_POST['inner_submission_id']) ? absint($_POST['inner_submission_id']) : 0;
+			$social_submission_id = isset($_POST['social_submission_id']) ? absint($_POST['social_submission_id']) : 0;
+
+			if ($inner_submission_id <= 0 || $social_submission_id <= 0) {
+				$this->send_error('ca_prepare_bundle_checkout', __('Invalid session.', 'rtr-custom-assessment'));
+			}
+
+			if (!$this->is_woocommerce_ready()) {
+				$this->send_error('ca_prepare_bundle_checkout', __('WooCommerce is required for checkout, but it is not active.', 'rtr-custom-assessment'));
+			}
+
+			$inner_submission = $this->require_submission_for_type($inner_submission_id, CA_Assessment_Types::INNER_DIMENSIONS);
+			$social_submission = $this->require_submission_for_type($social_submission_id, CA_Assessment_Types::SOCIAL_FLUENCY);
+
+			if ('completed' !== $inner_submission->status || 'completed' !== $social_submission->status) {
+				$this->send_error('ca_prepare_bundle_checkout', __('Please complete both assessments before proceeding to checkout.', 'rtr-custom-assessment'));
+			}
+
+			$price = (float) apply_filters('ca_bundle_full_results_price', 29.00, $inner_submission_id, $social_submission_id);
+			if ($price <= 0) {
+				$this->send_error('ca_prepare_bundle_checkout', __('The bundle price is not configured correctly.', 'rtr-custom-assessment'));
+			}
+
+			$inner_file_path = $this->generate_paid_full_results_pdf_file($inner_submission_id, $inner_submission);
+			$social_file_path = $this->generate_paid_full_results_pdf_file($social_submission_id, $social_submission);
+			if (!$inner_file_path || !$social_file_path) {
+				$this->send_error('ca_prepare_bundle_checkout', __('Could not generate your bundle results. Please try again.', 'rtr-custom-assessment'));
+			}
+
+			$order = null;
+			$existing_id = $this->find_existing_bundle_order_id($inner_submission_id, $social_submission_id);
+			if ($existing_id > 0) {
+				$candidate = wc_get_order($existing_id);
+				if ($candidate instanceof \WC_Order && $candidate->needs_payment()) {
+					$order = $candidate;
+				}
+			}
+
+			$order_id = $order instanceof \WC_Order ? (int) $order->get_id() : 0;
+			if ($order_id <= 0) {
+				$order = wc_create_order(array('status' => 'pending'));
+				if (!$order instanceof \WC_Order) {
+					$this->send_error('ca_prepare_bundle_checkout', __('Could not create checkout order. Please try again.', 'rtr-custom-assessment'));
+				}
+
+				$product = new WC_Product_Simple();
+				$product->set_name(
+					__('Bundle Full Results — Natural Attributes + Social Fluency', 'rtr-custom-assessment') . ' #' . (int) $inner_submission_id . '+' . (int) $social_submission_id
+				);
+				$product->set_status('publish');
+				$product->set_catalog_visibility('hidden');
+				$product->set_virtual(true);
+				$product->set_downloadable(false);
+				$product->set_regular_price(wc_format_decimal($price, 2));
+				$product->set_sold_individually(true);
+				$product->set_downloads(array());
+				$product_id = (int) $product->save();
+				if ($product_id <= 0) {
+					$this->send_error('ca_prepare_bundle_checkout', __('Could not create bundle product. Please try again.', 'rtr-custom-assessment'));
+				}
+
+				$order->add_product($product, 1);
+
+				// Prefill checkout billing fields from submission.
+				$this->apply_submission_billing_to_order($order, $inner_submission);
+
+				$order->update_meta_data('_ca_submission_id', $inner_submission_id);
+				$order->update_meta_data('_ca_bundle_full_results', 'yes');
+				$order->update_meta_data('_ca_bundle_inner_submission_id', $inner_submission_id);
+				$order->update_meta_data('_ca_bundle_social_submission_id', $social_submission_id);
+				$order->update_meta_data('_ca_bundle_inner_file_path', (string) $inner_file_path);
+				$order->update_meta_data('_ca_bundle_social_file_path', (string) $social_file_path);
+				$order->update_meta_data('_ca_bundle_template_version', self::FULL_RESULTS_TEMPLATE_VERSION);
+				$order->update_meta_data('_ca_bundle_product_id', (int) $product_id);
+
+				$order->calculate_totals();
+				$order->save();
+
+				$this->clear_wc_cart_for_guest_checkout();
+			}
+
+			$checkout_url = $order instanceof \WC_Order ? $order->get_checkout_payment_url(false) : '';
+			$checkout_url = is_string($checkout_url) ? trim($checkout_url) : '';
+			if ('' === $checkout_url) {
+				$this->send_error('ca_prepare_bundle_checkout', __('Could not build a checkout link. Please try again.', 'rtr-custom-assessment'));
+			}
+
+			$this->send_success(
+				'ca_prepare_bundle_checkout',
+				array(
+					'checkout_url' => $this->ensure_www_url($checkout_url),
+					'product_id' => null,
+				),
+				'Bundle checkout cart prepared.',
+				array(
+					'inner_submission_id' => $inner_submission_id,
+					'social_submission_id' => $social_submission_id,
+				)
+			);
+		} catch (\Throwable $e) {
+			$error_message = (string) $e->getMessage();
+			if ('' === $error_message) {
+				$error_message = 'Unknown error';
+			}
+			CA_Logger::log(
+				'ca_prepare_bundle_checkout',
+				'error',
+				'Unhandled bundle checkout preparation error.',
+				array(
+					'error' => $error_message,
+					'file' => $e->getFile(),
+					'line' => $e->getLine(),
+				)
+			);
+			$this->send_error(
+				'ca_prepare_bundle_checkout',
+				sprintf(
+					/* translators: %s: backend error message */
+					__('We could not start bundle checkout right now. %s', 'rtr-custom-assessment'),
+					sanitize_text_field($error_message)
+				)
+			);
+		}
+	}
+
+	/**
+	 * Find latest unpaid bundle order for submission pair.
+	 *
+	 * @param int $inner_submission_id
+	 * @param int $social_submission_id
+	 * @return int
+	 */
+	private function find_existing_bundle_order_id($inner_submission_id, $social_submission_id)
+	{
+		if (!function_exists('wc_get_orders')) {
+			return 0;
+		}
+
+		$orders = wc_get_orders(array(
+			'limit' => 1,
+			'orderby' => 'date',
+			'order' => 'DESC',
+			'status' => array('pending', 'failed'),
+			'meta_query' => array(
+				array(
+					'key' => '_ca_bundle_inner_submission_id',
+					'value' => (int) $inner_submission_id,
+				),
+				array(
+					'key' => '_ca_bundle_social_submission_id',
+					'value' => (int) $social_submission_id,
+				),
+			),
+			'return' => 'ids',
+		));
+
+		if (empty($orders)) {
+			return 0;
+		}
+
+		return (int) $orders[0];
+	}
+
+	/**
+	 * Render bundle download CTAs on thank-you.
+	 *
+	 * @param int $order_id WooCommerce order ID.
+	 * @return void
+	 */
+	public function render_bundle_download_on_thankyou($order_id)
+	{
+		static $rendered_order_ids = array();
+		$order_id = (int) $order_id;
+		if ($order_id <= 0) {
+			return;
+		}
+		if ($order_id > 0 && in_array($order_id, $rendered_order_ids, true)) {
+			return;
+		}
+
+		if (!$this->is_woocommerce_ready()) {
+			return;
+		}
+
+		$order = wc_get_order($order_id);
+		if (!$order instanceof \WC_Order) {
+			return;
+		}
+		if (!$order->is_paid()) {
+			return;
+		}
+		if ('yes' !== (string) $order->get_meta('_ca_bundle_full_results')) {
+			return;
+		}
+
+		$urls = $this->get_bundle_pdf_download_urls_for_order($order);
+		if (empty($urls)) {
+			return;
+		}
+
+		$rendered_order_ids[] = $order_id;
+		?>
+		<section class="woocommerce-order ca-order-download" style="margin-top:24px;">
+			<h2><?php esc_html_e('Your Full Results Bundle', 'rtr-custom-assessment'); ?></h2>
+			<p><?php esc_html_e('Your payment was received. Download both PDFs below.', 'rtr-custom-assessment'); ?></p>
+			<p>
+				<a class="button button-primary" href="<?php echo esc_url($urls['inner']); ?>" download>
+					<?php esc_html_e('Download Natural Attributes (PDF)', 'rtr-custom-assessment'); ?>
+				</a>
+			</p>
+			<p>
+				<a class="button button-primary" href="<?php echo esc_url($urls['social']); ?>" download>
+					<?php esc_html_e('Download Social Fluency (PDF)', 'rtr-custom-assessment'); ?>
+				</a>
+			</p>
+		</section>
+		<?php
+	}
+
+	/**
+	 * Render download CTAs on order details blocks (order-received / view-order).
+	 *
+	 * @param WC_Order|int $order Order instance or ID.
+	 * @return void
+	 */
+	public function render_bundle_download_after_order_table($order)
+	{
+		if (is_object($order) && method_exists($order, 'get_id')) {
+			$this->render_bundle_download_on_thankyou((int) $order->get_id());
+			return;
+		}
+		$this->render_bundle_download_on_thankyou((int) $order);
+	}
+
+	/**
+	 * Email customer download links for bundle checkout after payment.
+	 *
+	 * @param int $order_id
+	 * @return void
+	 */
+	public function maybe_send_customer_paid_bundle_pdf_email($order_id)
+	{
+		if (!$this->is_woocommerce_ready()) {
+			return;
+		}
+
+		$order = wc_get_order((int) $order_id);
+		if (!$order instanceof \WC_Order) {
+			return;
+		}
+
+		if ('yes' !== (string) $order->get_meta('_ca_bundle_full_results')) {
+			return;
+		}
+		if (!$order->is_paid()) {
+			return;
+		}
+		if ('yes' === (string) $order->get_meta('_ca_bundle_paid_pdf_email_sent')) {
+			return;
+		}
+
+		$urls = $this->get_bundle_pdf_download_urls_for_order($order);
+		if (empty($urls)) {
+			return;
+		}
+
+		$sent = CA_Mailer::send_customer_paid_bundle_pdf_download_email($order, (string) $urls['inner'], (string) $urls['social']);
+		if ($sent) {
+			$order->update_meta_data('_ca_bundle_paid_pdf_email_sent', 'yes');
+			$order->save();
+		}
+	}
+
+	/**
+	 * Public download URLs for bundle order.
+	 *
+	 * @param \WC_Order $order
+	 * @return array{inner:string,social:string}
+	 */
+	private function get_bundle_pdf_download_urls_for_order($order)
+	{
+		if (!$order instanceof \WC_Order) {
+			return array();
+		}
+
+		$inner_submission_id = (int) $order->get_meta('_ca_bundle_inner_submission_id');
+		$social_submission_id = (int) $order->get_meta('_ca_bundle_social_submission_id');
+		if ($inner_submission_id <= 0 || $social_submission_id <= 0) {
+			return array();
+		}
+
+		$inner_file_path = (string) $order->get_meta('_ca_bundle_inner_file_path');
+		$social_file_path = (string) $order->get_meta('_ca_bundle_social_file_path');
+
+		$template_version = (string) $order->get_meta('_ca_bundle_template_version');
+		if ('' === $inner_file_path || '' === $social_file_path || self::FULL_RESULTS_TEMPLATE_VERSION !== $template_version) {
+			$inner_submission = CA_Database::get_submission($inner_submission_id);
+			$social_submission = CA_Database::get_submission($social_submission_id);
+			if (!$inner_submission || !$social_submission) {
+				return array();
+			}
+
+			$inner_file_path = $this->generate_paid_full_results_pdf_file($inner_submission_id, $inner_submission);
+			$social_file_path = $this->generate_paid_full_results_pdf_file($social_submission_id, $social_submission);
+			if (!$inner_file_path || !$social_file_path) {
+				return array();
+			}
+
+			$order->update_meta_data('_ca_bundle_inner_file_path', (string) $inner_file_path);
+			$order->update_meta_data('_ca_bundle_social_file_path', (string) $social_file_path);
+			$order->update_meta_data('_ca_bundle_template_version', self::FULL_RESULTS_TEMPLATE_VERSION);
+			$order->save();
+		}
+
+		return array(
+			'inner' => $this->normalize_results_download_url($inner_file_path),
+			'social' => $this->normalize_results_download_url($social_file_path),
+		);
 	}
 
 	/**
@@ -1331,6 +1668,10 @@ class CA_Ajax
 		if (!$order) {
 			return;
 		}
+		if ('yes' === (string) $order->get_meta('_ca_bundle_full_results')) {
+			// Bundle orders render their own download CTAs.
+			return;
+		}
 		if (!$order->is_paid()) {
 			return;
 		}
@@ -1374,6 +1715,10 @@ class CA_Ajax
 
 		$order = wc_get_order((int) $order_id);
 		if (!$order instanceof \WC_Order) {
+			return;
+		}
+		if ('yes' === (string) $order->get_meta('_ca_bundle_full_results')) {
+			// Bundle orders use their own email that includes both PDFs.
 			return;
 		}
 

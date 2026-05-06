@@ -20,6 +20,7 @@ class CA_Shortcode {
 		add_shortcode( 'custom_assessment', array( $this, 'render_mindset' ) );
 		add_shortcode( 'social_fluency_assessment', array( $this, 'render_social_fluency' ) );
 		add_shortcode( 'natural_attributes_cataloging_assessment', array( $this, 'render_natural_attributes_cataloging' ) );
+		add_shortcode( 'bundle_assessments', array( $this, 'render_bundle_assessments' ) );
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_assets' ) );
 		add_action( 'wp_footer', array( $this, 'maybe_print_modal' ), 5 );
 	}
@@ -34,7 +35,8 @@ class CA_Shortcode {
 		}
 		return has_shortcode( $post->post_content, 'custom_assessment' )
 			|| has_shortcode( $post->post_content, 'social_fluency_assessment' )
-			|| has_shortcode( $post->post_content, 'natural_attributes_cataloging_assessment' );
+			|| has_shortcode( $post->post_content, 'natural_attributes_cataloging_assessment' )
+			|| has_shortcode( $post->post_content, 'bundle_assessments' );
 	}
 
 	public function enqueue_assets() {
@@ -140,6 +142,17 @@ class CA_Shortcode {
 							)
 						),
 					),
+					CA_Assessment_Types::BUNDLE => array(
+						'type'               => CA_Assessment_Types::BUNDLE,
+						'defer_answer_save'  => true,
+						'modal_title'        => __( 'Bundle Option — Both Assessments Unlocked', 'rtr-custom-assessment' ),
+						'scale_max'          => 0,
+						'total_questions'    => 0,
+						'question_bank'      => array(),
+						'scale_note'         => '',
+						'per_number_labels'  => array(),
+						'questions_priority' => array(),
+					),
 				),
 				'inner_results' => array(
 					'title'        => __( 'Natural Attributes Cataloging', 'rtr-custom-assessment' ),
@@ -156,7 +169,7 @@ class CA_Shortcode {
 					'tagline'      => __( 'Unlock the full picture of how you show up in social and professional settings.', 'rtr-custom-assessment' ),
 					'congrats'     => __( 'Congratulations on completing your assessment!', 'rtr-custom-assessment' ),
 					'email_lead'   => __( 'Your full report will be sent after payment to', 'rtr-custom-assessment' ),
-					'intro'        => __( 'Complete checkout to download your full PDF report with category insights and your question responses.', 'rtr-custom-assessment' ),
+					'intro'        => __( 'Your overall Social Fluency tier and one domain to notice. Free.', 'rtr-custom-assessment' ),
 					'preview_intro' => __( 'Your overall Social Fluency tier and one domain to notice. Free.', 'rtr-custom-assessment' ),
 					'preview_note'  => __( 'This is meaningful but incomplete. Unlock the full report to explore your complete breakdown and every response.', 'rtr-custom-assessment' ),
 				),
@@ -166,6 +179,12 @@ class CA_Shortcode {
 					'congrats'     => __( 'Congratulations on completing your assessment!', 'rtr-custom-assessment' ),
 					'email_lead'   => __( 'Your full report will be sent after payment to', 'rtr-custom-assessment' ),
 					'intro'        => __( 'Pay once to unlock your downloadable full report with category scores and every response.', 'rtr-custom-assessment' ),
+				),
+				'bundle_results' => array(
+					'headline' => __( 'Your constants and your roots — the full picture.', 'rtr-custom-assessment' ),
+					'body'     => __( 'Take both assessments free. Unlock both personalized reports together for $29 — less than each one separately. If you want to see the interplay between your Natural Attributes and your Social Fluency (which is where the real insight lives), this is the move.', 'rtr-custom-assessment' ),
+					'cta'      => __( 'Unlock both reports — $29 →', 'rtr-custom-assessment' ),
+					'price'    => 29.00,
 				),
 				'labels'      => array(
 					'next'          => __( 'Next', 'rtr-custom-assessment' ),
@@ -235,6 +254,24 @@ class CA_Shortcode {
 			'natural_attributes_cataloging_assessment'
 		);
 		return $this->render_trigger_button( CA_Assessment_Types::INNER_DIMENSIONS, $atts['button_text'] );
+	}
+
+	/**
+	 * Bundle Option — Take both Natural Attributes + Social Fluency.
+	 *
+	 * @param array $atts Shortcode atts.
+	 * @return string
+	 */
+	public function render_bundle_assessments( $atts ) {
+		self::$needs_modal = true;
+		$atts              = shortcode_atts(
+			array(
+				'button_text' => __( 'Take Bundle', 'rtr-custom-assessment' ),
+			),
+			$atts,
+			'bundle_assessments'
+		);
+		return $this->render_trigger_button( CA_Assessment_Types::BUNDLE, $atts['button_text'] );
 	}
 
 	/**
@@ -406,6 +443,38 @@ class CA_Shortcode {
 							</form>
 						</div>
 					</div>
+
+				<!-- Bundle flow: Step 2 — choose which assessment first -->
+				<div id="ca-screen-bundle-order" class="ca-screen">
+					<div class="ca-screen-content">
+						<div class="ca-intro-badge"><?php esc_html_e( 'Step 2 of 3 — Choose what to take first', 'rtr-custom-assessment' ); ?></div>
+						<h2 class="ca-screen-title"><?php esc_html_e( 'Your constants and your roots — the full picture.', 'rtr-custom-assessment' ); ?></h2>
+						<p class="ca-screen-subtitle"><?php esc_html_e( 'Price: $29 USD (saves $9) | PPP adjusts automatically', 'rtr-custom-assessment' ); ?></p>
+						<p class="ca-screen-subtitle" style="margin-top:10px;"><?php esc_html_e( 'Take both assessments free. Unlock both personalized reports together for $29 — less than each one separately. If you want to see the interplay between your Natural Attributes and your Social Fluency (which is where the real insight lives), this is the move.', 'rtr-custom-assessment' ); ?></p>
+
+						<div class="ca-bundle-order-grid">
+							<button type="button" class="ca-btn ca-btn--ghost ca-bundle-order-btn" id="ca-bundle-inner-first">
+								<?php esc_html_e( 'Natural Attributes Cataloging first', 'rtr-custom-assessment' ); ?>
+							</button>
+							<button type="button" class="ca-btn ca-btn--ghost ca-bundle-order-btn" id="ca-bundle-social-first">
+								<?php esc_html_e( 'Social Fluency first', 'rtr-custom-assessment' ); ?>
+							</button>
+						</div>
+
+						<div class="ca-form-error" id="ca-bundle-order-error" role="alert" aria-live="polite" style="margin-top: 14px;"></div>
+
+						<div class="ca-form-actions" style="display:flex; justify-content:flex-end; margin-top: 20px;">
+							<button type="button" class="ca-btn ca-btn--primary ca-btn--lg" id="ca-bundle-order-next">
+								<span class="ca-btn-text"><?php esc_html_e( 'Next', 'rtr-custom-assessment' ); ?></span>
+								<svg class="ca-btn-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+									stroke-width="2" stroke-linecap="round"
+									stroke-linejoin="round" aria-hidden="true">
+									<path d="M5 12h14M12 5l7 7-7 7" />
+								</svg>
+							</button>
+						</div>
+					</div>
+				</div>
 
 					<div id="ca-screen-questions" class="ca-screen">
 						<div class="ca-screen-content ca-screen-content--question">

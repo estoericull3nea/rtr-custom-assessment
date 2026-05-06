@@ -20,6 +20,13 @@
     unsyncedChanges: false,
     /** True while fetching next/previous question without full-screen loading. */
     awaitingQuestionFetch: false,
+    /** Bundle flow mode (Natural Attributes + Social Fluency sequential). */
+    bundleMode: false,
+    /** 0 = first assessment running; 1 = second assessment running. */
+    bundleStage: 0,
+    bundleFirstType: null,
+    bundleSecondType: null,
+    bundleSubmissionIds: {},
   };
 
   var $modal,
@@ -55,7 +62,12 @@
     $saveProgressSaveBtn,
     $saveProgressDiscardBtn,
     $saveProgressCancelBtn,
-    $nextBtnLabel;
+    $nextBtnLabel,
+    $bundleOrderScreen,
+    $bundleOrderError,
+    $bundleInnerFirstBtn,
+    $bundleSocialFirstBtn,
+    $bundleOrderNextBtn;
 
   function getCurrentConfig() {
     if (
@@ -356,6 +368,11 @@
     $saveProgressSaveBtn = $("#ca-save-progress-save");
     $saveProgressDiscardBtn = $("#ca-save-progress-discard");
     $saveProgressCancelBtn = $("#ca-save-progress-cancel");
+    $bundleOrderScreen = $("#ca-screen-bundle-order");
+    $bundleOrderError = $("#ca-bundle-order-error");
+    $bundleInnerFirstBtn = $("#ca-bundle-inner-first");
+    $bundleSocialFirstBtn = $("#ca-bundle-social-first");
+    $bundleOrderNextBtn = $("#ca-bundle-order-next");
     $(document).on("click", ".ca-assessment-trigger", openModal);
 
     $("#ca-close-modal").on("click", attemptCloseModal);
@@ -429,6 +446,57 @@
     });
 
     $infoForm.on("submit", handleInfoSubmit);
+    if ($bundleInnerFirstBtn && $bundleSocialFirstBtn) {
+      $bundleInnerFirstBtn.on("click", function () {
+        state.bundleFirstType = "inner_dimensions";
+        state.bundleSecondType = "social_fluency";
+        $bundleInnerFirstBtn.addClass("ca-selected");
+        $bundleSocialFirstBtn.removeClass("ca-selected");
+        if ($bundleOrderError && $bundleOrderError.length) {
+          hideError($bundleOrderError);
+        }
+      });
+      $bundleSocialFirstBtn.on("click", function () {
+        state.bundleFirstType = "social_fluency";
+        state.bundleSecondType = "inner_dimensions";
+        $bundleSocialFirstBtn.addClass("ca-selected");
+        $bundleInnerFirstBtn.removeClass("ca-selected");
+        if ($bundleOrderError && $bundleOrderError.length) {
+          hideError($bundleOrderError);
+        }
+      });
+    }
+    if ($bundleOrderNextBtn && $bundleOrderNextBtn.length) {
+      $bundleOrderNextBtn.on("click", function () {
+        if (state.isSubmitting) {
+          return;
+        }
+        if (!state.bundleFirstType || !state.bundleSecondType) {
+          if ($bundleOrderError && $bundleOrderError.length) {
+            $bundleOrderError.text("Please choose an assessment order.").addClass("ca-visible");
+          }
+          return;
+        }
+
+        state.isSubmitting = true;
+        setBtnLoading($startBtn, true);
+        hideError($bundleOrderError);
+
+        state.assessmentType = state.bundleFirstType;
+        state.bundleStage = 0;
+
+        // Switch to the chosen assessment without clearing the info fields.
+        resetState({ keepInfoFields: true });
+
+        var cfg = getCurrentConfig();
+        if ($modalTitle.length) {
+          $modalTitle.text(cfg.modal_title || "Assessment");
+        }
+
+        // Persist bundle flags before starting the assessment.
+        saveUserInfo();
+      });
+    }
     $phoneCountrySelect.on("change", syncPhonePlaceholderWithCountry);
     syncPhonePlaceholderWithCountry();
 
@@ -447,10 +515,23 @@
   function openModal(e) {
     var type = $(e.currentTarget).attr("data-ca-assessment") || "mindset";
     state.assessmentType = type;
+    state.bundleMode = type === "bundle";
+    state.bundleStage = 0;
+    state.bundleFirstType = null;
+    state.bundleSecondType = null;
+    state.bundleSubmissionIds = {};
 
     var cfg = getCurrentConfig();
     if ($modalTitle.length) {
       $modalTitle.text(cfg.modal_title || "Assessment");
+    }
+
+    // Adjust the Step badge for bundle flow.
+    var $infoBadge = $("#ca-screen-info .ca-intro-badge");
+    if (state.bundleMode) {
+      $infoBadge.text("Step 1 of 3 — Your Information");
+    } else {
+      $infoBadge.text("Step 1 of 2 — Your Information");
     }
 
     $modal.attr("aria-hidden", "false");
@@ -533,7 +614,9 @@
     clearDraftAnswers();
   }
 
-  function resetState() {
+  function resetState(options) {
+    options = options || {};
+    var keepInfoFields = !!options.keepInfoFields;
     var cfg = getCurrentConfig();
     state.submissionId = null;
     state.stepIndex = 0;
@@ -545,7 +628,9 @@
     state.awaitingQuestionFetch = false;
     state.totalQuestions = cfg.total_questions || 0;
     state.questionOrder = buildQuestionOrder();
-    $infoForm[0].reset();
+    if (!keepInfoFields && $infoForm && $infoForm[0]) {
+      $infoForm[0].reset();
+    }
     syncPhonePlaceholderWithCountry();
     hideError($infoError);
     setProgress(0);
@@ -620,6 +705,9 @@
     switch (name) {
       case "info":
         $target = $("#ca-screen-info");
+        break;
+      case "bundle-order":
+        $target = $("#ca-screen-bundle-order");
         break;
       case "questions":
         $target = $("#ca-screen-questions");
@@ -810,6 +898,10 @@
       .done(function (response) {
         if (response.success) {
           state.submissionId = response.data.submission_id;
+          if (state.bundleMode) {
+            state.bundleSubmissionIds[state.assessmentType] =
+              state.submissionId;
+          }
           state.stepIndex = 0;
           saveSession(data.email, state.submissionId);
           restoreDraftAnswers();
@@ -905,6 +997,14 @@
     state.isSubmitting = true;
     hideError($infoError);
     setBtnLoading($startBtn, true);
+
+    if (state.bundleMode) {
+      state.isSubmitting = false;
+      setBtnLoading($startBtn, false);
+      hideProgress();
+      showScreen("bundle-order");
+      return;
+    }
 
     findInProgressByEmail(email, function (response) {
       if (
@@ -1662,25 +1762,65 @@
 
     var initialCheckoutUrl =
       state.checkoutUrl || CA_Config.checkout_url || "/checkout/";
-    var paywallOverlay = requiresPaidDownload
-      ? '<div class="ca-results-paywall-overlay" role="presentation">' +
-        '<div class="ca-results-paywall-text"><a href="' +
-        escHtml(initialCheckoutUrl) +
-        '" class="ca-btn ca-btn--primary ca-results-paywall-btn">&#128722; Get the Full Result</a></div></div>'
-      : "";
+    var isBundle = !!state.bundleMode;
+    var showPaywallOverlay = requiresPaidDownload;
+    if (isBundle) {
+      // In the bundle flow, first assessment is free-preview only.
+      showPaywallOverlay = state.bundleStage === 1;
+    }
 
-    var ctaBlock = requiresPaidDownload
-      ? '<div class="ca-results-cta">' +
+    var paywallOverlay = "";
+    if (showPaywallOverlay) {
+      if (isBundle && state.bundleStage === 1) {
+        var bundleCta =
+          CA_Config.bundle_results && CA_Config.bundle_results.cta
+            ? CA_Config.bundle_results.cta
+            : "Unlock both reports — $29 →";
+        paywallOverlay =
+          '<div class="ca-results-paywall-overlay" role="presentation">' +
+          '<div class="ca-results-paywall-text"><a href="' +
+          escHtml(initialCheckoutUrl) +
+          '" class="ca-btn ca-btn--primary ca-results-paywall-btn">&#128722; ' +
+          escHtml(bundleCta) +
+          "</a></div></div>";
+      } else {
+        paywallOverlay =
+          '<div class="ca-results-paywall-overlay" role="presentation">' +
+          '<div class="ca-results-paywall-text"><a href="' +
+          escHtml(initialCheckoutUrl) +
+          '" class="ca-btn ca-btn--primary ca-results-paywall-btn">&#128722; Get the Full Result</a></div></div>';
+      }
+    }
+
+    var ctaBlock = "";
+    if (isBundle && state.bundleStage === 0) {
+      var nextLabel =
+        state.bundleSecondType === "social_fluency"
+          ? "your Social Fluency assessment"
+          : "your Natural Attributes Cataloging assessment";
+      ctaBlock =
+        '<div class="ca-results-cta">' +
+        '<button type="button" class="ca-btn ca-btn--primary" id="ca-bundle-continue">Continue to ' +
+        escHtml(nextLabel) +
+        "</button>" +
+        '<button type="button" class="ca-btn ca-btn--ghost" id="ca-close-results" style="margin-top:10px;">Close</button>' +
+        "</div>";
+    } else if (showPaywallOverlay) {
+      ctaBlock =
+        '<div class="ca-results-cta">' +
         '<button type="button" class="ca-btn ca-btn--ghost" id="ca-close-results">Close</button>' +
-        "</div>"
-      : '<div class="ca-results-cta">' +
+        "</div>";
+    } else {
+      ctaBlock =
+        '<div class="ca-results-cta">' +
         "<p>Your results have been saved. A copy may be shared with you by email.</p>" +
         '<button type="button" class="ca-btn ca-btn--ghost" id="ca-close-results">Close</button>' +
         "</div>";
+    }
 
     var heroHtml =
       '<div class="ca-results-hero' +
-      (requiresPaidDownload ? " ca-results-preview-blocked" : "") +
+      (showPaywallOverlay ? " ca-results-preview-blocked" : "") +
       '">' +
       '<p class="ca-results-hero-name">' +
       escHtml(user.first_name + " " + user.last_name) +
@@ -1707,7 +1847,7 @@
 
     var bodyHtml =
       '<div class="ca-results-body' +
-      (requiresPaidDownload ? " ca-results-preview-blocked" : "") +
+      (showPaywallOverlay ? " ca-results-preview-blocked" : "") +
       '">' +
       '<div class="ca-results-user-card">' +
       '<div class="ca-results-user-avatar">' +
@@ -1742,8 +1882,12 @@
     hideProgress();
     showScreen("results");
 
-    if (requiresPaidDownload) {
-      preparePaidFullResultsCheckout(false);
+    if (showPaywallOverlay) {
+      if (isBundle) {
+        prepareBundleCheckout(false);
+      } else {
+        preparePaidFullResultsCheckout(false);
+      }
     }
 
     setTimeout(function () {
@@ -1756,12 +1900,23 @@
     $resultsContent
       .off("click.caCloseResults")
       .on("click.caCloseResults", "#ca-close-results", closeModal);
+
+    if (isBundle) {
+      $resultsContent
+        .off("click.caBundleContinue")
+        .on("click.caBundleContinue", "#ca-bundle-continue", function () {
+          startBundleSecondAssessment();
+        });
+    }
   }
 
   function handlePaywallCheckout(e) {
     e.preventDefault();
 
-    if (!state.submissionId || state.isSubmitting) {
+    if (!state.submissionId && !(state.bundleMode && state.bundleStage === 1)) {
+      return;
+    }
+    if (state.isSubmitting) {
       return;
     }
 
@@ -1770,7 +1925,112 @@
       return;
     }
 
-    preparePaidFullResultsCheckout(true, e.currentTarget);
+    if (state.bundleMode && state.bundleStage === 1) {
+      prepareBundleCheckout(true, e.currentTarget);
+    } else {
+      preparePaidFullResultsCheckout(true, e.currentTarget);
+    }
+  }
+
+  function prepareBundleCheckout(redirectAfterPrepare, buttonEl) {
+    if (state.isSubmitting) {
+      return;
+    }
+
+    var $btn = buttonEl ? $(buttonEl) : $();
+    state.isSubmitting = true;
+    if ($btn.length) {
+      setBtnLoading($btn, true);
+    }
+
+    var innerId = state.bundleSubmissionIds["inner_dimensions"];
+    var socialId = state.bundleSubmissionIds["social_fluency"];
+    if (!innerId || !socialId) {
+      state.isSubmitting = false;
+      if ($btn.length) {
+        setBtnLoading($btn, false);
+      }
+      alert(CA_Config.labels.error_generic);
+      return;
+    }
+
+    caPost(
+      withAssessment({
+        action: "ca_prepare_bundle_checkout",
+        nonce: CA_Config.nonce,
+        inner_submission_id: innerId,
+        social_submission_id: socialId,
+      }),
+    )
+      .done(function (response) {
+        if (response && response.success && response.data) {
+          state.checkoutUrl =
+            response.data.checkout_url ||
+            CA_Config.checkout_url ||
+            "/checkout/";
+          $resultsContent
+            .find(".ca-results-paywall-btn")
+            .attr("href", state.checkoutUrl);
+          if (redirectAfterPrepare) {
+            window.location.href = state.checkoutUrl;
+          }
+          return;
+        }
+
+        if (redirectAfterPrepare) {
+          alert(
+            (response &&
+              response.data &&
+              (response.data.message || response.data)) ||
+              CA_Config.labels.error_generic,
+          );
+        }
+      })
+      .fail(function (xhr, textStatus, errorThrown) {
+        console.error("CA AJAX ca_prepare_bundle_checkout failed:", {
+          textStatus: textStatus,
+          errorThrown: errorThrown,
+          status: xhr && xhr.status ? xhr.status : null,
+          responseText:
+            xhr && xhr.responseText ? xhr.responseText.slice(0, 500) : null,
+        });
+        if (redirectAfterPrepare) {
+          alert(getAjaxErrorMessage(xhr));
+        }
+      })
+      .always(function () {
+        if ($btn.length) {
+          setBtnLoading($btn, false);
+        }
+        state.isSubmitting = false;
+      });
+  }
+
+  function startBundleSecondAssessment() {
+    if (!state.bundleMode || state.bundleStage !== 0) {
+      // Only allow continue from the first assessment.
+      return;
+    }
+    if (!state.bundleSecondType) {
+      alert(CA_Config.labels.error_generic);
+      return;
+    }
+
+    state.bundleStage = 1;
+    state.assessmentType = state.bundleSecondType;
+
+    var cfg = getCurrentConfig();
+    if ($modalTitle && $modalTitle.length) {
+      $modalTitle.text(cfg.modal_title || "Assessment");
+    }
+
+    resetState({ keepInfoFields: true });
+    hideError($infoError);
+    showProgress();
+
+    state.isSubmitting = true;
+    setBtnLoading($startBtn, true);
+    saveUserInfo();
   }
 
   function preparePaidFullResultsCheckout(redirectAfterPrepare, buttonEl) {
