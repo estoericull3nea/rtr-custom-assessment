@@ -366,6 +366,10 @@ class CA_Ajax
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- Nonce already verified via $this->verify_nonce().
 		$submission_id = isset($_POST['submission_id']) ? absint($_POST['submission_id']) : 0;
 		$assessment_type = $this->get_assessment_type_from_request();
+		$bundle_mode = isset($_POST['bundle_mode']) ? absint($_POST['bundle_mode']) : 0;
+		$bundle_stage = isset($_POST['bundle_stage']) ? absint($_POST['bundle_stage']) : 0;
+		$bundle_inner_submission_id = isset($_POST['bundle_inner_submission_id']) ? absint($_POST['bundle_inner_submission_id']) : 0;
+		$bundle_social_submission_id = isset($_POST['bundle_social_submission_id']) ? absint($_POST['bundle_social_submission_id']) : 0;
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
 		if (!$submission_id) {
@@ -391,8 +395,19 @@ class CA_Ajax
 
 		CA_Database::save_category_scores($submission_id, $scoring['category_scores']);
 
-		// Send results email as soon as assessment is completed (all assessment types).
-		CA_Mailer::send_results_email($submission_id);
+		// For bundle flow, suppress client/admin results email on the first assessment.
+		$should_notify_results_email = !($bundle_mode && $bundle_stage <= 0);
+		if ($should_notify_results_email) {
+			if ($bundle_mode && $bundle_stage >= 1) {
+				if ($bundle_inner_submission_id > 0 && $bundle_social_submission_id > 0) {
+					CA_Mailer::send_bundle_completion_email($bundle_inner_submission_id, $bundle_social_submission_id);
+				} else {
+					CA_Mailer::send_results_email($submission_id);
+				}
+			} else {
+				CA_Mailer::send_results_email($submission_id);
+			}
+		}
 
 		$this->send_success('ca_submit_assessment', array(
 			'message' => __('Assessment submitted.', 'rtr-custom-assessment'),

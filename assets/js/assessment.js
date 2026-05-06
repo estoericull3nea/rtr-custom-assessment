@@ -1613,6 +1613,14 @@
       nonce: CA_Config.nonce,
       submission_id: state.submissionId,
     });
+    if (state.bundleMode) {
+      data.bundle_mode = 1;
+      data.bundle_stage = state.bundleStage;
+      data.bundle_inner_submission_id =
+        state.bundleSubmissionIds["inner_dimensions"] || 0;
+      data.bundle_social_submission_id =
+        state.bundleSubmissionIds["social_fluency"] || 0;
+    }
 
     var pAfter =
       typeof options.progressAfterSubmit === "number"

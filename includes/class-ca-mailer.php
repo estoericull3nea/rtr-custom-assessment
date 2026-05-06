@@ -52,6 +52,134 @@ class CA_Mailer
 	}
 
 	/**
+	 * Send one combined email when a bundle (NAC + Social Fluency) is fully completed.
+	 *
+	 * @param int $inner_submission_id
+	 * @param int $social_submission_id
+	 * @return bool
+	 */
+	public static function send_bundle_completion_email($inner_submission_id, $social_submission_id)
+	{
+		$inner_submission_id = (int) $inner_submission_id;
+		$social_submission_id = (int) $social_submission_id;
+		if ($inner_submission_id <= 0 || $social_submission_id <= 0) {
+			return false;
+		}
+
+		$inner = CA_Database::get_submission($inner_submission_id);
+		$social = CA_Database::get_submission($social_submission_id);
+		if (
+			!$inner || !$social
+			|| 'completed' !== (string) $inner->status
+			|| 'completed' !== (string) $social->status
+		) {
+			return false;
+		}
+
+		$to = sanitize_email((string) $inner->email);
+		if (!is_email($to)) {
+			return false;
+		}
+
+		$inner_cats = CA_Database::get_category_scores($inner_submission_id);
+		$social_cats = CA_Database::get_category_scores($social_submission_id);
+
+		$top_inner = null;
+		foreach ($inner_cats as $cat) {
+			if (!$top_inner || (float) $cat->average > (float) $top_inner->average) {
+				$top_inner = $cat;
+			}
+		}
+
+		$top_social = null;
+		foreach ($social_cats as $cat) {
+			if (!$top_social || (float) $cat->average > (float) $top_social->average) {
+				$top_social = $cat;
+			}
+		}
+
+		$inner_name = $top_inner ? (string) $top_inner->category_name : __('Your strongest attribute', 'rtr-custom-assessment');
+		$inner_summary = $top_inner
+			? CA_Scoring::get_category_summary((string) $top_inner->category_name, (float) $top_inner->average, CA_Assessment_Types::INNER_DIMENSIONS)
+			: __('You respond most strongly where your natural strengths are already active.', 'rtr-custom-assessment');
+
+		$social_profile = CA_Scoring::get_overall_profile((float) $social->average_score, CA_Assessment_Types::SOCIAL_FLUENCY);
+		$social_domain = $top_social ? (string) $top_social->category_name : __('your strongest domain', 'rtr-custom-assessment');
+		$social_summary = $top_social
+			? CA_Scoring::get_category_summary((string) $top_social->category_name, (float) $top_social->average, CA_Assessment_Types::SOCIAL_FLUENCY)
+			: __('This is where your social strengths show up most clearly.', 'rtr-custom-assessment');
+
+		$blog_name = get_bloginfo('name');
+		$subject = sprintf(
+			/* translators: %s: site name */
+			__('Your Bundle Assessment Results - %s', 'rtr-custom-assessment'),
+			$blog_name
+		);
+
+		$full_name = trim((string) $inner->first_name . ' ' . (string) $inner->last_name);
+		if ('' === $full_name) {
+			$full_name = __('there', 'rtr-custom-assessment');
+		}
+
+		$body = '
+		<!DOCTYPE html>
+		<html lang="en">
+		<head>
+			<meta charset="UTF-8">
+			<meta name="viewport" content="width=device-width, initial-scale=1.0">
+			<title>' . esc_html__('Bundle Results', 'rtr-custom-assessment') . '</title>
+			<style>
+				body { font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; color:#333; background:#f5f5f5; margin:0; }
+				.wrap { max-width:640px; margin:20px auto; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,.1); }
+				.head { background:linear-gradient(135deg,#aa3130 0%,#8b2823 100%); color:#fff; padding:26px; text-align:center; }
+				.content { padding:26px; }
+				.card { border:1px solid #e9e2d9; border-radius:8px; padding:14px 16px; margin:0 0 14px; background:#fff; }
+				.kicker { font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:#8d2b28; font-weight:700; margin:0 0 8px; }
+				.row { font-size:14px; line-height:1.6; margin:6px 0; }
+				.note { font-size:13px; color:#666; margin:10px 0 0; }
+			</style>
+		</head>
+		<body>
+			<div class="wrap">
+				<div class="head">
+					<h1 style="margin:0 0 8px; font-size:26px;">' . esc_html__('Bundle Complete!', 'rtr-custom-assessment') . '</h1>
+					<p style="margin:0; opacity:.92;">' . esc_html__('Here is your combined preview from both assessments.', 'rtr-custom-assessment') . '</p>
+				</div>
+				<div class="content">
+					<p>' . sprintf(esc_html__('Hi %s,', 'rtr-custom-assessment'), esc_html($full_name)) . '</p>
+
+					<div class="card">
+						<p class="kicker">' . esc_html__('Natural Attributes Cataloging', 'rtr-custom-assessment') . '</p>
+						<p class="row"><strong>' . esc_html__('Top attribute surfaced:', 'rtr-custom-assessment') . '</strong> ' . esc_html($inner_name) . '</p>
+						<p class="row"><strong>' . esc_html__('Pattern revealed:', 'rtr-custom-assessment') . '</strong> ' . esc_html($inner_summary) . '</p>
+					</div>
+
+					<div class="card">
+						<p class="kicker">' . esc_html__('Social Fluency Assessment', 'rtr-custom-assessment') . '</p>
+						<p class="row"><strong>' . esc_html__('Overall Social Fluency tier:', 'rtr-custom-assessment') . '</strong> ' . esc_html($social_profile) . '</p>
+						<p class="row"><strong>' . esc_html__('Domain to notice:', 'rtr-custom-assessment') . '</strong> ' . esc_html($social_domain) . '</p>
+						<p class="row">' . esc_html($social_summary) . '</p>
+					</div>
+
+					<p class="note">' . esc_html__('You can unlock full downloadable reports from your checkout flow.', 'rtr-custom-assessment') . '</p>
+				</div>
+			</div>
+		</body>
+		</html>';
+
+		$headers = array(
+			'Content-Type: text/html; charset=UTF-8',
+			'From: ' . $blog_name . ' <' . get_option('admin_email') . '>',
+		);
+
+		$sent = (bool) wp_mail($to, $subject, $body, $headers);
+		if ($sent) {
+			self::send_admin_bundle_results_notification($inner, $social);
+		}
+		return $sent;
+	}
+
+	/**
 	 * Email customer after paid NAC order with the same PDF URL as the checkout thank-you page.
 	 *
 	 * @param \WC_Order $order WooCommerce order.
@@ -509,6 +637,70 @@ class CA_Mailer
 			'From: ' . get_bloginfo('name') . ' <' . $admin_email . '>',
 		);
 
+		wp_mail($admin_email, $subject, $body, $headers);
+	}
+
+	/**
+	 * Notify admin that a bundle completion email was sent.
+	 *
+	 * @param object $inner_submission  Natural Attributes submission.
+	 * @param object $social_submission Social Fluency submission.
+	 * @return void
+	 */
+	private static function send_admin_bundle_results_notification($inner_submission, $social_submission)
+	{
+		if (!$inner_submission || !$social_submission) {
+			return;
+		}
+
+		$admin_email = (string) get_option('admin_email');
+		if (!is_email($admin_email)) {
+			return;
+		}
+
+		$name = trim((string) $inner_submission->first_name . ' ' . (string) $inner_submission->last_name);
+		if ('' === $name) {
+			$name = __('Unknown', 'rtr-custom-assessment');
+		}
+
+		$subject = sprintf(
+			/* translators: %s: customer name */
+			__('Bundle Results Email Sent (%s)', 'rtr-custom-assessment'),
+			$name
+		);
+
+		$inner_url = self::get_admin_submission_detail_url($inner_submission);
+		$social_url = self::get_admin_submission_detail_url($social_submission);
+
+		$body = '
+		<!DOCTYPE html>
+		<html lang="en">
+		<head>
+			<meta charset="UTF-8">
+			<meta name="viewport" content="width=device-width, initial-scale=1.0">
+			<title>' . esc_html__('Bundle Results Email Sent', 'rtr-custom-assessment') . '</title>
+		</head>
+		<body style="font-family:Segoe UI,Tahoma,Geneva,Verdana,sans-serif;line-height:1.6;color:#333;background:#f5f5f5;margin:0;padding:20px;">
+			<div style="max-width:640px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;">
+				<div style="background:linear-gradient(135deg,#aa3130 0%,#8b2823 100%);color:#fff;padding:24px 22px;">
+					<h1 style="margin:0 0 6px;font-size:24px;">' . esc_html__('Bundle Results Email Sent', 'rtr-custom-assessment') . '</h1>
+					<p style="margin:0;opacity:.9;">' . esc_html__('Customer bundle completion notification delivered.', 'rtr-custom-assessment') . '</p>
+				</div>
+				<div style="padding:22px;">
+					<p><strong>' . esc_html($name) . '</strong> (' . esc_html((string) $inner_submission->email) . ')</p>
+					<p style="margin:8px 0;">' . esc_html__('Natural Attributes submission:', 'rtr-custom-assessment') . ' #' . esc_html((string) ((int) $inner_submission->id)) . '</p>
+					<p style="margin:8px 0;">' . esc_html__('Social Fluency submission:', 'rtr-custom-assessment') . ' #' . esc_html((string) ((int) $social_submission->id)) . '</p>
+					<p style="margin:14px 0 0;"><a href="' . esc_url($inner_url) . '">' . esc_html__('Open Natural Attributes submission', 'rtr-custom-assessment') . '</a></p>
+					<p style="margin:8px 0 0;"><a href="' . esc_url($social_url) . '">' . esc_html__('Open Social Fluency submission', 'rtr-custom-assessment') . '</a></p>
+				</div>
+			</div>
+		</body>
+		</html>';
+
+		$headers = array(
+			'Content-Type: text/html; charset=UTF-8',
+			'From: ' . get_bloginfo('name') . ' <' . $admin_email . '>',
+		);
 		wp_mail($admin_email, $subject, $body, $headers);
 	}
 
