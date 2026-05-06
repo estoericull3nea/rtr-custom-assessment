@@ -224,7 +224,7 @@ class CA_Shortcode {
 		self::$needs_modal = true;
 		$atts              = shortcode_atts(
 			array(
-				'button_text' => __( 'Start Natural Attributes Cataloging', 'rtr-custom-assessment' ),
+				'button_text' => __( 'Show me my Constants', 'rtr-custom-assessment' ),
 			),
 			$atts,
 			'natural_attributes_cataloging_assessment'
