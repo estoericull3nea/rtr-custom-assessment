@@ -494,7 +494,44 @@
         }
 
         // Persist bundle flags before starting the assessment.
-        saveUserInfo();
+        var email = $("#ca-email").val().trim();
+        if (!email) {
+          showError($infoError, "Email is required.");
+          state.isSubmitting = false;
+          setBtnLoading($startBtn, false);
+          return;
+        }
+
+        findInProgressByEmail(email, function (response) {
+          if (
+            response &&
+            response.success &&
+            response.data &&
+            response.data.found &&
+            (response.data.status === "in_progress" ||
+              response.data.status === "started")
+          ) {
+            showResumeDialog(
+              email,
+              function () {
+                state.isSubmitting = false;
+                setBtnLoading($startBtn, false);
+                resumeAssessment(
+                  response.data.submission_id,
+                  response.data.answers_map,
+                  response.data.total,
+                );
+              },
+              function () {
+                clearSavedSession();
+                saveUserInfo();
+              },
+            );
+            return;
+          }
+
+          saveUserInfo();
+        });
       });
     }
     $phoneCountrySelect.on("change", syncPhonePlaceholderWithCountry);
