@@ -81,12 +81,147 @@ class CA_Mailer
 			$name = __('Unknown', 'rtr-custom-assessment');
 		}
 
-		$body = '<p>' . esc_html__('A customer results email has been sent.', 'rtr-custom-assessment') . '</p>';
-		$body .= '<p><strong>' . esc_html__('Submission ID:', 'rtr-custom-assessment') . '</strong> ' . esc_html((string) ((int) $submission->id)) . '<br>';
-		$body .= '<strong>' . esc_html__('Assessment:', 'rtr-custom-assessment') . '</strong> ' . esc_html($assessment_label) . '<br>';
-		$body .= '<strong>' . esc_html__('Name:', 'rtr-custom-assessment') . '</strong> ' . esc_html($name) . '<br>';
-		$body .= '<strong>' . esc_html__('Email:', 'rtr-custom-assessment') . '</strong> ' . esc_html((string) $submission->email) . '</p>';
-		$body .= '<p><a href="' . esc_url($detail_url) . '">' . esc_html__('Open submission detail in admin', 'rtr-custom-assessment') . '</a></p>';
+		$blog_name = get_bloginfo('name');
+		$submitted_at = isset($submission->created_at) && '' !== (string) $submission->created_at
+			? date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime((string) $submission->created_at))
+			: '—';
+
+		$body = '
+		<!DOCTYPE html>
+		<html lang="en">
+		<head>
+			<meta charset="UTF-8">
+			<meta name="viewport" content="width=device-width, initial-scale=1.0">
+			<title>' . esc_html__('Customer Results Email Sent', 'rtr-custom-assessment') . '</title>
+			<style>
+				* { margin: 0; padding: 0; }
+				body {
+					font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+					line-height: 1.6;
+					color: #333;
+					background-color: #f5f5f5;
+				}
+				.email-container {
+					max-width: 600px;
+					margin: 20px auto;
+					background-color: #fff;
+					border-radius: 8px;
+					box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+					overflow: hidden;
+				}
+				.email-header {
+					background: linear-gradient(135deg, #aa3130 0%, #8b2823 100%);
+					color: #fff;
+					padding: 30px;
+					text-align: center;
+				}
+				.email-header h1 {
+					font-size: 26px;
+					margin-bottom: 8px;
+				}
+				.email-header p {
+					font-size: 14px;
+					opacity: 0.92;
+				}
+				.email-content {
+					padding: 30px;
+				}
+				.info-table {
+					width: 100%;
+					font-size: 14px;
+					border-collapse: collapse;
+					background: #fafafa;
+					border: 1px solid #eee;
+					border-radius: 6px;
+					overflow: hidden;
+				}
+				.info-table td {
+					padding: 10px 12px;
+					vertical-align: top;
+					border-bottom: 1px solid #eee;
+				}
+				.info-table tr:last-child td {
+					border-bottom: none;
+				}
+				.info-key {
+					width: 34%;
+					color: #666;
+					font-weight: 600;
+					background: #f7f7f7;
+				}
+				.cta-wrap {
+					margin-top: 20px;
+					text-align: center;
+				}
+				.cta-btn {
+					display: inline-block;
+					background: #aa3130;
+					color: #fff !important;
+					text-decoration: none;
+					padding: 10px 18px;
+					border-radius: 6px;
+					font-weight: 600;
+					font-size: 14px;
+				}
+				.cta-btn:hover {
+					background: #8b2823;
+					text-decoration: none;
+				}
+				.footer-section {
+					background-color: #f5f5f5;
+					padding: 20px 30px;
+					border-top: 1px solid #eee;
+					font-size: 13px;
+					color: #666;
+					text-align: center;
+				}
+			</style>
+		</head>
+		<body>
+			<div class="email-container">
+				<div class="email-header">
+					<h1>' . esc_html__('Customer Results Email Sent', 'rtr-custom-assessment') . '</h1>
+					<p>' . esc_html__('A customer notification was delivered successfully.', 'rtr-custom-assessment') . '</p>
+				</div>
+
+				<div class="email-content">
+					<p style="margin-bottom: 14px;">' . esc_html__('A customer results email has just been sent. Submission details are below:', 'rtr-custom-assessment') . '</p>
+
+					<table class="info-table" role="presentation">
+						<tr>
+							<td class="info-key">' . esc_html__('Submission ID', 'rtr-custom-assessment') . '</td>
+							<td>' . esc_html((string) ((int) $submission->id)) . '</td>
+						</tr>
+						<tr>
+							<td class="info-key">' . esc_html__('Assessment', 'rtr-custom-assessment') . '</td>
+							<td>' . esc_html($assessment_label) . '</td>
+						</tr>
+						<tr>
+							<td class="info-key">' . esc_html__('Name', 'rtr-custom-assessment') . '</td>
+							<td>' . esc_html($name) . '</td>
+						</tr>
+						<tr>
+							<td class="info-key">' . esc_html__('Email', 'rtr-custom-assessment') . '</td>
+							<td>' . esc_html((string) $submission->email) . '</td>
+						</tr>
+						<tr>
+							<td class="info-key">' . esc_html__('Submitted', 'rtr-custom-assessment') . '</td>
+							<td>' . esc_html($submitted_at) . '</td>
+						</tr>
+					</table>
+
+					<div class="cta-wrap">
+						<a href="' . esc_url($detail_url) . '" class="cta-btn">' . esc_html__('Open Submission Detail', 'rtr-custom-assessment') . '</a>
+					</div>
+				</div>
+
+				<div class="footer-section">
+					<p>&copy; ' . esc_html($blog_name) . ' ' . gmdate('Y') . '. ' . esc_html__('All rights reserved.', 'rtr-custom-assessment') . '</p>
+					<p>' . esc_html__('This is an automated admin notification.', 'rtr-custom-assessment') . '</p>
+				</div>
+			</div>
+		</body>
+		</html>';
 
 		$headers = array(
 			'Content-Type: text/html; charset=UTF-8',
