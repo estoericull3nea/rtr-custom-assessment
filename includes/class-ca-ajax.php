@@ -1290,7 +1290,7 @@ class CA_Ajax
 	}
 
 	/**
-	 * After successful payment, mark the NAC full-results product as out of stock (one purchase per hidden product).
+	 * After successful payment, draft the NAC full-results product and mark it out of stock (one purchase per hidden product).
 	 *
 	 * @param int $order_id WooCommerce order ID.
 	 * @return void
@@ -1340,7 +1340,7 @@ class CA_Ajax
 	}
 
 	/**
-	 * Force stock status out-of-stock for a NAC hidden product created by this plugin.
+	 * After payment: set NAC hidden product to draft and out of stock.
 	 *
 	 * @param int $product_id Product post ID.
 	 * @return void
@@ -1361,6 +1361,7 @@ class CA_Ajax
 			return;
 		}
 
+		$product->set_status('draft');
 		$product->set_manage_stock(true);
 		$product->set_stock_quantity(0);
 		$product->set_backorders('no');
