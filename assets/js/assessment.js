@@ -1519,7 +1519,50 @@
     if (requiresPaidDownload) {
       var emailEsc = escHtml(user.email);
       var quoteHtml = "";
+      var previewHtml = "";
       if (data.assessment_type === "inner_dimensions") {
+        var topCat = null;
+        if (Array.isArray(cats) && cats.length) {
+          topCat = cats
+            .slice()
+            .sort(function (a, b) {
+              return (parseFloat(b.average) || 0) - (parseFloat(a.average) || 0);
+            })[0];
+        }
+        var topTraitText = topCat
+          ? 'Top attribute surfaced: <strong>' +
+            escHtml(topCat.name) +
+            "</strong>."
+          : "Top attribute surfaced: <strong>Your strongest natural attribute</strong>.";
+        var patternText = topCat
+          ? "Pattern revealed: " + escHtml(topCat.summary || "")
+          : "Pattern revealed: You respond most strongly where your natural strengths are already active.";
+        previewHtml =
+          '<div class="ca-results-free-preview">' +
+          '<h3 class="ca-results-free-preview-title">' +
+          escHtml(Pack.preview_title || "Free preview (teaser of value)") +
+          "</h3>" +
+          '<p class="ca-results-free-preview-copy">' +
+          escHtml(
+            Pack.preview_intro ||
+              "See your preview. A snapshot of what the assessment surfaced.",
+          ) +
+          "</p>" +
+          '<ul class="ca-results-free-preview-list">' +
+          "<li>" +
+          topTraitText +
+          "</li>" +
+          "<li>" +
+          patternText +
+          "</li>" +
+          "</ul>" +
+          '<p class="ca-results-free-preview-note">' +
+          escHtml(
+            Pack.preview_note ||
+              "This is meaningful but incomplete. Unlock the full report for your complete breakdown and all responses.",
+          ) +
+          "</p>" +
+          "</div>";
         quoteHtml =
           '<p class="ca-results-nac-quote">&ldquo;' +
           escHtml(
@@ -1565,6 +1608,7 @@
             "Complete checkout to unlock and download your full PDF report.",
         ) +
         "</p>" +
+        previewHtml +
         "</div>";
     }
 
