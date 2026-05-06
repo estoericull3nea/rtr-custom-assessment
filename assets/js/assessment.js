@@ -1539,9 +1539,6 @@
           : "Pattern revealed: You respond most strongly where your natural strengths are already active.";
         previewHtml =
           '<div class="ca-results-free-preview">' +
-          '<h3 class="ca-results-free-preview-title">' +
-          escHtml(Pack.preview_title || "Free preview (teaser of value)") +
-          "</h3>" +
           '<p class="ca-results-free-preview-copy">' +
           escHtml(
             Pack.preview_intro ||
