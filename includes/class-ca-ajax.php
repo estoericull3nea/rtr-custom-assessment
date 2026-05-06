@@ -46,6 +46,7 @@ class CA_Ajax
 		add_action('woocommerce_order_details_after_order_table', array($this, 'render_inner_dimensions_download_after_order_table'), 20);
 		add_action('woocommerce_checkout_create_order', array($this, 'attach_inner_dimensions_meta_to_checkout_order'), 20, 2);
 		add_filter('woocommerce_checkout_get_value', array($this, 'checkout_prefill_billing_from_pay_order'), 20, 2);
+		add_filter('woocommerce_payment_complete_order_status', array($this, 'inner_dimensions_payment_complete_order_status'), 10, 3);
 	}
 
 	/**
@@ -1177,6 +1178,30 @@ class CA_Ajax
 			}
 			break;
 		}
+	}
+
+	/**
+	 * After successful payment, mark Natural Attributes Cataloging orders completed (not processing).
+	 *
+	 * @param string   $status    Status WooCommerce would apply (typically processing or completed).
+	 * @param int      $order_id  Order ID.
+	 * @param \WC_Order|false $order Order object when available.
+	 * @return string
+	 */
+	public function inner_dimensions_payment_complete_order_status($status, $order_id, $order)
+	{
+		if (!$order instanceof \WC_Order) {
+			$order = wc_get_order((int) $order_id);
+		}
+		if (!$order instanceof \WC_Order) {
+			return $status;
+		}
+
+		if (CA_Assessment_Types::INNER_DIMENSIONS !== (string) $order->get_meta('_ca_assessment_type')) {
+			return $status;
+		}
+
+		return 'completed';
 	}
 
 	/**
