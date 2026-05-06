@@ -464,7 +464,7 @@ class CA_Ajax
 			return (float) apply_filters('ca_inner_dimensions_full_results_price', 19.00, $submission_id);
 		}
 		if (CA_Assessment_Types::SOCIAL_FLUENCY === $t) {
-			return (float) apply_filters('ca_social_fluency_full_results_price', 9.99, $submission_id);
+			return (float) apply_filters('ca_social_fluency_full_results_price', 19.00, $submission_id);
 		}
 		return (float) apply_filters('ca_mindset_full_results_price', 9.99, $submission_id);
 	}
