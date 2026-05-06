@@ -18,6 +18,7 @@ class CA_Mailer
 	 */
 	public static function send_results_email($submission_id)
 	{
+		$submission_id = (int) $submission_id;
 		$submission = CA_Database::get_submission($submission_id);
 
 		if (!$submission || 'completed' !== $submission->status) {
@@ -43,8 +44,381 @@ class CA_Mailer
 
 		// Send email
 		$sent = wp_mail($submission->email, $subject, $body, $headers);
+		if ($sent) {
+			self::send_admin_results_notification($submission);
+		}
 
 		return $sent;
+	}
+
+	/**
+	 * Email customer after paid NAC order with the same PDF URL as the checkout thank-you page.
+	 *
+	 * @param \WC_Order $order WooCommerce order.
+	 * @param string    $download_url Public PDF URL.
+	 * @return bool
+	 */
+	public static function send_customer_paid_pdf_download_email($order, $download_url)
+	{
+		if (!$order instanceof \WC_Order) {
+			return false;
+		}
+
+		$download_url = trim((string) $download_url);
+		if ('' === $download_url) {
+			return false;
+		}
+
+		$to = trim((string) $order->get_billing_email());
+		if (!is_email($to)) {
+			return false;
+		}
+
+		$blog_name = get_bloginfo('name');
+		$order_no = (string) $order->get_order_number();
+		$subject = sprintf(
+			/* translators: %s: order number */
+			__('Your order #%s is complete', 'rtr-custom-assessment'),
+			$order_no
+		);
+		$subject = apply_filters('ca_customer_paid_pdf_email_subject', $subject, $order, $download_url);
+
+		$first = trim((string) $order->get_billing_first_name());
+		$greeting = '' !== $first
+			? '<p style="margin-bottom:12px;">' . sprintf(
+				/* translators: %s: first name */
+				esc_html__('Hi %s,', 'rtr-custom-assessment'),
+				esc_html($first)
+			) . '</p>'
+			: '<p style="margin-bottom:12px;">' . esc_html__('Hello,', 'rtr-custom-assessment') . '</p>';
+
+		$body_inner = $greeting;
+		$body_inner .= '<p style="margin-bottom:14px;">' . esc_html__('Your payment was received and your order is complete. Use the link below to download your PDF — the same link shown on the checkout confirmation page.', 'rtr-custom-assessment') . '</p>';
+		$body_inner .= '<div class="cta-wrap" style="margin: 20px 0; text-align:center;">';
+		$body_inner .= '<a href="' . esc_url($download_url) . '" class="cta-btn" style="display:inline-block;background:#aa3130;color:#fff !important;text-decoration:none;padding:12px 22px;border-radius:6px;font-weight:600;font-size:15px;">';
+		$body_inner .= esc_html__('Download PDF', 'rtr-custom-assessment');
+		$body_inner .= '</a></div>';
+		$body_inner .= '<p style="margin-top:14px;font-size:13px;color:#666;line-height:1.5;">';
+		$body_inner .= esc_html__('If the button does not work, copy this address into your browser:', 'rtr-custom-assessment');
+		$body_inner .= '</p>';
+		$body_inner .= '<p style="word-break:break-all;font-size:12px;color:#999;margin-top:6px;"><a href="' . esc_url($download_url) . '" style="color:#aa3130;">' . esc_html($download_url) . '</a></p>';
+
+		$body = '
+		<!DOCTYPE html>
+		<html lang="en">
+		<head>
+			<meta charset="UTF-8">
+			<meta name="viewport" content="width=device-width, initial-scale=1.0">
+			<title>' . esc_html__('Your order is complete', 'rtr-custom-assessment') . '</title>
+			<style>
+				* { margin: 0; padding: 0; }
+				body {
+					font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+					line-height: 1.6;
+					color: #333;
+					background-color: #f5f5f5;
+				}
+				.email-container {
+					max-width: 600px;
+					margin: 20px auto;
+					background-color: #fff;
+					border-radius: 8px;
+					box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+					overflow: hidden;
+				}
+				.email-header {
+					background: linear-gradient(135deg, #aa3130 0%, #8b2823 100%);
+					color: #fff;
+					padding: 30px;
+					text-align: center;
+				}
+				.email-header h1 {
+					font-size: 26px;
+					margin-bottom: 8px;
+				}
+				.email-header p {
+					font-size: 14px;
+					opacity: 0.92;
+				}
+				.email-content { padding: 30px; }
+				.cta-wrap { margin: 20px 0; text-align: center; }
+				.cta-btn {
+					display: inline-block;
+					background: #aa3130;
+					color: #fff !important;
+					text-decoration: none;
+					padding: 12px 22px;
+					border-radius: 6px;
+					font-weight: 600;
+					font-size: 15px;
+				}
+				.footer-section {
+					background-color: #f5f5f5;
+					padding: 20px 30px;
+					border-top: 1px solid #eee;
+					font-size: 13px;
+					color: #666;
+					text-align: center;
+				}
+			</style>
+		</head>
+		<body>
+			<div class="email-container">
+				<div class="email-header">
+					<h1>' . esc_html__('Thank you for your purchase', 'rtr-custom-assessment') . '</h1>
+					<p>' . esc_html__('Your order is complete', 'rtr-custom-assessment') . '</p>
+				</div>
+				<div class="email-content">
+					' . $body_inner . '
+				</div>
+				<div class="footer-section">
+					<p>&copy; ' . esc_html($blog_name) . ' ' . gmdate('Y') . '. ' . esc_html__('All rights reserved.', 'rtr-custom-assessment') . '</p>
+					<p>' . esc_html__('This is an automated message. Please do not reply.', 'rtr-custom-assessment') . '</p>
+				</div>
+			</div>
+		</body>
+		</html>';
+
+		$body = apply_filters('ca_customer_paid_pdf_email_body', $body, $order, $download_url);
+
+		$from_email = (string) get_option('admin_email');
+		if (!is_email($from_email)) {
+			$from_email = $to;
+		}
+
+		$headers = array(
+			'Content-Type: text/html; charset=UTF-8',
+			'From: ' . $blog_name . ' <' . $from_email . '>',
+		);
+
+		return (bool) wp_mail($to, $subject, $body, $headers);
+	}
+
+	/**
+	 * Notify admin that a customer results email was sent.
+	 *
+	 * @param object $submission Submission row.
+	 * @return void
+	 */
+	private static function send_admin_results_notification($submission)
+	{
+		if (!$submission || empty($submission->id)) {
+			return;
+		}
+
+		$admin_email = (string) get_option('admin_email');
+		if (!is_email($admin_email)) {
+			return;
+		}
+
+		$subject = sprintf(
+			/* translators: %d: submission id */
+			__('Customer Results Email Sent (Submission #%d)', 'rtr-custom-assessment'),
+			(int) $submission->id
+		);
+
+		$detail_url = self::get_admin_submission_detail_url($submission);
+		$assessment_label = self::assessment_type_label(CA_Assessment_Types::from_submission($submission));
+		$name = trim((string) $submission->first_name . ' ' . (string) $submission->last_name);
+		if ('' === $name) {
+			$name = __('Unknown', 'rtr-custom-assessment');
+		}
+
+		$blog_name = get_bloginfo('name');
+		$submitted_at = isset($submission->created_at) && '' !== (string) $submission->created_at
+			? date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime((string) $submission->created_at))
+			: '—';
+
+		$body = '
+		<!DOCTYPE html>
+		<html lang="en">
+		<head>
+			<meta charset="UTF-8">
+			<meta name="viewport" content="width=device-width, initial-scale=1.0">
+			<title>' . esc_html__('Customer Results Email Sent', 'rtr-custom-assessment') . '</title>
+			<style>
+				* { margin: 0; padding: 0; }
+				body {
+					font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+					line-height: 1.6;
+					color: #333;
+					background-color: #f5f5f5;
+				}
+				.email-container {
+					max-width: 600px;
+					margin: 20px auto;
+					background-color: #fff;
+					border-radius: 8px;
+					box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+					overflow: hidden;
+				}
+				.email-header {
+					background: linear-gradient(135deg, #aa3130 0%, #8b2823 100%);
+					color: #fff;
+					padding: 30px;
+					text-align: center;
+				}
+				.email-header h1 {
+					font-size: 26px;
+					margin-bottom: 8px;
+				}
+				.email-header p {
+					font-size: 14px;
+					opacity: 0.92;
+				}
+				.email-content {
+					padding: 30px;
+				}
+				.info-table {
+					width: 100%;
+					font-size: 14px;
+					border-collapse: collapse;
+					background: #fafafa;
+					border: 1px solid #eee;
+					border-radius: 6px;
+					overflow: hidden;
+				}
+				.info-table td {
+					padding: 10px 12px;
+					vertical-align: top;
+					border-bottom: 1px solid #eee;
+				}
+				.info-table tr:last-child td {
+					border-bottom: none;
+				}
+				.info-key {
+					width: 34%;
+					color: #666;
+					font-weight: 600;
+					background: #f7f7f7;
+				}
+				.cta-wrap {
+					margin-top: 20px;
+					text-align: center;
+				}
+				.cta-btn {
+					display: inline-block;
+					background: #aa3130;
+					color: #fff !important;
+					text-decoration: none;
+					padding: 10px 18px;
+					border-radius: 6px;
+					font-weight: 600;
+					font-size: 14px;
+				}
+				.cta-btn:hover {
+					background: #8b2823;
+					text-decoration: none;
+				}
+				.footer-section {
+					background-color: #f5f5f5;
+					padding: 20px 30px;
+					border-top: 1px solid #eee;
+					font-size: 13px;
+					color: #666;
+					text-align: center;
+				}
+			</style>
+		</head>
+		<body>
+			<div class="email-container">
+				<div class="email-header">
+					<h1>' . esc_html__('Customer Results Email Sent', 'rtr-custom-assessment') . '</h1>
+					<p>' . esc_html__('A customer notification was delivered successfully.', 'rtr-custom-assessment') . '</p>
+				</div>
+
+				<div class="email-content">
+					<p style="margin-bottom: 14px;">' . esc_html__('A customer results email has just been sent. Submission details are below:', 'rtr-custom-assessment') . '</p>
+
+					<table class="info-table" role="presentation">
+						<tr>
+							<td class="info-key">' . esc_html__('Submission ID', 'rtr-custom-assessment') . '</td>
+							<td>' . esc_html((string) ((int) $submission->id)) . '</td>
+						</tr>
+						<tr>
+							<td class="info-key">' . esc_html__('Assessment', 'rtr-custom-assessment') . '</td>
+							<td>' . esc_html($assessment_label) . '</td>
+						</tr>
+						<tr>
+							<td class="info-key">' . esc_html__('Name', 'rtr-custom-assessment') . '</td>
+							<td>' . esc_html($name) . '</td>
+						</tr>
+						<tr>
+							<td class="info-key">' . esc_html__('Email', 'rtr-custom-assessment') . '</td>
+							<td>' . esc_html((string) $submission->email) . '</td>
+						</tr>
+						<tr>
+							<td class="info-key">' . esc_html__('Submitted', 'rtr-custom-assessment') . '</td>
+							<td>' . esc_html($submitted_at) . '</td>
+						</tr>
+					</table>
+
+					<div class="cta-wrap">
+						<a href="' . esc_url($detail_url) . '" class="cta-btn">' . esc_html__('Open Submission Detail', 'rtr-custom-assessment') . '</a>
+					</div>
+				</div>
+
+				<div class="footer-section">
+					<p>&copy; ' . esc_html($blog_name) . ' ' . gmdate('Y') . '. ' . esc_html__('All rights reserved.', 'rtr-custom-assessment') . '</p>
+					<p>' . esc_html__('This is an automated admin notification.', 'rtr-custom-assessment') . '</p>
+				</div>
+			</div>
+		</body>
+		</html>';
+
+		$headers = array(
+			'Content-Type: text/html; charset=UTF-8',
+			'From: ' . get_bloginfo('name') . ' <' . $admin_email . '>',
+		);
+
+		wp_mail($admin_email, $subject, $body, $headers);
+	}
+
+	/**
+	 * Build admin detail URL for the submission.
+	 *
+	 * @param object $submission Submission row.
+	 * @return string
+	 */
+	private static function get_admin_submission_detail_url($submission)
+	{
+		$submission_id = isset($submission->id) ? (int) $submission->id : 0;
+		$page = 'custom-assessment-mindset';
+		$type = CA_Assessment_Types::from_submission($submission);
+
+		if (CA_Assessment_Types::SOCIAL_FLUENCY === $type) {
+			$page = 'custom-assessment-social';
+		} elseif (CA_Assessment_Types::INNER_DIMENSIONS === $type) {
+			$page = 'custom-assessment-inner';
+		}
+
+		return add_query_arg(
+			array(
+				'page' => $page,
+				'ca_tab' => 'submissions',
+				'view' => 'detail',
+				'id' => $submission_id,
+			),
+			admin_url('admin.php')
+		);
+	}
+
+	/**
+	 * Human label for assessment type.
+	 *
+	 * @param string $type Normalized assessment type.
+	 * @return string
+	 */
+	private static function assessment_type_label($type)
+	{
+		$type = CA_Assessment_Types::normalize($type);
+		if (CA_Assessment_Types::SOCIAL_FLUENCY === $type) {
+			return __('Social Fluency', 'rtr-custom-assessment');
+		}
+		if (CA_Assessment_Types::INNER_DIMENSIONS === $type) {
+			return __('Natural Attributes Cataloging', 'rtr-custom-assessment');
+		}
+		return __('Mindset', 'rtr-custom-assessment');
 	}
 
 	/**
@@ -58,13 +432,30 @@ class CA_Mailer
 	{
 		$blog_name = get_bloginfo('name');
 		$assessment_type = CA_Assessment_Types::from_submission($submission);
-		$is_nac = ($assessment_type === CA_Assessment_Types::INNER_DIMENSIONS);
-		$results_mask_style = $is_nac ? ' style="filter: blur(8px); opacity: 0.22; user-select: none; pointer-events: none;"' : '';
+		$needs_paywall = CA_Assessment_Types::requires_paid_full_results($assessment_type);
 		$scale_max = CA_Assessment_Types::get_scale_max($assessment_type);
 		$total_questions = CA_Assessment_Registry::get_total_count($assessment_type);
 		$max_score = $total_questions * $scale_max;
 		$overall_profile = CA_Scoring::get_overall_profile((float) $submission->average_score, $assessment_type);
-		$paywall_url = self::build_inner_dimensions_checkout_url_for_submission((int) $submission->id);
+
+		$paid_unlocked = $needs_paywall && self::submission_has_paid_full_results_order($submission);
+		$paywall_url = '';
+		if ($needs_paywall && !$paid_unlocked) {
+			$ajax = CA_Ajax::get_instance();
+			if ($ajax) {
+				$paywall_url = $ajax->get_paid_full_results_order_pay_url_for_submission((int) $submission->id);
+			}
+			if ('' === $paywall_url && function_exists('wc_get_checkout_url')) {
+				$paywall_url = wc_get_checkout_url();
+			}
+		}
+
+		$header_tagline = $needs_paywall
+			? esc_html__('Unlock your full report', 'rtr-custom-assessment')
+			: esc_html__('Your Results Summary', 'rtr-custom-assessment');
+		$intro_follow = $needs_paywall
+			? esc_html__('Thank you for completing the assessment. Use the secure link below to open your personal checkout page and unlock your full results—the same link you get after finishing the assessment.', 'rtr-custom-assessment')
+			: esc_html__('Thank you for completing the assessment. Below is your detailed results summary.', 'rtr-custom-assessment');
 
 		$body = '
 		<!DOCTYPE html>
@@ -264,18 +655,20 @@ class CA_Mailer
 				<!-- Header -->
 				<div class="email-header">
 					<h1>Assessment Complete!</h1>
-					<p>Your Results Summary</p>
+					<p>' . $header_tagline . '</p>
 				</div>
 
 				<!-- Content -->
 				<div class="email-content">
 					<div class="intro-text">
 						<p>Dear <strong>' . esc_html($submission->first_name . ' ' . $submission->last_name) . '</strong>,</p>
-						<p style="margin-top: 10px;">Thank you for completing the assessment. Below is your detailed results summary.</p>
-					</div>
+						<p style="margin-top: 10px;">' . $intro_follow . '</p>
+					</div>';
 
+		if (!$needs_paywall) {
+			$body .= '
 					<!-- Overall Scores -->
-					<div class="section"' . $results_mask_style . '>
+					<div class="section">
 						<div class="section-title">📊 Overall Performance</div>
 						
 						<div class="overall-stats">
@@ -296,14 +689,14 @@ class CA_Mailer
 					</div>
 
 					<!-- Category Breakdown -->
-					<div class="section"' . $results_mask_style . '>
+					<div class="section">
 						<div class="section-title">📈 Category Breakdown</div>
 						<div class="categories-list">';
 
-		foreach ($cat_scores as $cat) {
-			$q_count = ($cat->average > 0) ? (int) round((float) $cat->subtotal / (float) $cat->average) : 0;
-			$cat_max = $q_count * $scale_max;
-			$body .= '
+			foreach ($cat_scores as $cat) {
+				$q_count = ($cat->average > 0) ? (int) round((float) $cat->subtotal / (float) $cat->average) : 0;
+				$cat_max = $q_count * $scale_max;
+				$body .= '
 						<div class="category-item">
 							<div class="category-header">
 								<span class="category-name">' . esc_html($cat->category_name) . '</span>
@@ -311,10 +704,18 @@ class CA_Mailer
 							</div>
 							<div class="score-summary">' . esc_html(CA_Scoring::get_category_summary($cat->category_name, (float) $cat->average, $assessment_type)) . '</div>
 						</div>';
+			}
+
+			$body .= '
+						</div>
+					</div>';
 		}
 
 		$paywall_email_cta = '';
-		if ($is_nac) {
+		if ($needs_paywall && $paid_unlocked) {
+			$paywall_email_cta = '
+						<p style="margin: 12px 0 0; color: #666; font-size: 14px;">' . esc_html__('Your payment is complete. Your full results are available from your order confirmation and in your account order details.', 'rtr-custom-assessment') . '</p>';
+		} elseif ($needs_paywall && !$paid_unlocked && '' !== trim($paywall_url)) {
 			$paywall_email_cta = '
 						<div class="paywall-btn-wrap">
 							<a href="' . esc_url($paywall_url) . '" class="paywall-btn">&#128722; Get the Full Result</a>
@@ -322,9 +723,6 @@ class CA_Mailer
 		}
 
 		$body .= '
-						</div>
-					</div>
-
 					<!-- Submission Details -->
 					<div class="section">
 						<div class="section-title" style="color: #666;">Submission Details</div>
@@ -366,57 +764,50 @@ class CA_Mailer
 	}
 
 	/**
-	 * Build user-specific checkout URL for NAC full results.
+	 * Whether this submission already has a paid WooCommerce order for the same paid-results assessment type.
 	 *
-	 * @param int $submission_id
-	 * @return string
+	 * @param object $submission Submission row.
+	 * @return bool
 	 */
-	private static function build_inner_dimensions_checkout_url_for_submission($submission_id)
+	private static function submission_has_paid_full_results_order($submission)
 	{
-		$submission_id = (int) $submission_id;
-		$checkout_url = function_exists('wc_get_checkout_url') ? wc_get_checkout_url() : home_url('/checkout/');
-		if ($submission_id <= 0 || !function_exists('wc_get_orders')) {
-			return $checkout_url;
+		if (!$submission || empty($submission->id) || !function_exists('wc_get_orders')) {
+			return false;
+		}
+
+		$submission_id = (int) $submission->id;
+		$atype = CA_Assessment_Types::from_submission($submission);
+		if (!CA_Assessment_Types::requires_paid_full_results($atype)) {
+			return false;
 		}
 
 		$order_ids = wc_get_orders(array(
 			'limit' => 1,
 			'orderby' => 'date',
 			'order' => 'DESC',
-			'status' => array('pending', 'failed'),
-			'meta_key' => '_ca_submission_id',
-			'meta_value' => $submission_id,
+			'status' => array('completed', 'processing'),
+			'meta_query' => array(
+				array(
+					'key' => '_ca_submission_id',
+					'value' => $submission_id,
+				),
+				array(
+					'key' => '_ca_assessment_type',
+					'value' => $atype,
+				),
+			),
 			'return' => 'ids',
 		));
 
-		if (!empty($order_ids)) {
-			$order = wc_get_order((int) $order_ids[0]);
-			if ($order instanceof \WC_Order && $order->needs_payment()) {
-				$pay_url = $order->get_checkout_payment_url(true);
-				if (is_string($pay_url) && '' !== trim($pay_url)) {
-					return trim($pay_url);
-				}
-			}
+		if (empty($order_ids)) {
+			return false;
 		}
 
-		$product_ids = get_posts(array(
-			'post_type' => 'product',
-			'post_status' => array('publish', 'private', 'draft'),
-			'posts_per_page' => 1,
-			'fields' => 'ids',
-			'meta_key' => '_ca_submission_id',
-			'meta_value' => $submission_id,
-		));
-
-		if (empty($product_ids)) {
-			return $checkout_url;
+		$order = wc_get_order((int) $order_ids[0]);
+		if (!$order instanceof \WC_Order) {
+			return false;
 		}
 
-		$product_id = (int) $product_ids[0];
-		if ($product_id <= 0) {
-			return $checkout_url;
-		}
-
-		return add_query_arg('add-to-cart', $product_id, $checkout_url);
+		return $order->is_paid();
 	}
 }

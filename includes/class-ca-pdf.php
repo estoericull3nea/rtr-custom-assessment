@@ -18,21 +18,552 @@ class Rtr_Custom_Assessment_Pdf
 	 */
 	public function get_pdf_binary($html)
 	{
-		if (class_exists('TCPDF')) {
-			try {
-				return $this->get_binary_with_tcpdf($html);
-			} catch (\Throwable $e) {
-				// Fallback below.
-			}
-		}
-		if (class_exists('Dompdf\Dompdf')) {
+		if (class_exists('\Dompdf\Dompdf')) {
 			try {
 				return $this->get_binary_with_dompdf($html);
 			} catch (\Throwable $e) {
 				// Fallback below.
 			}
 		}
+		if (class_exists('\TCPDF')) {
+			try {
+				return $this->get_binary_with_tcpdf($html);
+			} catch (\Throwable $e) {
+				// Fallback below.
+			}
+		}
 		return $this->get_binary_with_simple_pdf($html);
+	}
+
+	/**
+	 * Build and save a graphical PDF from structured report data.
+	 *
+	 * Prefers Dompdf (Composer `dompdf/dompdf`); falls back to TCPDF, plain HTML→text,
+	 * then the legacy raw-PDF builder if nothing else is available.
+	 *
+	 * @param array  $data
+	 * @param string $absolute_path
+	 * @return bool
+	 */
+	public function save_pdf_from_data( array $data, $absolute_path ) {
+		$html   = $this->build_natural_attributes_report_html( $data );
+		$binary = $this->get_pdf_binary( $html );
+		if ( false === $binary || '' === $binary ) {
+			$binary = $this->build_pdf_report_binary( $data );
+		}
+		if ( false === $binary || '' === $binary ) {
+			return false;
+		}
+		$dir = dirname( $absolute_path );
+		if ( ! is_dir( $dir ) ) {
+			wp_mkdir_p( $dir );
+		}
+		return false !== file_put_contents( $absolute_path, $binary );
+	}
+
+	/**
+	 * HTML document for Natural Attributes / inner-dimensions PDF (Dompdf).
+	 *
+	 * @param array $data Same shape as CA_Ajax::build_submission_pdf_data().
+	 * @return string
+	 */
+	private function build_natural_attributes_report_html( array $data ) {
+		$overall_pct   = (int) ( $data['overall_percent'] ?? 0 );
+		$overall_pct   = max( 0, min( 100, $overall_pct ) );
+		$ovr_level     = $overall_pct >= 80 ? 'high' : ( $overall_pct >= 50 ? 'medium' : 'low' );
+		$ovr_color     = $this->pdf_html_level_color( $ovr_level );
+		$ovr_label     = strtoupper( esc_html( $ovr_level ) );
+
+		$atype = isset( $data['assessment_type'] )
+			? CA_Assessment_Types::normalize( (string) $data['assessment_type'] )
+			: CA_Assessment_Types::INNER_DIMENSIONS;
+
+		if ( CA_Assessment_Types::SOCIAL_FLUENCY === $atype ) {
+			$title = esc_html( __( 'Social Fluency Assessment', 'rtr-custom-assessment' ) );
+			$q1    = esc_html(
+				__( 'Your personalized results summarize how you responded across categories and question prompts.', 'rtr-custom-assessment' )
+			);
+			$q2    = '';
+		} elseif ( CA_Assessment_Types::INNER_DIMENSIONS === $atype ) {
+			$title = esc_html( __( 'Natural Attributes Cataloging', 'rtr-custom-assessment' ) );
+			$q1    = '&quot;<em style="color:#994433;font-style:italic;">' . esc_html( __( 'Remember', 'rtr-custom-assessment' ) ) . '</em> '
+				. esc_html( __( 'Who You Were Before the World', 'rtr-custom-assessment' ) );
+			$q2    = esc_html( __( 'Told You Who to Be.', 'rtr-custom-assessment' ) ) . '&quot;';
+		} else {
+			$title = esc_html( __( 'Entrepreneurial Mindset Assessment', 'rtr-custom-assessment' ) );
+			$q1    = esc_html(
+				__( 'Your results reflect how you rated each entrepreneurial mindset dimension on our 1–5 scale.', 'rtr-custom-assessment' )
+			);
+			$q2    = '';
+		}
+
+		$logo_html = '';
+		$logo_path = $this->resolve_local_logo_path( isset( $data['logo_url'] ) ? (string) $data['logo_url'] : '' );
+		if ( '' !== $logo_path && is_readable( $logo_path ) ) {
+			$real = realpath( $logo_path );
+			if ( false !== $real ) {
+				$uri       = 'file://' . str_replace( '\\', '/', $real );
+				$logo_html = '<img src="' . esc_attr( $uri ) . '" style="max-height:44pt;max-width:100pt;height:auto;width:auto;" alt="">';
+			}
+		}
+		if ( '' === $logo_html ) {
+			$logo_html = '<div style="font-family:DejaVu Serif,serif;font-size:15pt;line-height:1.1;color:#994433;">'
+				. '<div>root.</div><div style="font-size:13.5pt;">to rise</div></div>';
+		}
+
+		$meta_name  = trim( (string) ( $data['name'] ?? '' ) );
+		$meta_email = trim( (string) ( $data['email'] ?? '' ) );
+		$meta_parts = array();
+		if ( '' !== $meta_name ) {
+			$meta_parts[] = $meta_name;
+		}
+		if ( '' !== $meta_email ) {
+			$meta_parts[] = $meta_email;
+		}
+		$meta = esc_html( implode( '   |   ', $meta_parts ) );
+
+		$congrats = esc_html( __( 'Congratulations on Completing Your Discovery Journey!', 'rtr-custom-assessment' ) );
+		$sublead  = esc_html( __( 'Your personalized results and score breakdown are included below.', 'rtr-custom-assessment' ) );
+		$ovr_txt  = esc_html(
+			sprintf(
+				/* translators: 1: percentage, 2: level label (HIGH/MEDIUM/LOW) */
+				__( 'Overall Score: %1$s%%  [%2$s]', 'rtr-custom-assessment' ),
+				(string) $overall_pct,
+				$ovr_label
+			)
+		);
+		$name_email = esc_html( trim( (string) ( $data['name'] ?? '' ) . '   –   ' . (string) ( $data['email'] ?? '' ) ) );
+
+		$cat_title = esc_html( __( 'Category Results', 'rtr-custom-assessment' ) );
+		$qr_title  = esc_html( __( 'Question Responses', 'rtr-custom-assessment' ) );
+
+		$cat_rows = '';
+		foreach ( (array) ( $data['categories'] ?? array() ) as $cat ) {
+			$pct     = (int) ( $cat['percent'] ?? 0 );
+			$lv      = (string) ( $cat['level'] ?? 'low' );
+			$col     = $this->pdf_html_level_color( $lv );
+			$cname   = esc_html( (string) ( $cat['name'] ?? '' ) );
+			$summary = esc_html( (string) ( $cat['summary'] ?? '' ) );
+			$lv_u    = strtoupper( esc_html( $lv ) );
+			$cat_rows .= '<tr><td style="padding:10pt 12pt;border:0.5pt solid #dde1e6;vertical-align:top;">'
+				. '<div style="font-size:11pt;font-weight:bold;color:#121826;margin-bottom:6pt;">' . $cname . '</div>'
+				. '<div style="font-size:9pt;color:#5a6270;line-height:1.45;">' . $summary . '</div></td>'
+				. '<td style="width:86pt;padding:10pt 8pt;border:0.5pt solid #dde1e6;background:' . esc_attr( $col )
+				. ';color:#fff;text-align:center;vertical-align:middle;">'
+				. '<div style="font-size:8pt;opacity:0.95;">' . esc_html( __( 'Your score', 'rtr-custom-assessment' ) ) . '</div>'
+				. '<div style="font-size:17pt;font-weight:bold;margin:6pt 0;">' . (int) $pct . '%</div>'
+				. '<div style="display:inline-block;padding:3pt 8pt;background:#fff;border-radius:3pt;font-size:8pt;font-weight:bold;color:'
+				. esc_attr( $col ) . ';">' . $lv_u . '</div></td></tr>';
+		}
+
+		$resp_rows = '';
+		$even      = false;
+		foreach ( (array) ( $data['responses'] ?? array() ) as $row ) {
+			$bg       = $even ? '#f5f7fa' : '#fff';
+			$even     = ! $even;
+			$qtext    = esc_html( (string) ( $row['question'] ?? '' ) );
+			$atext    = esc_html( (string) ( $row['answer'] ?? '' ) );
+			$resp_rows .= '<tr style="background:' . esc_attr( $bg ) . ';"><td style="padding:8pt 10pt;border-bottom:0.3pt solid #e2e6eb;font-size:8.5pt;">'
+				. $qtext . '</td><td style="width:78pt;padding:8pt 8pt;border-bottom:0.3pt solid #e2e6eb;font-size:8.5pt;font-weight:bold;">'
+				. $atext . '</td></tr>';
+		}
+
+		$html = '<!DOCTYPE html><html><head><meta charset="UTF-8">'
+			. '<style>
+body { margin:0; padding:28pt 36pt 40pt; font-family: DejaVu Sans, sans-serif; font-size:9pt; color:#1a1f2e; }
+.hdr { border-bottom:0.5pt solid #dde1e6; padding-bottom:14pt; margin-bottom:16pt; }
+.hdr-table { width:100%; border-collapse:collapse; }
+.hdr-right { text-align:right; vertical-align:middle; }
+.hdr-title { font-size:12pt; font-weight:bold; color:#000; margin:0 0 6pt; }
+.hdr-quote { font-size:8.2pt; line-height:1.45; color:#000; }
+.hdr-quote .l2 { display:block; margin-top:2pt; }
+.meta { font-size:8pt; color:#6b7280; margin-top:12pt; }
+.band { background:#eef1f5; border-top:0.5pt solid #dde1e6; border-bottom:0.5pt solid #dde1e6; padding:16pt 0; margin:0 -36pt 18pt; padding-left:36pt; padding-right:36pt; }
+.band-table { width:100%; border-collapse:collapse; }
+h2.sec { font-size:11pt; color:#121826; margin:0 0 8pt; border-bottom:1.2pt solid #aa3130; padding-bottom:4pt; display:inline-block; }
+table.grid { width:100%; border-collapse:collapse; margin-bottom:14pt; }
+th.qh { background:#1c2433; color:#fff; font-size:8.5pt; padding:7pt 10pt; text-align:left; }
+th.qh2 { background:#1c2433; color:#fff; font-size:8.5pt; padding:7pt 8pt; text-align:left; width:78pt; }
+</style></head><body>'
+			. '<div class="hdr"><table class="hdr-table"><tr><td style="width:38%;vertical-align:middle;">' . $logo_html
+			. '</td><td class="hdr-right"><div class="hdr-title">' . $title . '</div>'
+			. '<div class="hdr-quote">' . $q1
+			. ( '' !== $q2 ? '<span class="l2">' . $q2 . '</span>' : '' ) . '</div></td></tr></table>'
+			. '<div class="meta">' . $meta . '</div></div>'
+			. '<div class="band"><table class="band-table"><tr><td style="width:88pt;text-align:center;vertical-align:middle;">'
+			. '<div style="display:table;margin:0 auto;width:56pt;height:56pt;border-radius:50%;background:'
+			. esc_attr( $ovr_color ) . ';color:#fff;"><div style="display:table-cell;width:56pt;height:56pt;vertical-align:middle;'
+			. 'text-align:center;font-size:11pt;font-weight:bold;line-height:1;">' . (int) $overall_pct . '%</div></div></td>'
+			. '<td style="vertical-align:middle;padding-left:14pt;">'
+			. '<div style="font-size:11pt;font-weight:bold;color:#121826;margin-bottom:6pt;">' . $congrats . '</div>'
+			. '<div style="font-size:8.5pt;color:#5a6270;margin-bottom:8pt;">' . $sublead . '</div>'
+			. '<div style="font-size:9.5pt;font-weight:bold;color:' . esc_attr( $ovr_color ) . ';">' . $ovr_txt . '</div>'
+			. '<div style="font-size:8pt;color:#6b7280;margin-top:6pt;">' . $name_email . '</div></td></tr></table></div>'
+			. '<h2 class="sec">' . $cat_title . '</h2><table class="grid">' . $cat_rows . '</table>'
+			. '<h2 class="sec">' . $qr_title . '</h2><table class="grid" style="margin-top:4pt;">'
+			. '<tr><th class="qh">' . esc_html( __( 'Question', 'rtr-custom-assessment' ) ) . '</th>'
+			. '<th class="qh2">' . esc_html( __( 'Response', 'rtr-custom-assessment' ) ) . '</th></tr>'
+			. $resp_rows . '</table></body></html>';
+
+		return $html;
+	}
+
+	/**
+	 * Hex colour for category / overall level (HTML/CSS).
+	 *
+	 * @param string $level high|medium|low
+	 * @return string
+	 */
+	private function pdf_html_level_color( $level ) {
+		if ( 'high' === $level ) {
+			return '#1f9d55';
+		}
+		if ( 'medium' === $level ) {
+			return '#d97706';
+		}
+		return '#c0392b';
+	}
+
+	/**
+	 * Render a fully-graphical assessment results report as a PDF binary string.
+	 *
+	 * Legacy fallback: native PDF drawing (used when Dompdf/TCPDF are unavailable).
+	 * Draws header strip, overall score band, category cards, and Q&A table.
+	 *
+	 * @param array $data Keys: name, email, total_score, overall_percent,
+	 *                    categories[]{name,percent,level,summary},
+	 *                    responses[]{question,answer}
+	 * @return string|false
+	 */
+	private function build_pdf_report_binary( array $data ) {
+		$pw = 612; $ph = 792;
+		$ml = 45;  $mr = 45; $mb = 50;
+		$cw = $pw - $ml - $mr; // 522 pt usable width
+
+		// Colours: [R, G, B] on 0–1 scale
+		$white  = array( 1.00, 1.00, 1.00 );
+		$dark   = array( 0.07, 0.09, 0.13 );
+		$gray   = array( 0.40, 0.43, 0.48 );
+		$lgray  = array( 0.94, 0.95, 0.96 );
+		$navy   = array( 0.11, 0.14, 0.20 );
+		$border = array( 0.83, 0.85, 0.87 );
+		$brand  = array( 0.69, 0.10, 0.10 );
+		$green  = array( 0.12, 0.62, 0.32 );
+		$orange = array( 0.85, 0.35, 0.04 );
+		$red    = array( 0.75, 0.10, 0.10 );
+
+		$level_col = function ( $level ) use ( $green, $orange, $red ) {
+			if ( 'high'   === $level ) { return $green; }
+			if ( 'medium' === $level ) { return $orange; }
+			return $red;
+		};
+
+		// ---- Object pool ----
+		$obj  = array();
+		$aobj = function ( $body ) use ( &$obj ) {
+			$obj[] = $body;
+			return count( $obj );
+		};
+
+		$fr = $aobj( '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>' );
+		$fb = $aobj( '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>' );
+		$logo = $this->build_pdf_logo_image_object( isset( $data['logo_url'] ) ? (string) $data['logo_url'] : '' );
+		$logo_obj_id = 0;
+		if ( is_array( $logo ) && ! empty( $logo['object_body'] ) ) {
+			$logo_obj_id = $aobj( (string) $logo['object_body'] );
+		}
+		$po = $aobj( '<< /Type /Pages /Kids [] /Count 0 >>' );
+
+		// ---- Page state ----
+		$pages = array();
+		$s     = '';             // current content stream
+		$y     = (float) $ph;   // current Y (top of page, decreasing)
+
+		$fp = null;
+		$fp = function () use ( &$s, &$y, &$pages, $ph, $mb, $pw, $fr, $fb, $po, $aobj, $logo_obj_id ) {
+			$xobject = $logo_obj_id > 0 ? ' /XObject << /Im1 ' . $logo_obj_id . ' 0 R >>' : '';
+			$co      = $aobj( '<< /Length ' . strlen( $s ) . " >>\nstream\n{$s}endstream" );
+			$pages[] = $aobj(
+				"<< /Type /Page /Parent {$po} 0 R"
+				. " /MediaBox [0 0 {$pw} {$ph}]"
+				. " /Resources << /Font << /F1 {$fr} 0 R /F2 {$fb} 0 R >>{$xobject} >>"
+				. " /Contents {$co} 0 R >>"
+			);
+			$s = '';
+			$y = (float) ( $ph - $mb );
+		};
+
+		// Ensure $h pts of vertical space; flush page if needed.
+		$ns = function ( $h ) use ( &$y, $mb, &$fp ) {
+			if ( $y - (float) $h < (float) $mb ) {
+				$fp();
+			}
+		};
+
+		// ---- Drawing helpers (all append to $s) ----
+
+		// Filled rectangle (x,y = bottom-left corner)
+		$rf = function ( $x, $gy, $w, $h, $c ) use ( &$s ) {
+			$s .= sprintf(
+				"q %.3f %.3f %.3f rg %.4f %.4f %.4f %.4f re f Q\n",
+				$c[0], $c[1], $c[2], (float) $x, (float) $gy, (float) $w, (float) $h
+			);
+		};
+
+		// Stroked rectangle
+		$rs = function ( $x, $gy, $w, $h, $c, $lw = 0.5 ) use ( &$s ) {
+			$s .= sprintf(
+				"q %.3f %.3f %.3f RG %.2f w %.4f %.4f %.4f %.4f re S Q\n",
+				$c[0], $c[1], $c[2], (float) $lw, (float) $x, (float) $gy, (float) $w, (float) $h
+			);
+		};
+
+		// Horizontal line
+		$ln = function ( $x1, $y1, $x2, $y2, $c, $lw = 0.5 ) use ( &$s ) {
+			$s .= sprintf(
+				"q %.3f %.3f %.3f RG %.2f w %.4f %.4f m %.4f %.4f l S Q\n",
+				$c[0], $c[1], $c[2], (float) $lw,
+				(float) $x1, (float) $y1, (float) $x2, (float) $y2
+			);
+		};
+
+		// Filled circle via 4 cubic Bézier curves
+		$circle = function ( $cx, $cy, $r, $c ) use ( &$s ) {
+			$cx = (float) $cx; $cy = (float) $cy; $r = (float) $r;
+			$k  = $r * 0.5523;
+			$s .= sprintf( "q %.3f %.3f %.3f rg\n", $c[0], $c[1], $c[2] );
+			$s .= sprintf( "%.4f %.4f m\n", $cx, $cy + $r );
+			$s .= sprintf( "%.4f %.4f %.4f %.4f %.4f %.4f c\n", $cx+$k,$cy+$r, $cx+$r,$cy+$k, $cx+$r,$cy );
+			$s .= sprintf( "%.4f %.4f %.4f %.4f %.4f %.4f c\n", $cx+$r,$cy-$k, $cx+$k,$cy-$r, $cx,$cy-$r );
+			$s .= sprintf( "%.4f %.4f %.4f %.4f %.4f %.4f c\n", $cx-$k,$cy-$r, $cx-$r,$cy-$k, $cx-$r,$cy );
+			$s .= sprintf( "%.4f %.4f %.4f %.4f %.4f %.4f c\n", $cx-$r,$cy+$k, $cx-$k,$cy+$r, $cx,$cy+$r );
+			$s .= "f Q\n";
+		};
+
+		// Single text line at absolute position (Tm = absolute text matrix)
+		$tl = function ( $text, $x, $ty, $fn, $sz, $c ) use ( &$s ) {
+			$e = preg_replace( '/[^\x20-\x7E]/', '', (string) $text );
+			$e = str_replace( array( '\\', '(', ')' ), array( '\\\\', '\(', '\)' ), $e );
+			$s .= sprintf(
+				"BT /%s %.2f Tf %.3f %.3f %.3f rg 1 0 0 1 %.4f %.4f Tm (%s) Tj ET\n",
+				$fn, (float) $sz, $c[0], $c[1], $c[2], (float) $x, (float) $ty, $e
+			);
+		};
+
+		// Word-wrap text to fit within $max_w pts at $pt_sz font size.
+		$ww = function ( $text, $max_w, $pt_sz ) {
+			// Helvetica average char width ≈ 0.52 × point size
+			$chars   = max( 20, (int) ( (float) $max_w / max( 1.0, (float) $pt_sz * 0.52 ) ) );
+			$wrapped = wordwrap( (string) $text, $chars, "\n", false );
+			return array_map( 'trim', explode( "\n", $wrapped ) );
+		};
+
+		// =================== PAGE 1 HEADER ===================
+
+		$hh = 82;
+		$rf( 0, $ph - $hh, $pw, $hh, $navy );
+
+		// Brand logo image (fallback to text if unavailable).
+		$logo_drawn = false;
+		if ( $logo_obj_id > 0 && is_array( $logo ) && ! empty( $logo['width'] ) && ! empty( $logo['height'] ) ) {
+			$src_w = max( 1.0, (float) $logo['width'] );
+			$src_h = max( 1.0, (float) $logo['height'] );
+			$max_w = 72.0;
+			$max_h = 44.0;
+			$scale = min( $max_w / $src_w, $max_h / $src_h );
+			$dw = $src_w * $scale;
+			$dh = $src_h * $scale;
+			$dx = $ml;
+			$dy = $ph - 54.0;
+			$s .= sprintf(
+				"q %.4f 0 0 %.4f %.4f %.4f cm /Im1 Do Q\n",
+				(float) $dw,
+				(float) $dh,
+				(float) $dx,
+				(float) $dy
+			);
+			$logo_drawn = true;
+		}
+		if ( ! $logo_drawn ) {
+			$tl( 'root.',   $ml,      $ph - 25, 'F2', 15, $brand );
+			$tl( 'to rise', $ml,      $ph - 43, 'F2', 15, $white );
+		}
+		// Report title + subtitle
+		$tl( 'Natural Attributes Cataloging', $ml + 78, $ph - 27, 'F2', 12, $white );
+		$tl( 'Full Results Report',            $ml + 78, $ph - 44, 'F1',  9, array( 0.68, 0.70, 0.74 ) );
+		// Meta line
+		$meta_name  = trim( (string) ( $data['name'] ?? '' ) );
+		$meta_email = trim( (string) ( $data['email'] ?? '' ) );
+		$meta_parts = array();
+		if ( '' !== $meta_name ) {
+			$meta_parts[] = $meta_name;
+		}
+		if ( '' !== $meta_email ) {
+			$meta_parts[] = $meta_email;
+		}
+		$meta_str = implode( '   |   ', $meta_parts );
+		$tl( $meta_str, $ml, $ph - 65, 'F1', 8, array( 0.60, 0.63, 0.68 ) );
+
+		$y = (float) ( $ph - $hh );
+
+		// =================== OVERALL SCORE BAND ===================
+
+		$band_h = 80;
+		$rf( 0, $y - $band_h, $pw, $band_h, $lgray );
+		$ln( 0, $y - $band_h, (float) $pw, $y - $band_h, $border );
+
+		$overall_pct = (int) ( $data['overall_percent'] ?? 0 );
+		$ovr_level   = $overall_pct >= 80 ? 'high' : ( $overall_pct >= 50 ? 'medium' : 'low' );
+		$ovr_col     = $level_col( $ovr_level );
+
+		// Donut circle
+		$cr  = 30.0;
+		$ccx = (float) ( $ml + $cr + 8 );
+		$ccy = $y - $band_h / 2.0;
+		$circle( $ccx, $ccy, $cr, $ovr_col );
+		$circle( $ccx, $ccy, $cr * 0.58, $lgray ); // hole
+
+		// Percentage inside donut
+		$pct_s   = $overall_pct . '%';
+		$pct_off = max( 3.0, ( $cr * 2 - strlen( $pct_s ) * 6.0 ) / 2.0 );
+		$tl( $pct_s, $ccx - $cr + $pct_off, $ccy - 4.5, 'F2', 10, $dark );
+
+		// Congratulations text beside the donut
+		$tx = $ccx + $cr + 18;
+		$tl( 'Congratulations on Completing Your Discovery Journey!', $tx, $y - 18, 'F2', 11, $dark );
+		$tl( 'Your personalized results and score breakdown are included below.', $tx, $y - 34, 'F1', 8.5, $gray );
+		$tl( 'Overall Score: ' . $overall_pct . '%  [' . strtoupper( $ovr_level ) . ']', $tx, $y - 51, 'F2', 9.5, $ovr_col );
+		$name_email = ( $data['name'] ?? '' ) . '   –   ' . ( $data['email'] ?? '' );
+		$tl( $name_email, $tx, $y - 66, 'F1', 8, $gray );
+
+		$y -= (float) ( $band_h + 20 );
+
+		// =================== CATEGORY CARDS ===================
+
+		$tl( 'Category Results', $ml, $y, 'F2', 13, $dark );
+		$ln( $ml, $y - 5, $ml + 148, $y - 5, $brand, 1.5 );
+		$y -= 22.0;
+
+		$badge_w = 94;
+
+		foreach ( ( $data['categories'] ?? array() ) as $cat ) {
+			$pct     = (int) ( $cat['percent'] ?? 0 );
+			$lv      = (string) ( $cat['level']   ?? 'low' );
+			$col     = $level_col( $lv );
+			$name    = (string) ( $cat['name']    ?? '' );
+			$summary = (string) ( $cat['summary'] ?? '' );
+
+			$sum_max_w = (float) ( $cw - $badge_w - 28 );
+			$sum_lines = $ww( $summary, $sum_max_w, 9.0 );
+			$card_h    = (float) max( 78.0, 42.0 + count( $sum_lines ) * 12.5 );
+
+			$ns( $card_h + 10 );
+
+			$cb = $y - $card_h; // card bottom Y
+
+			// Card body
+			$rf( $ml, $cb, $cw, $card_h, $white );
+			$rs( $ml, $cb, $cw, $card_h, $border, 0.6 );
+
+			// Score badge (right column)
+			$bx = (float) ( $ml + $cw - $badge_w );
+			$rf( $bx, $cb, (float) $badge_w, $card_h, $col );
+
+			$tl( 'Your score', $bx + 8, $y - 17, 'F1', 8, $white );
+
+			$pstr   = $pct . '%';
+			$pstr_x = $bx + max( 4.0, ( (float) $badge_w - strlen( $pstr ) * 10.5 ) / 2.0 );
+			$tl( $pstr, $pstr_x, $y - 44, 'F2', 18, $white );
+
+			// Level pill at bottom of badge
+			$pill_w = 58.0; $pill_h = 14.0;
+			$pill_x = $bx + ( (float) $badge_w - $pill_w ) / 2.0;
+			$pill_y = $cb + 8.0;
+			$rf( $pill_x, $pill_y, $pill_w, $pill_h, $white );
+			$lv_label = strtoupper( $lv );
+			$lv_x     = $pill_x + max( 3.0, ( $pill_w - strlen( $lv_label ) * 6.5 ) / 2.0 );
+			$tl( $lv_label, $lv_x, $pill_y + 3.5, 'F2', 8, $col );
+
+			// Category name
+			$tl( $name, $ml + 12, $y - 18, 'F2', 12, $dark );
+
+			// Summary (word-wrapped)
+			$sy = $y - 35.0;
+			foreach ( $sum_lines as $sl ) {
+				if ( '' !== $sl ) {
+					$tl( $sl, $ml + 12, $sy, 'F1', 9.0, $gray );
+				}
+				$sy -= 12.5;
+			}
+
+			$y = $cb - 8.0;
+		}
+
+		// =================== QUESTION RESPONSES ===================
+
+		$ns( 55 );
+		$y -= 14.0;
+		$tl( 'Question Responses', $ml, $y, 'F2', 13, $dark );
+		$ln( $ml, $y - 5, $ml + 174, $y - 5, $brand, 1.5 );
+		$y -= 22.0;
+
+		// Table header
+		$th     = 18.0;
+		$resp_x = (float) ( $ml + $cw - 72 );
+		$rf( $ml, $y - $th, (float) $cw, $th, $navy );
+		$tl( 'Question', $ml + 8,     $y - 13, 'F2', 8.5, $white );
+		$tl( 'Response', $resp_x + 5, $y - 13, 'F2', 8.5, $white );
+		$y -= $th;
+
+		$even = false;
+		foreach ( ( $data['responses'] ?? array() ) as $row ) {
+			$q  = (string) ( $row['question'] ?? '' );
+			$a  = (string) ( $row['answer']   ?? '' );
+			$ql = $ww( $q, (float) ( $cw - 95 ), 8.5 );
+			$rh = (float) max( 18.0, count( $ql ) * 11.0 + 8.0 );
+
+			$ns( $rh );
+
+			if ( $even ) {
+				$rf( $ml, $y - $rh, (float) $cw, $rh, array( 0.96, 0.97, 0.98 ) );
+			}
+			$ln( $ml, $y - $rh, (float) ( $ml + $cw ), $y - $rh, $border, 0.3 );
+
+			$qy = $y - 10.5;
+			foreach ( $ql as $ql_line ) {
+				if ( '' !== $ql_line ) {
+					$tl( $ql_line, $ml + 8, $qy, 'F1', 8.5, $dark );
+				}
+				$qy -= 11.0;
+			}
+			$tl( $a, $resp_x + 5, $y - 10.5, 'F2', 8.5, $dark );
+
+			$y    -= $rh;
+			$even  = ! $even;
+		}
+
+		$fp(); // flush final page
+
+		// ---- Finalise PDF structure ----
+		$kids_str       = implode( ' ', array_map( function ( $p ) { return "{$p} 0 R"; }, $pages ) );
+		$obj[ $po - 1 ] = "<< /Type /Pages /Kids [{$kids_str}] /Count " . count( $pages ) . ' >>';
+		$cat_n          = $aobj( '<< /Type /Catalog /Pages ' . $po . ' 0 R >>' );
+
+		$pdf  = "%PDF-1.4\n";
+		$offs = array( 0 );
+		foreach ( $obj as $i => $b ) {
+			$offs[] = strlen( $pdf );
+			$pdf   .= ( $i + 1 ) . " 0 obj\n{$b}\nendobj\n";
+		}
+		$xoff = strlen( $pdf );
+		$n    = count( $obj ) + 1;
+		$pdf .= "xref\n0 {$n}\n0000000000 65535 f \n";
+		for ( $i = 1; $i < $n; $i++ ) {
+			$pdf .= sprintf( '%010d 00000 n ', $offs[ $i ] ) . "\n";
+		}
+		$pdf .= "trailer\n<< /Size {$n} /Root {$cat_n} 0 R >>\nstartxref\n{$xoff}\n%%EOF";
+
+		return $pdf;
 	}
 
 	/**
@@ -58,18 +589,171 @@ class Rtr_Custom_Assessment_Pdf
 	}
 
 	/**
+	 * Build and save a PDF directly from an array of pre-formatted text lines.
+	 * Bypasses all HTML parsing; the binary builder is called directly.
+	 *
+	 * @param string[] $lines
+	 * @param string   $absolute_path
+	 * @return bool
+	 */
+	public function save_pdf_from_lines( array $lines, $absolute_path ) {
+		if ( empty( $lines ) ) {
+			$lines = array( 'No content.' );
+		}
+
+		$binary = $this->build_binary_from_lines( $lines );
+		if ( false === $binary || '' === $binary ) {
+			return false;
+		}
+
+		$dir = dirname( $absolute_path );
+		if ( ! is_dir( $dir ) ) {
+			wp_mkdir_p( $dir );
+		}
+
+		return false !== file_put_contents( $absolute_path, $binary );
+	}
+
+	/**
+	 * Build PDF binary from pre-formatted lines (font size aware, bold markers).
+	 *
+	 * Lines prefixed with "##H1 " use 14pt Helvetica-Bold.
+	 * Lines prefixed with "##H2 " use 11pt Helvetica-Bold.
+	 * Lines of "##HR" render as a visual separator.
+	 * All other lines use 10pt Helvetica.
+	 *
+	 * @param string[] $lines
+	 * @return string|false
+	 */
+	private function build_binary_from_lines( array $lines ) {
+		$page_width  = 612;
+		$page_height = 792;
+		$margin_x    = 50;
+		$margin_y    = 50;
+		$usable_h    = $page_height - ( 2 * $margin_y );
+
+		$objects    = array();
+		$add_object = function ( $body ) use ( &$objects ) {
+			$objects[] = $body;
+			return count( $objects );
+		};
+
+		$font_reg  = $add_object( '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>' );
+		$font_bold = $add_object( '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>' );
+		$pages_obj = $add_object( '<< /Type /Pages /Kids [] /Count 0 >>' );
+
+		// Split lines into pages based on accumulated height.
+		$pages_lines  = array();
+		$current_page = array();
+		$used_h       = 0;
+
+		foreach ( $lines as $line ) {
+			if ( strncmp( $line, '##H1 ', 5 ) === 0 ) {
+				$lh = 22;
+			} elseif ( strncmp( $line, '##H2 ', 5 ) === 0 ) {
+				$lh = 18;
+			} elseif ( '##HR' === $line ) {
+				$lh = 12;
+			} else {
+				$lh = 14;
+			}
+
+			if ( $used_h + $lh > $usable_h && ! empty( $current_page ) ) {
+				$pages_lines[] = $current_page;
+				$current_page  = array();
+				$used_h        = 0;
+			}
+
+			$current_page[] = array( 'line' => $line, 'lh' => $lh );
+			$used_h        += $lh;
+		}
+		if ( ! empty( $current_page ) ) {
+			$pages_lines[] = $current_page;
+		}
+
+		$page_objects = array();
+		foreach ( $pages_lines as $page_entries ) {
+			$content = "BT\n";
+			$y       = $page_height - $margin_y;
+
+			foreach ( $page_entries as $entry ) {
+				$line = $entry['line'];
+				$lh   = $entry['lh'];
+
+				if ( strncmp( $line, '##H1 ', 5 ) === 0 ) {
+					$text    = substr( $line, 5 );
+					$font_sz = "/F2 14 Tf\n";
+				} elseif ( strncmp( $line, '##H2 ', 5 ) === 0 ) {
+					$text    = substr( $line, 5 );
+					$font_sz = "/F2 11 Tf\n";
+				} elseif ( '##HR' === $line ) {
+					$text    = str_repeat( '_', 88 );
+					$font_sz = "/F1 8 Tf\n";
+				} else {
+					$text    = $line;
+					$font_sz = "/F1 10 Tf\n";
+				}
+
+				// Use Tm (text matrix) for absolute positioning — avoids
+				// cumulative-offset bugs that Td causes with variable line heights.
+				$escaped  = $this->pdf_escape_text( $text );
+				$content .= $font_sz;
+				$content .= "1 0 0 1 " . $margin_x . ' ' . $y . " Tm\n";
+				$content .= '(' . $escaped . ") Tj\n";
+				$y       -= $lh;
+			}
+
+			$content .= "ET\n";
+
+			$content_obj  = $add_object( "<< /Length " . strlen( $content ) . " >>\nstream\n" . $content . "endstream" );
+			$page_objects[] = $add_object(
+				"<< /Type /Page /Parent " . $pages_obj . " 0 R"
+				. " /MediaBox [0 0 " . $page_width . ' ' . $page_height . "]"
+				. " /Resources << /Font << /F1 " . $font_reg . " 0 R /F2 " . $font_bold . " 0 R >> >>"
+				. " /Contents " . $content_obj . " 0 R >>"
+			);
+		}
+
+		$kids = array();
+		foreach ( $page_objects as $po ) {
+			$kids[] = $po . ' 0 R';
+		}
+		$objects[ $pages_obj - 1 ] = "<< /Type /Pages /Kids [ " . implode( ' ', $kids ) . " ] /Count " . count( $page_objects ) . " >>";
+
+		$catalog_obj = $add_object( "<< /Type /Catalog /Pages " . $pages_obj . " 0 R >>" );
+
+		$pdf     = "%PDF-1.4\n";
+		$offsets = array( 0 );
+		for ( $i = 0, $len = count( $objects ); $i < $len; $i++ ) {
+			$offsets[] = strlen( $pdf );
+			$pdf      .= ( $i + 1 ) . " 0 obj\n" . $objects[ $i ] . "\nendobj\n";
+		}
+
+		$xref_offset = strlen( $pdf );
+		$pdf        .= "xref\n0 " . ( count( $objects ) + 1 ) . "\n";
+		$pdf        .= "0000000000 65535 f \n";
+		for ( $i = 1; $i <= count( $objects ); $i++ ) {
+			$pdf .= sprintf( '%010d 00000 n ', $offsets[ $i ] ) . "\n";
+		}
+		$pdf .= "trailer\n<< /Size " . ( count( $objects ) + 1 ) . " /Root " . $catalog_obj . " 0 R >>\n";
+		$pdf .= "startxref\n" . $xref_offset . "\n%%EOF";
+
+		return $pdf;
+	}
+
+	/**
 	 * Generate PDF from HTML content.
 	 *
 	 * @param string $html
 	 */
 	public function generate($html)
 	{
-		// Use TCPDF if available, otherwise use a simple approach
-		if (class_exists('TCPDF')) {
-			$this->generate_with_tcpdf($html);
-		} else {
-			$this->generate_simple($html);
+		$binary = $this->get_pdf_binary( $html );
+		if ( false === $binary || '' === $binary ) {
+			return;
 		}
+		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Raw PDF binary output.
+		echo $binary;
 	}
 
 	/**
@@ -80,26 +764,18 @@ class Rtr_Custom_Assessment_Pdf
 	 */
 	public function export_pdf($html, $filename)
 	{
-		// Set headers for PDF download
-		header('Content-Type: application/pdf');
-		header('Content-Disposition: attachment; filename="' . $filename . '"');
-		header('Cache-Control: no-cache, no-store, must-revalidate');
-		header('Pragma: no-cache');
-		header('Expires: 0');
+		header( 'Content-Type: application/pdf' );
+		header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
+		header( 'Cache-Control: no-cache, no-store, must-revalidate' );
+		header( 'Pragma: no-cache' );
+		header( 'Expires: 0' );
 
-		// Try using TCPDF or DomPDF, fallback to a built-in minimal PDF renderer.
-		if (class_exists('TCPDF')) {
-			$this->generate_with_tcpdf($html);
-		} elseif (class_exists('Dompdf\Dompdf')) {
-			$this->generate_with_dompdf($html);
-		} else {
-			$binary = $this->get_binary_with_simple_pdf($html);
-			if (false === $binary || '' === $binary) {
-				return;
-			}
-			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Raw PDF binary output.
-			echo $binary;
+		$binary = $this->get_pdf_binary( $html );
+		if ( false === $binary || '' === $binary ) {
+			return;
 		}
+		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Raw PDF binary output.
+		echo $binary;
 	}
 
 	/**
@@ -146,12 +822,9 @@ class Rtr_Custom_Assessment_Pdf
 	 */
 	private function generate_with_dompdf($html)
 	{
-		$dompdf = new \Dompdf\Dompdf();
-		$dompdf->loadHtml($html);
-		$dompdf->setPaper('A4');
-		$dompdf->render();
-		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Dompdf returns binary PDF content, not HTML output.
-		echo $dompdf->output();
+		$binary = $this->get_binary_with_dompdf( $html );
+		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Raw PDF binary output.
+		echo $binary;
 	}
 
 	/**
@@ -162,11 +835,32 @@ class Rtr_Custom_Assessment_Pdf
 	 */
 	private function get_binary_with_dompdf($html)
 	{
-		$dompdf = new \Dompdf\Dompdf();
-		$dompdf->loadHtml($html);
-		$dompdf->setPaper('A4');
+		$options = new \Dompdf\Options();
+		$options->set( 'defaultFont', 'DejaVu Sans' );
+		$options->set( 'isHtml5ParserEnabled', true );
+		$options->set( 'isRemoteEnabled', true );
+
+		$chroot = array();
+		if ( defined( 'ABSPATH' ) ) {
+			$chroot[] = ABSPATH;
+		}
+		if ( defined( 'WP_CONTENT_DIR' ) ) {
+			$chroot[] = WP_CONTENT_DIR;
+		}
+		if ( defined( 'CA_PLUGIN_DIR' ) ) {
+			$chroot[] = CA_PLUGIN_DIR;
+		}
+		$chroot = array_values( array_unique( array_filter( $chroot ) ) );
+		if ( ! empty( $chroot ) ) {
+			$options->setChroot( $chroot );
+		}
+
+		$dompdf = new \Dompdf\Dompdf( $options );
+		$dompdf->loadHtml( (string) $html, 'UTF-8' );
+		$dompdf->setPaper( 'letter', 'portrait' );
 		$dompdf->render();
-		return $dompdf->output();
+
+		return (string) $dompdf->output();
 	}
 
 	/**
@@ -192,7 +886,10 @@ class Rtr_Custom_Assessment_Pdf
 	 */
 	private function get_binary_with_simple_pdf($html)
 	{
-		$lines = $this->extract_basic_lines_from_html((string) $html);
+		$lines = $this->extract_structured_lines_from_html((string) $html);
+		if (empty($lines)) {
+			$lines = $this->extract_basic_lines_from_html((string) $html);
+		}
 		if (empty($lines)) {
 			$lines = array('Assessment Results');
 		}
@@ -483,6 +1180,99 @@ class Rtr_Custom_Assessment_Pdf
 	}
 
 	/**
+	 * Build an image XObject body for a PNG/JPEG logo URL.
+	 *
+	 * Converts PNG to JPEG via GD when possible to keep PDF embedding simple.
+	 *
+	 * @param string $logo_url
+	 * @return array|null
+	 */
+	private function build_pdf_logo_image_object( $logo_url ) {
+		$path = $this->resolve_local_logo_path( (string) $logo_url );
+		if ( '' === $path || ! is_readable( $path ) ) {
+			return null;
+		}
+
+		$info = @getimagesize( $path );
+		if ( ! is_array( $info ) || empty( $info[0] ) || empty( $info[1] ) ) {
+			return null;
+		}
+
+		$mime = isset( $info['mime'] ) ? strtolower( (string) $info['mime'] ) : '';
+		$w = (int) $info[0];
+		$h = (int) $info[1];
+		$jpeg_binary = '';
+
+		if ( 'image/jpeg' === $mime || 'image/jpg' === $mime ) {
+			$jpeg_binary = (string) @file_get_contents( $path );
+		} elseif ( 'image/png' === $mime && function_exists( 'imagecreatefrompng' ) && function_exists( 'imagejpeg' ) ) {
+			$img = @imagecreatefrompng( $path );
+			if ( $img ) {
+				if ( function_exists( 'imagecreatetruecolor' ) ) {
+					$bg = imagecreatetruecolor( (int) $w, (int) $h );
+					// Match the report header background so transparent PNG areas blend in.
+					$navy = imagecolorallocate( $bg, 28, 36, 51 );
+					imagefilledrectangle( $bg, 0, 0, (int) $w, (int) $h, $navy );
+					imagecopy( $bg, $img, 0, 0, 0, 0, (int) $w, (int) $h );
+					imagedestroy( $img );
+					$img = $bg;
+				}
+				ob_start();
+				imagejpeg( $img, null, 90 );
+				$jpeg_binary = (string) ob_get_clean();
+				imagedestroy( $img );
+			}
+		}
+
+		if ( '' === $jpeg_binary ) {
+			return null;
+		}
+
+		$body = "<< /Type /XObject /Subtype /Image /Width {$w} /Height {$h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length " . strlen( $jpeg_binary ) . " >>\nstream\n" . $jpeg_binary . "\nendstream";
+		return array(
+			'object_body' => $body,
+			'width'       => $w,
+			'height'      => $h,
+		);
+	}
+
+	/**
+	 * Resolve logo URL into an absolute local filesystem path.
+	 *
+	 * @param string $logo_url
+	 * @return string
+	 */
+	private function resolve_local_logo_path( $logo_url ) {
+		$logo_url = trim( (string) $logo_url );
+		if ( '' === $logo_url ) {
+			return '';
+		}
+
+		if ( 0 === strpos( $logo_url, '/' ) ) {
+			$logo_url = home_url( $logo_url );
+		}
+
+		$uploads = wp_upload_dir();
+		$baseurl = isset( $uploads['baseurl'] ) ? (string) $uploads['baseurl'] : '';
+		$basedir = isset( $uploads['basedir'] ) ? (string) $uploads['basedir'] : '';
+
+		if ( '' !== $baseurl && '' !== $basedir && 0 === strpos( $logo_url, $baseurl ) ) {
+			$rel = ltrim( substr( $logo_url, strlen( $baseurl ) ), '/' );
+			return trailingslashit( $basedir ) . $rel;
+		}
+
+		$site_url = (string) home_url( '/' );
+		if ( '' !== $site_url && 0 === strpos( $logo_url, $site_url ) ) {
+			$rel_path = ltrim( substr( $logo_url, strlen( $site_url ) ), '/' );
+			if ( '' !== $rel_path && defined( 'ABSPATH' ) ) {
+				return rtrim( ABSPATH, '/\\' ) . '/' . $rel_path;
+			}
+		}
+
+		return '';
+	}
+
+	/**
 	 * Normalize text from HTML node to plain readable content.
 	 *
 	 * @param string $text
@@ -491,6 +1281,10 @@ class Rtr_Custom_Assessment_Pdf
 	private function normalize_text($text)
 	{
 		$text = html_entity_decode((string) $text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+		// Preserve readability for flattened inline nodes (e.g., "score33%low").
+		$text = preg_replace('/([A-Za-z])(\d)/', '$1 $2', $text);
+		$text = preg_replace('/(\d)([A-Za-z])/', '$1 $2', $text);
+		$text = preg_replace('/(%)([A-Za-z])/', '$1 $2', $text);
 		$text = preg_replace('/\s+/', ' ', $text);
 		$text = trim((string) $text);
 		if ('' === $text) {

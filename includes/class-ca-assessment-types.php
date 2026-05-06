@@ -55,6 +55,19 @@ class CA_Assessment_Types {
 	}
 
 	/**
+	 * Assessments that require WooCommerce payment before unlocking the downloadable PDF results.
+	 *
+	 * @param string $assessment_type Normalized type.
+	 * @return bool
+	 */
+	public static function requires_paid_full_results( $assessment_type ) {
+		$t = self::normalize( $assessment_type );
+		return self::MINDSET === $t
+			|| self::INNER_DIMENSIONS === $t
+			|| self::SOCIAL_FLUENCY === $t;
+	}
+
+	/**
 	 * @param object $submission Row from ca_submissions.
 	 * @return string
 	 */
