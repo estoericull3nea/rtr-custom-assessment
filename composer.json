@@ -1,0 +1,14 @@
+{
+	"name": "rtr/rtr-custom-assessment",
+	"version": "2.0.0",
+	"description": "WordPress assessment plugin (Dompdf for PDF reports)",
+	"type": "wordpress-plugin",
+	"license": "GPL-2.0-or-later",
+	"require": {
+		"php": ">=7.4",
+		"dompdf/dompdf": "^2.0"
+	},
+	"config": {
+		"sort-packages": true
+	}
+}

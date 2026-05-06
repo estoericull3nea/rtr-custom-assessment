@@ -18,16 +18,16 @@ class Rtr_Custom_Assessment_Pdf
 	 */
 	public function get_pdf_binary($html)
 	{
-		if (class_exists('TCPDF')) {
+		if (class_exists('\Dompdf\Dompdf')) {
 			try {
-				return $this->get_binary_with_tcpdf($html);
+				return $this->get_binary_with_dompdf($html);
 			} catch (\Throwable $e) {
 				// Fallback below.
 			}
 		}
-		if (class_exists('Dompdf\Dompdf')) {
+		if (class_exists('\TCPDF')) {
 			try {
-				return $this->get_binary_with_dompdf($html);
+				return $this->get_binary_with_tcpdf($html);
 			} catch (\Throwable $e) {
 				// Fallback below.
 			}
@@ -36,15 +36,21 @@ class Rtr_Custom_Assessment_Pdf
 	}
 
 	/**
-	 * Build and save a fully-graphical PDF from structured report data.
-	 * No external library required — uses raw PDF operators.
+	 * Build and save a graphical PDF from structured report data.
+	 *
+	 * Prefers Dompdf (Composer `dompdf/dompdf`); falls back to TCPDF, plain HTML→text,
+	 * then the legacy raw-PDF builder if nothing else is available.
 	 *
 	 * @param array  $data
 	 * @param string $absolute_path
 	 * @return bool
 	 */
 	public function save_pdf_from_data( array $data, $absolute_path ) {
-		$binary = $this->build_pdf_report_binary( $data );
+		$html   = $this->build_natural_attributes_report_html( $data );
+		$binary = $this->get_pdf_binary( $html );
+		if ( false === $binary || '' === $binary ) {
+			$binary = $this->build_pdf_report_binary( $data );
+		}
 		if ( false === $binary || '' === $binary ) {
 			return false;
 		}
@@ -56,11 +62,148 @@ class Rtr_Custom_Assessment_Pdf
 	}
 
 	/**
+	 * HTML document for Natural Attributes / inner-dimensions PDF (Dompdf).
+	 *
+	 * @param array $data Same shape as CA_Ajax::build_submission_pdf_data().
+	 * @return string
+	 */
+	private function build_natural_attributes_report_html( array $data ) {
+		$total_score_s = isset( $data['total_score'] ) ? (string) $data['total_score'] : '';
+		$overall_pct   = (int) ( $data['overall_percent'] ?? 0 );
+		$overall_pct   = max( 0, min( 100, $overall_pct ) );
+		$ovr_level     = $overall_pct >= 80 ? 'high' : ( $overall_pct >= 50 ? 'medium' : 'low' );
+		$ovr_color     = $this->pdf_html_level_color( $ovr_level );
+		$ovr_label     = strtoupper( esc_html( $ovr_level ) );
+
+		$title = esc_html( __( 'Natural Attributes Cataloging', 'rtr-custom-assessment' ) );
+		$q1    = '&quot;<em style="color:#994433;font-style:italic;">' . esc_html( __( 'Remember', 'rtr-custom-assessment' ) ) . '</em> '
+			. esc_html( __( 'Who You Were Before the World', 'rtr-custom-assessment' ) );
+		$q2    = esc_html( __( 'Told You Who to Be.', 'rtr-custom-assessment' ) ) . '&quot;';
+
+		$logo_html = '';
+		$logo_path = $this->resolve_local_logo_path( isset( $data['logo_url'] ) ? (string) $data['logo_url'] : '' );
+		if ( '' !== $logo_path && is_readable( $logo_path ) ) {
+			$real = realpath( $logo_path );
+			if ( false !== $real ) {
+				$uri       = 'file://' . str_replace( '\\', '/', $real );
+				$logo_html = '<img src="' . esc_attr( $uri ) . '" style="max-height:44pt;max-width:100pt;height:auto;width:auto;" alt="">';
+			}
+		}
+		if ( '' === $logo_html ) {
+			$logo_html = '<div style="font-family:DejaVu Serif,serif;font-size:15pt;line-height:1.1;color:#994433;">'
+				. '<div>root.</div><div style="font-size:13.5pt;">to rise</div></div>';
+		}
+
+		$meta = esc_html(
+			trim( (string) ( $data['name'] ?? '' ) ) . '   |   ' . trim( (string) ( $data['email'] ?? '' ) )
+			. '   |   ' . __( 'Total Score:', 'rtr-custom-assessment' ) . ' ' . $total_score_s
+		);
+
+		$congrats = esc_html( __( 'Congratulations on Completing Your Discovery Journey!', 'rtr-custom-assessment' ) );
+		$sublead  = esc_html( __( 'Your personalized results and score breakdown are included below.', 'rtr-custom-assessment' ) );
+		$ovr_txt  = esc_html(
+			sprintf(
+				/* translators: 1: percentage, 2: level label (HIGH/MEDIUM/LOW) */
+				__( 'Overall Score: %1$s%%  [%2$s]', 'rtr-custom-assessment' ),
+				(string) $overall_pct,
+				$ovr_label
+			)
+		);
+		$name_email = esc_html( trim( (string) ( $data['name'] ?? '' ) . '   –   ' . (string) ( $data['email'] ?? '' ) ) );
+
+		$cat_title = esc_html( __( 'Category Results', 'rtr-custom-assessment' ) );
+		$qr_title  = esc_html( __( 'Question Responses', 'rtr-custom-assessment' ) );
+
+		$cat_rows = '';
+		foreach ( (array) ( $data['categories'] ?? array() ) as $cat ) {
+			$pct     = (int) ( $cat['percent'] ?? 0 );
+			$lv      = (string) ( $cat['level'] ?? 'low' );
+			$col     = $this->pdf_html_level_color( $lv );
+			$cname   = esc_html( (string) ( $cat['name'] ?? '' ) );
+			$summary = esc_html( (string) ( $cat['summary'] ?? '' ) );
+			$lv_u    = strtoupper( esc_html( $lv ) );
+			$cat_rows .= '<tr><td style="padding:10pt 12pt;border:0.5pt solid #dde1e6;vertical-align:top;">'
+				. '<div style="font-size:11pt;font-weight:bold;color:#121826;margin-bottom:6pt;">' . $cname . '</div>'
+				. '<div style="font-size:9pt;color:#5a6270;line-height:1.45;">' . $summary . '</div></td>'
+				. '<td style="width:86pt;padding:10pt 8pt;border:0.5pt solid #dde1e6;background:' . esc_attr( $col )
+				. ';color:#fff;text-align:center;vertical-align:middle;">'
+				. '<div style="font-size:8pt;opacity:0.95;">' . esc_html( __( 'Your score', 'rtr-custom-assessment' ) ) . '</div>'
+				. '<div style="font-size:17pt;font-weight:bold;margin:6pt 0;">' . (int) $pct . '%</div>'
+				. '<div style="display:inline-block;padding:3pt 8pt;background:#fff;border-radius:3pt;font-size:8pt;font-weight:bold;color:'
+				. esc_attr( $col ) . ';">' . $lv_u . '</div></td></tr>';
+		}
+
+		$resp_rows = '';
+		$even      = false;
+		foreach ( (array) ( $data['responses'] ?? array() ) as $row ) {
+			$bg       = $even ? '#f5f7fa' : '#fff';
+			$even     = ! $even;
+			$qtext    = esc_html( (string) ( $row['question'] ?? '' ) );
+			$atext    = esc_html( (string) ( $row['answer'] ?? '' ) );
+			$resp_rows .= '<tr style="background:' . esc_attr( $bg ) . ';"><td style="padding:8pt 10pt;border-bottom:0.3pt solid #e2e6eb;font-size:8.5pt;">'
+				. $qtext . '</td><td style="width:78pt;padding:8pt 8pt;border-bottom:0.3pt solid #e2e6eb;font-size:8.5pt;font-weight:bold;">'
+				. $atext . '</td></tr>';
+		}
+
+		$html = '<!DOCTYPE html><html><head><meta charset="UTF-8">'
+			. '<style>
+body { margin:0; padding:28pt 36pt 40pt; font-family: DejaVu Sans, sans-serif; font-size:9pt; color:#1a1f2e; }
+.hdr { border-bottom:0.5pt solid #dde1e6; padding-bottom:14pt; margin-bottom:16pt; }
+.hdr-table { width:100%; border-collapse:collapse; }
+.hdr-right { text-align:right; vertical-align:middle; }
+.hdr-title { font-size:12pt; font-weight:bold; color:#000; margin:0 0 6pt; }
+.hdr-quote { font-size:8.2pt; line-height:1.45; color:#000; }
+.hdr-quote .l2 { display:block; margin-top:2pt; }
+.meta { font-size:8pt; color:#6b7280; margin-top:12pt; }
+.band { background:#eef1f5; border-top:0.5pt solid #dde1e6; border-bottom:0.5pt solid #dde1e6; padding:16pt 0; margin:0 -36pt 18pt; padding-left:36pt; padding-right:36pt; }
+.band-table { width:100%; border-collapse:collapse; }
+h2.sec { font-size:11pt; color:#121826; margin:0 0 8pt; border-bottom:1.2pt solid #aa3130; padding-bottom:4pt; display:inline-block; }
+table.grid { width:100%; border-collapse:collapse; margin-bottom:14pt; }
+th.qh { background:#1c2433; color:#fff; font-size:8.5pt; padding:7pt 10pt; text-align:left; }
+th.qh2 { background:#1c2433; color:#fff; font-size:8.5pt; padding:7pt 8pt; text-align:left; width:78pt; }
+</style></head><body>'
+			. '<div class="hdr"><table class="hdr-table"><tr><td style="width:38%;vertical-align:middle;">' . $logo_html
+			. '</td><td class="hdr-right"><div class="hdr-title">' . $title . '</div>'
+			. '<div class="hdr-quote">' . $q1 . '<span class="l2">' . $q2 . '</span></div></td></tr></table>'
+			. '<div class="meta">' . $meta . '</div></div>'
+			. '<div class="band"><table class="band-table"><tr><td style="width:88pt;text-align:center;vertical-align:middle;">'
+			. '<div style="display:inline-block;width:56pt;height:56pt;line-height:56pt;border-radius:50%;background:'
+			. esc_attr( $ovr_color ) . ';color:#fff;font-size:11pt;font-weight:bold;">' . (int) $overall_pct . '%</div></td>'
+			. '<td style="vertical-align:middle;padding-left:14pt;">'
+			. '<div style="font-size:11pt;font-weight:bold;color:#121826;margin-bottom:6pt;">' . $congrats . '</div>'
+			. '<div style="font-size:8.5pt;color:#5a6270;margin-bottom:8pt;">' . $sublead . '</div>'
+			. '<div style="font-size:9.5pt;font-weight:bold;color:' . esc_attr( $ovr_color ) . ';">' . $ovr_txt . '</div>'
+			. '<div style="font-size:8pt;color:#6b7280;margin-top:6pt;">' . $name_email . '</div></td></tr></table></div>'
+			. '<h2 class="sec">' . $cat_title . '</h2><table class="grid">' . $cat_rows . '</table>'
+			. '<h2 class="sec">' . $qr_title . '</h2><table class="grid" style="margin-top:4pt;">'
+			. '<tr><th class="qh">' . esc_html( __( 'Question', 'rtr-custom-assessment' ) ) . '</th>'
+			. '<th class="qh2">' . esc_html( __( 'Response', 'rtr-custom-assessment' ) ) . '</th></tr>'
+			. $resp_rows . '</table></body></html>';
+
+		return $html;
+	}
+
+	/**
+	 * Hex colour for category / overall level (HTML/CSS).
+	 *
+	 * @param string $level high|medium|low
+	 * @return string
+	 */
+	private function pdf_html_level_color( $level ) {
+		if ( 'high' === $level ) {
+			return '#1f9d55';
+		}
+		if ( 'medium' === $level ) {
+			return '#d97706';
+		}
+		return '#c0392b';
+	}
+
+	/**
 	 * Render a fully-graphical assessment results report as a PDF binary string.
 	 *
-	 * Draws: dark header bar, overall score donut, category cards with coloured
-	 * score badges, and a Q&A table — all using native PDF path/text operators
-	 * (no TCPDF / Dompdf required).
+	 * Legacy fallback: native PDF drawing (used when Dompdf/TCPDF are unavailable).
+	 * Draws header strip, overall score band, category cards, and Q&A table.
 	 *
 	 * @param array $data Keys: name, email, total_score, overall_percent,
 	 *                    categories[]{name,percent,level,summary},
@@ -572,12 +715,12 @@ class Rtr_Custom_Assessment_Pdf
 	 */
 	public function generate($html)
 	{
-		// Use TCPDF if available, otherwise use a simple approach
-		if (class_exists('TCPDF')) {
-			$this->generate_with_tcpdf($html);
-		} else {
-			$this->generate_simple($html);
+		$binary = $this->get_pdf_binary( $html );
+		if ( false === $binary || '' === $binary ) {
+			return;
 		}
+		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Raw PDF binary output.
+		echo $binary;
 	}
 
 	/**
@@ -588,26 +731,18 @@ class Rtr_Custom_Assessment_Pdf
 	 */
 	public function export_pdf($html, $filename)
 	{
-		// Set headers for PDF download
-		header('Content-Type: application/pdf');
-		header('Content-Disposition: attachment; filename="' . $filename . '"');
-		header('Cache-Control: no-cache, no-store, must-revalidate');
-		header('Pragma: no-cache');
-		header('Expires: 0');
+		header( 'Content-Type: application/pdf' );
+		header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
+		header( 'Cache-Control: no-cache, no-store, must-revalidate' );
+		header( 'Pragma: no-cache' );
+		header( 'Expires: 0' );
 
-		// Try using TCPDF or DomPDF, fallback to a built-in minimal PDF renderer.
-		if (class_exists('TCPDF')) {
-			$this->generate_with_tcpdf($html);
-		} elseif (class_exists('Dompdf\Dompdf')) {
-			$this->generate_with_dompdf($html);
-		} else {
-			$binary = $this->get_binary_with_simple_pdf($html);
-			if (false === $binary || '' === $binary) {
-				return;
-			}
-			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Raw PDF binary output.
-			echo $binary;
+		$binary = $this->get_pdf_binary( $html );
+		if ( false === $binary || '' === $binary ) {
+			return;
 		}
+		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Raw PDF binary output.
+		echo $binary;
 	}
 
 	/**
@@ -654,12 +789,9 @@ class Rtr_Custom_Assessment_Pdf
 	 */
 	private function generate_with_dompdf($html)
 	{
-		$dompdf = new \Dompdf\Dompdf();
-		$dompdf->loadHtml($html);
-		$dompdf->setPaper('A4');
-		$dompdf->render();
-		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Dompdf returns binary PDF content, not HTML output.
-		echo $dompdf->output();
+		$binary = $this->get_binary_with_dompdf( $html );
+		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Raw PDF binary output.
+		echo $binary;
 	}
 
 	/**
@@ -670,11 +802,32 @@ class Rtr_Custom_Assessment_Pdf
 	 */
 	private function get_binary_with_dompdf($html)
 	{
-		$dompdf = new \Dompdf\Dompdf();
-		$dompdf->loadHtml($html);
-		$dompdf->setPaper('A4');
+		$options = new \Dompdf\Options();
+		$options->set( 'defaultFont', 'DejaVu Sans' );
+		$options->set( 'isHtml5ParserEnabled', true );
+		$options->set( 'isRemoteEnabled', true );
+
+		$chroot = array();
+		if ( defined( 'ABSPATH' ) ) {
+			$chroot[] = ABSPATH;
+		}
+		if ( defined( 'WP_CONTENT_DIR' ) ) {
+			$chroot[] = WP_CONTENT_DIR;
+		}
+		if ( defined( 'CA_PLUGIN_DIR' ) ) {
+			$chroot[] = CA_PLUGIN_DIR;
+		}
+		$chroot = array_values( array_unique( array_filter( $chroot ) ) );
+		if ( ! empty( $chroot ) ) {
+			$options->setChroot( $chroot );
+		}
+
+		$dompdf = new \Dompdf\Dompdf( $options );
+		$dompdf->loadHtml( (string) $html, 'UTF-8' );
+		$dompdf->setPaper( 'letter', 'portrait' );
 		$dompdf->render();
-		return $dompdf->output();
+
+		return (string) $dompdf->output();
 	}
 
 	/**
