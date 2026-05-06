@@ -266,7 +266,7 @@ class CA_Shortcode {
 		self::$needs_modal = true;
 		$atts              = shortcode_atts(
 			array(
-				'button_text' => __( 'Take Bundle', 'rtr-custom-assessment' ),
+				'button_text' => __( 'Unlock both reports — $29 ', 'rtr-custom-assessment' ),
 			),
 			$atts,
 			'bundle_assessments'
