@@ -68,7 +68,6 @@ class Rtr_Custom_Assessment_Pdf
 	 * @return string
 	 */
 	private function build_natural_attributes_report_html( array $data ) {
-		$total_score_s = isset( $data['total_score'] ) ? (string) $data['total_score'] : '';
 		$overall_pct   = (int) ( $data['overall_percent'] ?? 0 );
 		$overall_pct   = max( 0, min( 100, $overall_pct ) );
 		$ovr_level     = $overall_pct >= 80 ? 'high' : ( $overall_pct >= 50 ? 'medium' : 'low' );
@@ -94,10 +93,16 @@ class Rtr_Custom_Assessment_Pdf
 				. '<div>root.</div><div style="font-size:13.5pt;">to rise</div></div>';
 		}
 
-		$meta = esc_html(
-			trim( (string) ( $data['name'] ?? '' ) ) . '   |   ' . trim( (string) ( $data['email'] ?? '' ) )
-			. '   |   ' . __( 'Total Score:', 'rtr-custom-assessment' ) . ' ' . $total_score_s
-		);
+		$meta_name  = trim( (string) ( $data['name'] ?? '' ) );
+		$meta_email = trim( (string) ( $data['email'] ?? '' ) );
+		$meta_parts = array();
+		if ( '' !== $meta_name ) {
+			$meta_parts[] = $meta_name;
+		}
+		if ( '' !== $meta_email ) {
+			$meta_parts[] = $meta_email;
+		}
+		$meta = esc_html( implode( '   |   ', $meta_parts ) );
 
 		$congrats = esc_html( __( 'Congratulations on Completing Your Discovery Journey!', 'rtr-custom-assessment' ) );
 		$sublead  = esc_html( __( 'Your personalized results and score breakdown are included below.', 'rtr-custom-assessment' ) );
@@ -167,8 +172,9 @@ th.qh2 { background:#1c2433; color:#fff; font-size:8.5pt; padding:7pt 8pt; text-
 			. '<div class="hdr-quote">' . $q1 . '<span class="l2">' . $q2 . '</span></div></td></tr></table>'
 			. '<div class="meta">' . $meta . '</div></div>'
 			. '<div class="band"><table class="band-table"><tr><td style="width:88pt;text-align:center;vertical-align:middle;">'
-			. '<div style="display:inline-block;width:56pt;height:56pt;line-height:56pt;border-radius:50%;background:'
-			. esc_attr( $ovr_color ) . ';color:#fff;font-size:11pt;font-weight:bold;">' . (int) $overall_pct . '%</div></td>'
+			. '<div style="display:table;margin:0 auto;width:56pt;height:56pt;border-radius:50%;background:'
+			. esc_attr( $ovr_color ) . ';color:#fff;"><div style="display:table-cell;width:56pt;height:56pt;vertical-align:middle;'
+			. 'text-align:center;font-size:11pt;font-weight:bold;line-height:1;">' . (int) $overall_pct . '%</div></div></td>'
 			. '<td style="vertical-align:middle;padding-left:14pt;">'
 			. '<div style="font-size:11pt;font-weight:bold;color:#121826;margin-bottom:6pt;">' . $congrats . '</div>'
 			. '<div style="font-size:8.5pt;color:#5a6270;margin-bottom:8pt;">' . $sublead . '</div>'
@@ -367,8 +373,16 @@ th.qh2 { background:#1c2433; color:#fff; font-size:8.5pt; padding:7pt 8pt; text-
 		$tl( 'Natural Attributes Cataloging', $ml + 78, $ph - 27, 'F2', 12, $white );
 		$tl( 'Full Results Report',            $ml + 78, $ph - 44, 'F1',  9, array( 0.68, 0.70, 0.74 ) );
 		// Meta line
-		$meta_str = ( $data['name'] ?? '' ) . '   |   ' . ( $data['email'] ?? '' )
-		          . '   |   Total Score: ' . ( $data['total_score'] ?? '' );
+		$meta_name  = trim( (string) ( $data['name'] ?? '' ) );
+		$meta_email = trim( (string) ( $data['email'] ?? '' ) );
+		$meta_parts = array();
+		if ( '' !== $meta_name ) {
+			$meta_parts[] = $meta_name;
+		}
+		if ( '' !== $meta_email ) {
+			$meta_parts[] = $meta_email;
+		}
+		$meta_str = implode( '   |   ', $meta_parts );
 		$tl( $meta_str, $ml, $ph - 65, 'F1', 8, array( 0.60, 0.63, 0.68 ) );
 
 		$y = (float) ( $ph - $hh );
