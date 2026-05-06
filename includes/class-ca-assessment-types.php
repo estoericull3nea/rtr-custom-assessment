@@ -62,7 +62,9 @@ class CA_Assessment_Types {
 	 */
 	public static function requires_paid_full_results( $assessment_type ) {
 		$t = self::normalize( $assessment_type );
-		return self::INNER_DIMENSIONS === $t || self::SOCIAL_FLUENCY === $t;
+		return self::MINDSET === $t
+			|| self::INNER_DIMENSIONS === $t
+			|| self::SOCIAL_FLUENCY === $t;
 	}
 
 	/**

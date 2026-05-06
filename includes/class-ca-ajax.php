@@ -466,7 +466,7 @@ class CA_Ajax
 		if (CA_Assessment_Types::SOCIAL_FLUENCY === $t) {
 			return (float) apply_filters('ca_social_fluency_full_results_price', 9.99, $submission_id);
 		}
-		return 0;
+		return (float) apply_filters('ca_mindset_full_results_price', 9.99, $submission_id);
 	}
 
 	/**
@@ -478,7 +478,7 @@ class CA_Ajax
 	}
 
 	/**
-	 * Create/reuse WooCommerce order for Social Fluency or Natural Attributes paid full-results flow.
+	 * Create/reuse WooCommerce order for Entrepreneurial Mindset, Social Fluency, or Natural Attributes Cataloging paid full-results flow.
 	 */
 	public function ca_prepare_paid_full_results_checkout()
 	{
@@ -690,8 +690,10 @@ class CA_Ajax
 
 		if (CA_Assessment_Types::SOCIAL_FLUENCY === $assessment_type) {
 			$name_tpl = __('Social Fluency Full Results #%1$d - %2$s %3$s', 'rtr-custom-assessment');
-		} else {
+		} elseif (CA_Assessment_Types::INNER_DIMENSIONS === $assessment_type) {
 			$name_tpl = __('Natural Attributes Cataloging Full Results #%1$d - %2$s %3$s', 'rtr-custom-assessment');
+		} else {
+			$name_tpl = __('Entrepreneurial Mindset Full Results #%1$d - %2$s %3$s', 'rtr-custom-assessment');
 		}
 
 		$product->set_name(
@@ -831,7 +833,13 @@ class CA_Ajax
 		}
 
 		if (!$order instanceof \WC_Order) {
-			$created_via = CA_Assessment_Types::SOCIAL_FLUENCY === $assessment_type ? 'ca_social_fluency_full_results' : 'ca_inner_dimensions_full_results';
+			if (CA_Assessment_Types::SOCIAL_FLUENCY === $assessment_type) {
+				$created_via = 'ca_social_fluency_full_results';
+			} elseif (CA_Assessment_Types::INNER_DIMENSIONS === $assessment_type) {
+				$created_via = 'ca_inner_dimensions_full_results';
+			} else {
+				$created_via = 'ca_mindset_full_results';
+			}
 			$created = wc_create_order(
 				array(
 					'status' => 'pending',
@@ -1164,7 +1172,13 @@ class CA_Ajax
 		}
 
 		$sub_type = CA_Assessment_Types::from_submission($submission);
-		$prefix = CA_Assessment_Types::SOCIAL_FLUENCY === $sub_type ? 'sf-results-' : 'nac-results-';
+		if (CA_Assessment_Types::SOCIAL_FLUENCY === $sub_type) {
+			$prefix = 'sf-results-';
+		} elseif (CA_Assessment_Types::INNER_DIMENSIONS === $sub_type) {
+			$prefix = 'nac-results-';
+		} else {
+			$prefix = 'mindset-results-';
+		}
 
 		$dir_path  = trailingslashit($upload['basedir']) . 'ca-results';
 		$timestamp = gmdate('YmdHis');

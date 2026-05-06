@@ -84,11 +84,17 @@ class Rtr_Custom_Assessment_Pdf
 				__( 'Your personalized results summarize how you responded across categories and question prompts.', 'rtr-custom-assessment' )
 			);
 			$q2    = '';
-		} else {
+		} elseif ( CA_Assessment_Types::INNER_DIMENSIONS === $atype ) {
 			$title = esc_html( __( 'Natural Attributes Cataloging', 'rtr-custom-assessment' ) );
 			$q1    = '&quot;<em style="color:#994433;font-style:italic;">' . esc_html( __( 'Remember', 'rtr-custom-assessment' ) ) . '</em> '
 				. esc_html( __( 'Who You Were Before the World', 'rtr-custom-assessment' ) );
 			$q2    = esc_html( __( 'Told You Who to Be.', 'rtr-custom-assessment' ) ) . '&quot;';
+		} else {
+			$title = esc_html( __( 'Entrepreneurial Mindset Assessment', 'rtr-custom-assessment' ) );
+			$q1    = esc_html(
+				__( 'Your results reflect how you rated each entrepreneurial mindset dimension on our 1–5 scale.', 'rtr-custom-assessment' )
+			);
+			$q2    = '';
 		}
 
 		$logo_html = '';

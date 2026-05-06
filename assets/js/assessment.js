@@ -1456,7 +1456,8 @@
     var isYesNo = data.assessment_type === "inner_dimensions";
     var requiresPaidDownload =
       data.assessment_type === "inner_dimensions" ||
-      data.assessment_type === "social_fluency";
+      data.assessment_type === "social_fluency" ||
+      data.assessment_type === "mindset";
 
     var initials = (
       user.first_name.charAt(0) + user.last_name.charAt(0)
@@ -1506,10 +1507,14 @@
         "</sup></span>" +
         '<span class="ca-results-score-label">Average Score</span>';
 
-    var Pack =
-      data.assessment_type === "inner_dimensions"
-        ? CA_Config.inner_results || {}
-        : CA_Config.social_results || {};
+    var Pack = {};
+    if (data.assessment_type === "inner_dimensions") {
+      Pack = CA_Config.inner_results || {};
+    } else if (data.assessment_type === "social_fluency") {
+      Pack = CA_Config.social_results || {};
+    } else {
+      Pack = CA_Config.mindset_results || {};
+    }
     var paidTop = "";
     if (requiresPaidDownload) {
       var emailEsc = escHtml(user.email);
@@ -1535,7 +1540,9 @@
           Pack.title ||
             (data.assessment_type === "social_fluency"
               ? "Social Fluency Assessment"
-              : "Natural Attributes Cataloging"),
+              : data.assessment_type === "mindset"
+                ? "Entrepreneurial Mindset Assessment"
+                : "Natural Attributes Cataloging"),
         ) +
         "</h1>" +
         quoteHtml +
