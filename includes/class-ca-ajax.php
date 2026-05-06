@@ -47,6 +47,7 @@ class CA_Ajax
 		add_action('woocommerce_checkout_create_order', array($this, 'attach_inner_dimensions_meta_to_checkout_order'), 20, 2);
 		add_filter('woocommerce_checkout_get_value', array($this, 'checkout_prefill_billing_from_pay_order'), 20, 2);
 		add_filter('woocommerce_payment_complete_order_status', array($this, 'inner_dimensions_payment_complete_order_status'), 10, 3);
+		add_action('template_redirect', array($this, 'maybe_nac_order_pay_404_or_expired'), 5);
 	}
 
 	/**
@@ -724,12 +725,95 @@ class CA_Ajax
 			$order->update_meta_data('_ca_full_results_template_version', $template_version);
 		}
 
+		$expiry_seconds = (int) apply_filters('ca_nac_order_pay_link_expiry_seconds', 2 * HOUR_IN_SECONDS);
+		$expiry_seconds = max(60, $expiry_seconds);
+		$order->update_meta_data('_ca_order_pay_expires_at', time() + $expiry_seconds);
+
 		$order->calculate_totals();
 		$order->save();
 
 		$this->clear_wc_cart_for_guest_checkout();
 
 		return $this->get_inner_dimensions_order_payment_url($order);
+	}
+
+	/**
+	 * On order-pay: 404 if the NAC link expired (unpaid past window) or the order no longer needs payment (e.g. completed).
+	 *
+	 * Requires a valid `key` query arg matching the order (same as WooCommerce’s pay flow).
+	 *
+	 * @return void
+	 */
+	public function maybe_nac_order_pay_404_or_expired()
+	{
+		if (!function_exists('is_wc_endpoint_url') || !is_wc_endpoint_url('order-pay')) {
+			return;
+		}
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- WC front-end order key in URL.
+		if (empty($_GET['key'])) {
+			return;
+		}
+
+		global $wp;
+		$order_id = isset($wp->query_vars['order-pay']) ? absint($wp->query_vars['order-pay']) : 0;
+		if ($order_id <= 0 && function_exists('get_query_var')) {
+			$order_id = absint(get_query_var('order-pay'));
+		}
+		if ($order_id <= 0) {
+			return;
+		}
+
+		$order = wc_get_order($order_id);
+		if (!$order instanceof \WC_Order) {
+			return;
+		}
+
+		if (CA_Assessment_Types::INNER_DIMENSIONS !== (string) $order->get_meta('_ca_assessment_type')) {
+			return;
+		}
+
+		$key = isset($_GET['key']) ? wc_clean(wp_unslash($_GET['key'])) : '';
+		if ('' === $key || !hash_equals($order->get_order_key(), $key)) {
+			return;
+		}
+
+		if (!$order->needs_payment()) {
+			$this->nac_order_pay_send_404();
+		}
+
+		$expiry_seconds = (int) apply_filters('ca_nac_order_pay_link_expiry_seconds', 2 * HOUR_IN_SECONDS);
+		$expiry_seconds = max(60, $expiry_seconds);
+
+		$expires_at = (int) $order->get_meta('_ca_order_pay_expires_at');
+		if ($expires_at <= 0 && $order->get_date_created()) {
+			$expires_at = $order->get_date_created()->getTimestamp() + $expiry_seconds;
+		}
+
+		if ($expires_at > 0 && time() > $expires_at) {
+			$this->nac_order_pay_send_404();
+		}
+	}
+
+	/**
+	 * Render the theme 404 template and halt.
+	 *
+	 * @return void
+	 */
+	private function nac_order_pay_send_404()
+	{
+		global $wp_query;
+		$wp_query->set_404();
+		status_header(404);
+		nocache_headers();
+
+		$template = get_query_template('404');
+		if ($template) {
+			include $template;
+		} else {
+			wp_die(esc_html__('Not found.', 'rtr-custom-assessment'), esc_html__('Not found.', 'rtr-custom-assessment'), array('response' => 404));
+		}
+		exit;
 	}
 
 	/**
