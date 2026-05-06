@@ -52,6 +52,149 @@ class CA_Mailer
 	}
 
 	/**
+	 * Email customer after paid NAC order with the same PDF URL as the checkout thank-you page.
+	 *
+	 * @param \WC_Order $order WooCommerce order.
+	 * @param string    $download_url Public PDF URL.
+	 * @return bool
+	 */
+	public static function send_customer_paid_pdf_download_email($order, $download_url)
+	{
+		if (!$order instanceof \WC_Order) {
+			return false;
+		}
+
+		$download_url = trim((string) $download_url);
+		if ('' === $download_url) {
+			return false;
+		}
+
+		$to = trim((string) $order->get_billing_email());
+		if (!is_email($to)) {
+			return false;
+		}
+
+		$blog_name = get_bloginfo('name');
+		$order_no = (string) $order->get_order_number();
+		$subject = sprintf(
+			/* translators: %s: order number */
+			__('Your order #%s is complete', 'rtr-custom-assessment'),
+			$order_no
+		);
+		$subject = apply_filters('ca_customer_paid_pdf_email_subject', $subject, $order, $download_url);
+
+		$first = trim((string) $order->get_billing_first_name());
+		$greeting = '' !== $first
+			? '<p style="margin-bottom:12px;">' . sprintf(
+				/* translators: %s: first name */
+				esc_html__('Hi %s,', 'rtr-custom-assessment'),
+				esc_html($first)
+			) . '</p>'
+			: '<p style="margin-bottom:12px;">' . esc_html__('Hello,', 'rtr-custom-assessment') . '</p>';
+
+		$body_inner = $greeting;
+		$body_inner .= '<p style="margin-bottom:14px;">' . esc_html__('Your payment was received and your order is complete. Use the link below to download your PDF — the same link shown on the checkout confirmation page.', 'rtr-custom-assessment') . '</p>';
+		$body_inner .= '<div class="cta-wrap" style="margin: 20px 0; text-align:center;">';
+		$body_inner .= '<a href="' . esc_url($download_url) . '" class="cta-btn" style="display:inline-block;background:#aa3130;color:#fff !important;text-decoration:none;padding:12px 22px;border-radius:6px;font-weight:600;font-size:15px;">';
+		$body_inner .= esc_html__('Download PDF', 'rtr-custom-assessment');
+		$body_inner .= '</a></div>';
+		$body_inner .= '<p style="margin-top:14px;font-size:13px;color:#666;line-height:1.5;">';
+		$body_inner .= esc_html__('If the button does not work, copy this address into your browser:', 'rtr-custom-assessment');
+		$body_inner .= '</p>';
+		$body_inner .= '<p style="word-break:break-all;font-size:12px;color:#999;margin-top:6px;"><a href="' . esc_url($download_url) . '" style="color:#aa3130;">' . esc_html($download_url) . '</a></p>';
+
+		$body = '
+		<!DOCTYPE html>
+		<html lang="en">
+		<head>
+			<meta charset="UTF-8">
+			<meta name="viewport" content="width=device-width, initial-scale=1.0">
+			<title>' . esc_html__('Your order is complete', 'rtr-custom-assessment') . '</title>
+			<style>
+				* { margin: 0; padding: 0; }
+				body {
+					font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+					line-height: 1.6;
+					color: #333;
+					background-color: #f5f5f5;
+				}
+				.email-container {
+					max-width: 600px;
+					margin: 20px auto;
+					background-color: #fff;
+					border-radius: 8px;
+					box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+					overflow: hidden;
+				}
+				.email-header {
+					background: linear-gradient(135deg, #aa3130 0%, #8b2823 100%);
+					color: #fff;
+					padding: 30px;
+					text-align: center;
+				}
+				.email-header h1 {
+					font-size: 26px;
+					margin-bottom: 8px;
+				}
+				.email-header p {
+					font-size: 14px;
+					opacity: 0.92;
+				}
+				.email-content { padding: 30px; }
+				.cta-wrap { margin: 20px 0; text-align: center; }
+				.cta-btn {
+					display: inline-block;
+					background: #aa3130;
+					color: #fff !important;
+					text-decoration: none;
+					padding: 12px 22px;
+					border-radius: 6px;
+					font-weight: 600;
+					font-size: 15px;
+				}
+				.footer-section {
+					background-color: #f5f5f5;
+					padding: 20px 30px;
+					border-top: 1px solid #eee;
+					font-size: 13px;
+					color: #666;
+					text-align: center;
+				}
+			</style>
+		</head>
+		<body>
+			<div class="email-container">
+				<div class="email-header">
+					<h1>' . esc_html__('Thank you for your purchase', 'rtr-custom-assessment') . '</h1>
+					<p>' . esc_html__('Your order is complete', 'rtr-custom-assessment') . '</p>
+				</div>
+				<div class="email-content">
+					' . $body_inner . '
+				</div>
+				<div class="footer-section">
+					<p>&copy; ' . esc_html($blog_name) . ' ' . gmdate('Y') . '. ' . esc_html__('All rights reserved.', 'rtr-custom-assessment') . '</p>
+					<p>' . esc_html__('This is an automated message. Please do not reply.', 'rtr-custom-assessment') . '</p>
+				</div>
+			</div>
+		</body>
+		</html>';
+
+		$body = apply_filters('ca_customer_paid_pdf_email_body', $body, $order, $download_url);
+
+		$from_email = (string) get_option('admin_email');
+		if (!is_email($from_email)) {
+			$from_email = $to;
+		}
+
+		$headers = array(
+			'Content-Type: text/html; charset=UTF-8',
+			'From: ' . $blog_name . ' <' . $from_email . '>',
+		);
+
+		return (bool) wp_mail($to, $subject, $body, $headers);
+	}
+
+	/**
 	 * Notify admin that a customer results email was sent.
 	 *
 	 * @param object $submission Submission row.

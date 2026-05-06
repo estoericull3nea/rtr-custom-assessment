@@ -63,6 +63,7 @@ class CA_Ajax
 		add_filter('woocommerce_checkout_get_value', array($this, 'checkout_prefill_billing_from_pay_order'), 20, 2);
 		add_filter('woocommerce_payment_complete_order_status', array($this, 'inner_dimensions_payment_complete_order_status'), 10, 3);
 		add_action('woocommerce_payment_complete', array($this, 'mark_inner_dimensions_product_out_of_stock_on_payment'), 10, 1);
+		add_action('woocommerce_payment_complete', array($this, 'maybe_send_customer_paid_pdf_email'), 15, 1);
 		add_action('template_redirect', array($this, 'maybe_nac_order_pay_404_or_expired'), 5);
 	}
 
@@ -1227,16 +1228,7 @@ class CA_Ajax
 			return;
 		}
 
-		$this->ensure_inner_dimensions_order_results_file($order);
-
-		$download_url = (string) $order->get_meta('_ca_full_results_file_path');
-		if ('' === $download_url) {
-			$product_id = (int) $order->get_meta('_ca_full_results_product_id');
-			if ($product_id > 0) {
-				$download_url = (string) get_post_meta($product_id, '_ca_full_results_file_path', true);
-			}
-		}
-		$download_url = $this->normalize_results_download_url($download_url);
+		$download_url = $this->get_inner_dimensions_pdf_download_url_for_order($order);
 		if ('' === $download_url) {
 			return;
 		}
@@ -1254,6 +1246,81 @@ class CA_Ajax
 			</p>
 		</section>
 		<?php
+	}
+
+	/**
+	 * After successful payment, email the customer the same PDF download URL as the thank-you page.
+	 *
+	 * @param int $order_id WooCommerce order ID.
+	 * @return void
+	 */
+	public function maybe_send_customer_paid_pdf_email($order_id)
+	{
+		if (!$this->is_woocommerce_ready()) {
+			return;
+		}
+
+		$order = wc_get_order((int) $order_id);
+		if (!$order instanceof \WC_Order) {
+			return;
+		}
+
+		if (CA_Assessment_Types::INNER_DIMENSIONS !== (string) $order->get_meta('_ca_assessment_type')) {
+			return;
+		}
+
+		if (!$order->is_paid()) {
+			return;
+		}
+
+		if ('yes' === (string) $order->get_meta('_ca_paid_pdf_email_sent')) {
+			return;
+		}
+
+		$download_url = $this->get_inner_dimensions_pdf_download_url_for_order($order);
+		if ('' === $download_url) {
+			return;
+		}
+
+		$sent = CA_Mailer::send_customer_paid_pdf_download_email($order, $download_url);
+		if ($sent) {
+			$order->update_meta_data('_ca_paid_pdf_email_sent', 'yes');
+			$order->save();
+		}
+	}
+
+	/**
+	 * Public PDF URL for NAC orders (matches thank-you download link after ensure + normalize).
+	 *
+	 * @param \WC_Order $order Order instance.
+	 * @return string
+	 */
+	public function get_inner_dimensions_pdf_download_url_for_order($order)
+	{
+		if (!$this->is_woocommerce_ready()) {
+			return '';
+		}
+		if (!$order instanceof \WC_Order) {
+			return '';
+		}
+		if (CA_Assessment_Types::INNER_DIMENSIONS !== (string) $order->get_meta('_ca_assessment_type')) {
+			return '';
+		}
+		if (!$order->is_paid()) {
+			return '';
+		}
+
+		$this->ensure_inner_dimensions_order_results_file($order);
+
+		$download_url = (string) $order->get_meta('_ca_full_results_file_path');
+		if ('' === $download_url) {
+			$product_id = (int) $order->get_meta('_ca_full_results_product_id');
+			if ($product_id > 0) {
+				$download_url = (string) get_post_meta($product_id, '_ca_full_results_file_path', true);
+			}
+		}
+
+		return $this->normalize_results_download_url($download_url);
 	}
 
 	/**
