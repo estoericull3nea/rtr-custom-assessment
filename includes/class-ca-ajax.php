@@ -47,6 +47,7 @@ class CA_Ajax
 		add_action('woocommerce_checkout_create_order', array($this, 'attach_inner_dimensions_meta_to_checkout_order'), 20, 2);
 		add_filter('woocommerce_checkout_get_value', array($this, 'checkout_prefill_billing_from_pay_order'), 20, 2);
 		add_filter('woocommerce_payment_complete_order_status', array($this, 'inner_dimensions_payment_complete_order_status'), 10, 3);
+		add_action('woocommerce_payment_complete', array($this, 'mark_inner_dimensions_product_out_of_stock_on_payment'), 10, 1);
 		add_action('template_redirect', array($this, 'maybe_nac_order_pay_404_or_expired'), 5);
 	}
 
@@ -1286,6 +1287,85 @@ class CA_Ajax
 		}
 
 		return 'completed';
+	}
+
+	/**
+	 * After successful payment, mark the NAC full-results product as out of stock (one purchase per hidden product).
+	 *
+	 * @param int $order_id WooCommerce order ID.
+	 * @return void
+	 */
+	public function mark_inner_dimensions_product_out_of_stock_on_payment($order_id)
+	{
+		if (!$this->is_woocommerce_ready()) {
+			return;
+		}
+
+		$order = wc_get_order((int) $order_id);
+		if (!$order instanceof \WC_Order) {
+			return;
+		}
+
+		if (CA_Assessment_Types::INNER_DIMENSIONS !== (string) $order->get_meta('_ca_assessment_type')) {
+			return;
+		}
+
+		if ('yes' === (string) $order->get_meta('_ca_nac_product_marked_outofstock')) {
+			return;
+		}
+
+		$candidate_ids = array();
+		$meta_pid = (int) $order->get_meta('_ca_full_results_product_id');
+		if ($meta_pid > 0) {
+			$candidate_ids[] = $meta_pid;
+		}
+
+		foreach ($order->get_items('line_item') as $item) {
+			if (!is_object($item) || !method_exists($item, 'get_product_id')) {
+				continue;
+			}
+			$pid = (int) $item->get_product_id();
+			if ($pid > 0) {
+				$candidate_ids[] = $pid;
+			}
+		}
+
+		$candidate_ids = array_unique(array_filter($candidate_ids));
+		foreach ($candidate_ids as $product_id) {
+			$this->set_inner_dimensions_product_out_of_stock((int) $product_id);
+		}
+
+		$order->update_meta_data('_ca_nac_product_marked_outofstock', 'yes');
+		$order->save();
+	}
+
+	/**
+	 * Force stock status out-of-stock for a NAC hidden product created by this plugin.
+	 *
+	 * @param int $product_id Product post ID.
+	 * @return void
+	 */
+	private function set_inner_dimensions_product_out_of_stock($product_id)
+	{
+		$product_id = (int) $product_id;
+		if ($product_id <= 0) {
+			return;
+		}
+
+		$product = wc_get_product($product_id);
+		if (!$product instanceof \WC_Product) {
+			return;
+		}
+
+		if (CA_Assessment_Types::INNER_DIMENSIONS !== (string) $product->get_meta('_ca_assessment_type')) {
+			return;
+		}
+
+		$product->set_manage_stock(true);
+		$product->set_stock_quantity(0);
+		$product->set_backorders('no');
+		$product->set_stock_status('outofstock');
+		$product->save();
 	}
 
 	/**
