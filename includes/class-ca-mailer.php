@@ -112,7 +112,7 @@ class CA_Mailer
 		$blog_name = get_bloginfo('name');
 		$subject = sprintf(
 			/* translators: %s: site name */
-			__('Your Bundle Assessment Results - %s', 'rtr-custom-assessment'),
+			__('Your Assessment Results - %s', 'rtr-custom-assessment'),
 			$blog_name
 		);
 
@@ -142,8 +142,8 @@ class CA_Mailer
 		<body>
 			<div class="wrap">
 				<div class="head">
-					<h1 style="margin:0 0 8px; font-size:26px;">' . esc_html__('Bundle Complete!', 'rtr-custom-assessment') . '</h1>
-					<p style="margin:0; opacity:.92;">' . esc_html__('Here is your combined preview from both assessments.', 'rtr-custom-assessment') . '</p>
+					<h1 style="margin:0 0 8px; font-size:26px;">' . esc_html__('Assessment Complete!', 'rtr-custom-assessment') . '</h1>
+					<p style="margin:0; opacity:.92;">' . esc_html__('A customer notification was delivered successfully.', 'rtr-custom-assessment') . '</p>
 				</div>
 				<div class="content">
 					<p>' . sprintf(esc_html__('Hi %s,', 'rtr-custom-assessment'), esc_html($full_name)) . '</p>
@@ -664,9 +664,9 @@ class CA_Mailer
 		}
 
 		$subject = sprintf(
-			/* translators: %s: customer name */
-			__('Bundle Results Email Sent (%s)', 'rtr-custom-assessment'),
-			$name
+			/* translators: %d: submission id */
+			__('Customer Results Email Sent (Bundle #%d)', 'rtr-custom-assessment'),
+			(int) $social_submission->id
 		);
 
 		$inner_url = self::get_admin_submission_detail_url($inner_submission);
@@ -678,20 +678,42 @@ class CA_Mailer
 		<head>
 			<meta charset="UTF-8">
 			<meta name="viewport" content="width=device-width, initial-scale=1.0">
-			<title>' . esc_html__('Bundle Results Email Sent', 'rtr-custom-assessment') . '</title>
+			<title>' . esc_html__('Customer Results Email Sent', 'rtr-custom-assessment') . '</title>
 		</head>
 		<body style="font-family:Segoe UI,Tahoma,Geneva,Verdana,sans-serif;line-height:1.6;color:#333;background:#f5f5f5;margin:0;padding:20px;">
 			<div style="max-width:640px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;">
-				<div style="background:linear-gradient(135deg,#aa3130 0%,#8b2823 100%);color:#fff;padding:24px 22px;">
-					<h1 style="margin:0 0 6px;font-size:24px;">' . esc_html__('Bundle Results Email Sent', 'rtr-custom-assessment') . '</h1>
-					<p style="margin:0;opacity:.9;">' . esc_html__('Customer bundle completion notification delivered.', 'rtr-custom-assessment') . '</p>
+				<div style="background:linear-gradient(135deg,#aa3130 0%,#8b2823 100%);color:#fff;padding:24px 22px;text-align:center;">
+					<h1 style="margin:0 0 6px;font-size:36px;line-height:1.2;">' . esc_html__('Customer Results Email Sent', 'rtr-custom-assessment') . '</h1>
+					<p style="margin:0;opacity:.9;">' . esc_html__('A customer notification was delivered successfully.', 'rtr-custom-assessment') . '</p>
 				</div>
 				<div style="padding:22px;">
-					<p><strong>' . esc_html($name) . '</strong> (' . esc_html((string) $inner_submission->email) . ')</p>
-					<p style="margin:8px 0;">' . esc_html__('Natural Attributes submission:', 'rtr-custom-assessment') . ' #' . esc_html((string) ((int) $inner_submission->id)) . '</p>
-					<p style="margin:8px 0;">' . esc_html__('Social Fluency submission:', 'rtr-custom-assessment') . ' #' . esc_html((string) ((int) $social_submission->id)) . '</p>
-					<p style="margin:14px 0 0;"><a href="' . esc_url($inner_url) . '">' . esc_html__('Open Natural Attributes submission', 'rtr-custom-assessment') . '</a></p>
-					<p style="margin:8px 0 0;"><a href="' . esc_url($social_url) . '">' . esc_html__('Open Social Fluency submission', 'rtr-custom-assessment') . '</a></p>
+					<p style="margin:0 0 14px;">' . esc_html__('A customer bundle results email has just been sent. Combined preview details are below:', 'rtr-custom-assessment') . '</p>
+					<table style="width:100%;font-size:14px;border-collapse:collapse;background:#fafafa;border:1px solid #eee;border-radius:6px;overflow:hidden;">
+						<tr>
+							<td style="width:34%;padding:10px 12px;background:#f7f7f7;color:#666;font-weight:600;border-bottom:1px solid #eee;">' . esc_html__('Submission IDs', 'rtr-custom-assessment') . '</td>
+							<td style="padding:10px 12px;border-bottom:1px solid #eee;">' . esc_html((string) ((int) $inner_submission->id)) . ' + ' . esc_html((string) ((int) $social_submission->id)) . '</td>
+						</tr>
+						<tr>
+							<td style="padding:10px 12px;background:#f7f7f7;color:#666;font-weight:600;border-bottom:1px solid #eee;">' . esc_html__('Assessment', 'rtr-custom-assessment') . '</td>
+							<td style="padding:10px 12px;border-bottom:1px solid #eee;">' . esc_html__('Bundle: Natural Attributes + Social Fluency', 'rtr-custom-assessment') . '</td>
+						</tr>
+						<tr>
+							<td style="padding:10px 12px;background:#f7f7f7;color:#666;font-weight:600;border-bottom:1px solid #eee;">' . esc_html__('Name', 'rtr-custom-assessment') . '</td>
+							<td style="padding:10px 12px;border-bottom:1px solid #eee;">' . esc_html($name) . '</td>
+						</tr>
+						<tr>
+							<td style="padding:10px 12px;background:#f7f7f7;color:#666;font-weight:600;border-bottom:1px solid #eee;">' . esc_html__('Email', 'rtr-custom-assessment') . '</td>
+							<td style="padding:10px 12px;border-bottom:1px solid #eee;">' . esc_html((string) $inner_submission->email) . '</td>
+						</tr>
+						<tr>
+							<td style="padding:10px 12px;background:#f7f7f7;color:#666;font-weight:600;">' . esc_html__('Preview included', 'rtr-custom-assessment') . '</td>
+							<td style="padding:10px 12px;">' . esc_html__('Top attribute + pattern (NAC), and overall tier + domain (Social)', 'rtr-custom-assessment') . '</td>
+						</tr>
+					</table>
+					<div style="margin-top:16px;text-align:center;">
+						<a href="' . esc_url($inner_url) . '" style="display:inline-block;background:#aa3130;color:#fff !important;text-decoration:none;padding:10px 16px;border-radius:6px;font-weight:600;font-size:14px;margin:0 5px 8px;">' . esc_html__('Open Natural Attributes', 'rtr-custom-assessment') . '</a>
+						<a href="' . esc_url($social_url) . '" style="display:inline-block;background:#aa3130;color:#fff !important;text-decoration:none;padding:10px 16px;border-radius:6px;font-weight:600;font-size:14px;margin:0 5px 8px;">' . esc_html__('Open Social Fluency', 'rtr-custom-assessment') . '</a>
+					</div>
 				</div>
 			</div>
 		</body>
