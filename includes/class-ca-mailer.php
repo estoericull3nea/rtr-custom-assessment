@@ -109,6 +109,15 @@ class CA_Mailer
 			? CA_Scoring::get_category_summary((string) $top_social->category_name, (float) $top_social->average, CA_Assessment_Types::SOCIAL_FLUENCY)
 			: __('This is where your social strengths show up most clearly.', 'rtr-custom-assessment');
 
+		$paywall_url = '';
+		$ajax = CA_Ajax::get_instance();
+		if ($ajax) {
+			$paywall_url = (string) $ajax->get_bundle_order_pay_url_for_submissions($inner_submission_id, $social_submission_id);
+		}
+		if ('' === trim($paywall_url) && function_exists('wc_get_checkout_url')) {
+			$paywall_url = wc_get_checkout_url();
+		}
+
 		$blog_name = get_bloginfo('name');
 		$subject = sprintf(
 			/* translators: %s: site name */
@@ -162,6 +171,9 @@ class CA_Mailer
 					</div>
 
 					<p class="note">' . esc_html__('You can unlock full downloadable reports from your checkout flow.', 'rtr-custom-assessment') . '</p>
+					<div style="margin-top:14px;text-align:center;">
+						<a href="' . esc_url($paywall_url) . '" style="display:inline-block;background:#aa3130;color:#fff !important;text-decoration:none;padding:11px 18px;border-radius:6px;font-weight:600;font-size:14px;">' . esc_html__('Get the Full Result', 'rtr-custom-assessment') . '</a>
+					</div>
 				</div>
 			</div>
 		</body>

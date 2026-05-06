@@ -2518,6 +2518,7 @@ class CA_Admin
 		$answers = CA_Database::get_answers($submission_id);
 		$cat_scores = CA_Database::get_category_scores($submission_id);
 		$woo_orders = $this->get_submission_woocommerce_orders((int) $submission_id);
+		$is_bundle_submission = $this->submission_is_part_of_bundle((int) $submission_id);
 
 		if (!$submission) {
 			echo '<div class="wrap"><p>' . esc_html__('Submission not found.', 'rtr-custom-assessment') . '</p></div>';
@@ -2571,54 +2572,56 @@ class CA_Admin
 				</div>
 			</div>
 
-			<div class="ca-admin-card">
-				<h2 class="ca-admin-card-title"><?php esc_html_e('WooCommerce Orders', 'rtr-custom-assessment'); ?></h2>
-				<?php if (!function_exists('wc_get_orders')): ?>
-					<p><?php esc_html_e('WooCommerce is not active.', 'rtr-custom-assessment'); ?></p>
-				<?php elseif (empty($woo_orders)): ?>
-					<p><?php esc_html_e('No WooCommerce orders found for this submission.', 'rtr-custom-assessment'); ?></p>
-				<?php else: ?>
-					<table class="wp-list-table widefat fixed ca-admin-table">
-						<thead>
-							<tr>
-								<th><?php esc_html_e('Order', 'rtr-custom-assessment'); ?></th>
-								<th><?php esc_html_e('Status', 'rtr-custom-assessment'); ?></th>
-								<th><?php esc_html_e('Total', 'rtr-custom-assessment'); ?></th>
-								<th><?php esc_html_e('Created', 'rtr-custom-assessment'); ?></th>
-							</tr>
-						</thead>
-						<tbody>
-							<?php foreach ($woo_orders as $woo_order): ?>
-								<?php
-								$order_id = (int) $woo_order->get_id();
-								$order_number = $woo_order->get_order_number();
-								$order_edit_url = admin_url('post.php?post=' . $order_id . '&action=edit');
-								$order_status = wc_get_order_status_name($woo_order->get_status());
-								$date_created = $woo_order->get_date_created();
-								?>
+			<?php if (!$is_bundle_submission): ?>
+				<div class="ca-admin-card">
+					<h2 class="ca-admin-card-title"><?php esc_html_e('WooCommerce Orders', 'rtr-custom-assessment'); ?></h2>
+					<?php if (!function_exists('wc_get_orders')): ?>
+						<p><?php esc_html_e('WooCommerce is not active.', 'rtr-custom-assessment'); ?></p>
+					<?php elseif (empty($woo_orders)): ?>
+						<p><?php esc_html_e('No WooCommerce orders found for this submission.', 'rtr-custom-assessment'); ?></p>
+					<?php else: ?>
+						<table class="wp-list-table widefat fixed ca-admin-table">
+							<thead>
 								<tr>
-									<td>
-										<a href="<?php echo esc_url($order_edit_url); ?>">
-											<?php echo esc_html('#' . $order_number); ?>
-										</a>
-									</td>
-									<td><?php echo esc_html($order_status); ?></td>
-									<td><?php echo wp_kses_post($woo_order->get_formatted_order_total()); ?></td>
-									<td>
-										<?php
-										echo esc_html(
-											$date_created
-												? date_i18n(get_option('date_format') . ' ' . get_option('time_format'), $date_created->getTimestamp())
-												: '—'
-										);
-										?>
-									</td>
+									<th><?php esc_html_e('Order', 'rtr-custom-assessment'); ?></th>
+									<th><?php esc_html_e('Status', 'rtr-custom-assessment'); ?></th>
+									<th><?php esc_html_e('Total', 'rtr-custom-assessment'); ?></th>
+									<th><?php esc_html_e('Created', 'rtr-custom-assessment'); ?></th>
 								</tr>
-							<?php endforeach; ?>
-						</tbody>
-					</table>
-				<?php endif; ?>
-			</div>
+							</thead>
+							<tbody>
+								<?php foreach ($woo_orders as $woo_order): ?>
+									<?php
+									$order_id = (int) $woo_order->get_id();
+									$order_number = $woo_order->get_order_number();
+									$order_edit_url = admin_url('post.php?post=' . $order_id . '&action=edit');
+									$order_status = wc_get_order_status_name($woo_order->get_status());
+									$date_created = $woo_order->get_date_created();
+									?>
+									<tr>
+										<td>
+											<a href="<?php echo esc_url($order_edit_url); ?>">
+												<?php echo esc_html('#' . $order_number); ?>
+											</a>
+										</td>
+										<td><?php echo esc_html($order_status); ?></td>
+										<td><?php echo wp_kses_post($woo_order->get_formatted_order_total()); ?></td>
+										<td>
+											<?php
+											echo esc_html(
+												$date_created
+													? date_i18n(get_option('date_format') . ' ' . get_option('time_format'), $date_created->getTimestamp())
+													: '—'
+											);
+											?>
+										</td>
+									</tr>
+								<?php endforeach; ?>
+							</tbody>
+						</table>
+					<?php endif; ?>
+				</div>
+			<?php endif; ?>
 
 			<?php if ('completed' === $submission->status): ?>
 
@@ -2758,6 +2761,38 @@ class CA_Admin
 		}
 
 		return $orders;
+	}
+
+	/**
+	 * Whether submission is part of a bundle order.
+	 *
+	 * @param int $submission_id
+	 * @return bool
+	 */
+	private function submission_is_part_of_bundle($submission_id)
+	{
+		$submission_id = (int) $submission_id;
+		if ($submission_id <= 0 || !function_exists('wc_get_orders')) {
+			return false;
+		}
+
+		$bundle_ids = wc_get_orders(array(
+			'limit' => 1,
+			'return' => 'ids',
+			'meta_query' => array(
+				'relation' => 'OR',
+				array(
+					'key' => '_ca_bundle_inner_submission_id',
+					'value' => $submission_id,
+				),
+				array(
+					'key' => '_ca_bundle_social_submission_id',
+					'value' => $submission_id,
+				),
+			),
+		));
+
+		return !empty($bundle_ids);
 	}
 
 	/**

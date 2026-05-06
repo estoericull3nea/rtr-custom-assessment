@@ -786,6 +786,99 @@ class CA_Ajax
 	}
 
 	/**
+	 * Build/reuse bundle order-pay URL for two completed submissions.
+	 *
+	 * @param int $inner_submission_id
+	 * @param int $social_submission_id
+	 * @return string
+	 */
+	public function get_bundle_order_pay_url_for_submissions($inner_submission_id, $social_submission_id)
+	{
+		$inner_submission_id = (int) $inner_submission_id;
+		$social_submission_id = (int) $social_submission_id;
+		if ($inner_submission_id <= 0 || $social_submission_id <= 0 || !$this->is_woocommerce_ready()) {
+			return '';
+		}
+
+		$inner_submission = CA_Database::get_submission($inner_submission_id);
+		$social_submission = CA_Database::get_submission($social_submission_id);
+		if (
+			!$inner_submission || !$social_submission
+			|| 'completed' !== (string) $inner_submission->status
+			|| 'completed' !== (string) $social_submission->status
+		) {
+			return '';
+		}
+		if (
+			CA_Assessment_Types::INNER_DIMENSIONS !== CA_Assessment_Types::from_submission($inner_submission)
+			|| CA_Assessment_Types::SOCIAL_FLUENCY !== CA_Assessment_Types::from_submission($social_submission)
+		) {
+			return '';
+		}
+
+		$price = (float) apply_filters('ca_bundle_full_results_price', 29.00, $inner_submission_id, $social_submission_id);
+		if ($price <= 0) {
+			return '';
+		}
+
+		$inner_file_path = $this->generate_paid_full_results_pdf_file($inner_submission_id, $inner_submission);
+		$social_file_path = $this->generate_paid_full_results_pdf_file($social_submission_id, $social_submission);
+		if (!$inner_file_path || !$social_file_path) {
+			return '';
+		}
+
+		$order = null;
+		$existing_id = $this->find_existing_bundle_order_id($inner_submission_id, $social_submission_id);
+		if ($existing_id > 0) {
+			$candidate = wc_get_order($existing_id);
+			if ($candidate instanceof \WC_Order && $candidate->needs_payment()) {
+				$order = $candidate;
+			}
+		}
+
+		if (!$order instanceof \WC_Order) {
+			$order = wc_create_order(array('status' => 'pending'));
+			if (!$order instanceof \WC_Order) {
+				return '';
+			}
+
+			$product = new WC_Product_Simple();
+			$product->set_name(
+				__('Bundle Full Results — Natural Attributes + Social Fluency', 'rtr-custom-assessment') . ' #' . (int) $inner_submission_id . '+' . (int) $social_submission_id
+			);
+			$product->set_status('publish');
+			$product->set_catalog_visibility('hidden');
+			$product->set_virtual(true);
+			$product->set_downloadable(false);
+			$product->set_regular_price(wc_format_decimal($price, 2));
+			$product->set_sold_individually(true);
+			$product->set_downloads(array());
+			$product_id = (int) $product->save();
+			if ($product_id <= 0) {
+				return '';
+			}
+
+			$order->add_product($product, 1);
+			$this->apply_submission_billing_to_order($order, $inner_submission);
+			$order->update_meta_data('_ca_submission_id', $inner_submission_id);
+			$order->update_meta_data('_ca_bundle_full_results', 'yes');
+			$order->update_meta_data('_ca_bundle_inner_submission_id', $inner_submission_id);
+			$order->update_meta_data('_ca_bundle_social_submission_id', $social_submission_id);
+			$order->update_meta_data('_ca_bundle_inner_file_path', (string) $inner_file_path);
+			$order->update_meta_data('_ca_bundle_social_file_path', (string) $social_file_path);
+			$order->update_meta_data('_ca_bundle_template_version', self::FULL_RESULTS_TEMPLATE_VERSION);
+			$order->update_meta_data('_ca_bundle_product_id', (int) $product_id);
+			$order->calculate_totals();
+			$order->save();
+			$this->clear_wc_cart_for_guest_checkout();
+		}
+
+		$checkout_url = $order->get_checkout_payment_url(false);
+		$checkout_url = is_string($checkout_url) ? trim($checkout_url) : '';
+		return '' !== $checkout_url ? $this->ensure_www_url($checkout_url) : '';
+	}
+
+	/**
 	 * Render bundle download CTAs on thank-you.
 	 *
 	 * @param int $order_id WooCommerce order ID.
