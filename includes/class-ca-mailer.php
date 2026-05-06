@@ -384,15 +384,19 @@ class CA_Mailer
 			'orderby' => 'date',
 			'order' => 'DESC',
 			'status' => array('pending', 'failed'),
-			'meta_key' => '_ca_submission_id',
-			'meta_value' => $submission_id,
+			'meta_query' => array(
+				array(
+					'key' => '_ca_submission_id',
+					'value' => $submission_id,
+				),
+			),
 			'return' => 'ids',
 		));
 
 		if (!empty($order_ids)) {
 			$order = wc_get_order((int) $order_ids[0]);
 			if ($order instanceof \WC_Order && $order->needs_payment()) {
-				$pay_url = $order->get_checkout_payment_url(true);
+				$pay_url = $order->get_checkout_payment_url(false);
 				if (is_string($pay_url) && '' !== trim($pay_url)) {
 					return trim($pay_url);
 				}

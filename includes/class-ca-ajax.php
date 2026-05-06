@@ -474,9 +474,11 @@ class CA_Ajax
 				$this->send_error('ca_prepare_inner_dimensions_checkout', __('Could not prepare your downloadable product. Please try again.', 'rtr-custom-assessment'));
 			}
 
-			$this->prepare_inner_dimensions_checkout_cart($product_id);
 			$this->set_inner_dimensions_checkout_prefill_session($submission);
-			$checkout_url = $this->build_inner_dimensions_checkout_url($product_id);
+
+			// Pending order + checkout order-pay URL works for guests without a WooCommerce session cookie
+			// (cart-only flows often fail when not logged in). Same endpoint as checkout: /checkout/order-pay/{id}/…
+			$checkout_url = $this->build_inner_dimensions_order_pay_checkout_url($submission, $submission_id, $product_id);
 			if ('' === $checkout_url) {
 				$this->send_error('ca_prepare_inner_dimensions_checkout', __('Could not build a checkout link. Please try again.', 'rtr-custom-assessment'));
 			}
@@ -532,8 +534,12 @@ class CA_Ajax
 			'orderby' => 'date',
 			'order' => 'DESC',
 			'status' => array('pending', 'failed'),
-			'meta_key' => '_ca_submission_id',
-			'meta_value' => (int) $submission_id,
+			'meta_query' => array(
+				array(
+					'key' => '_ca_submission_id',
+					'value' => (int) $submission_id,
+				),
+			),
 			'return' => 'ids',
 		));
 
@@ -626,7 +632,8 @@ class CA_Ajax
 		if (!$order->needs_payment()) {
 			return '';
 		}
-		$url = $order->get_checkout_payment_url(true);
+		// false: include pay_for_order=true + key so the full payment form loads (classic + blocks).
+		$url = $order->get_checkout_payment_url(false);
 		$url = is_string($url) ? trim($url) : '';
 		return '' !== $url ? $this->ensure_www_url($url) : '';
 	}
@@ -644,6 +651,84 @@ class CA_Ajax
 			return;
 		}
 		$wc->cart->empty_cart();
+	}
+
+	/**
+	 * Create or refresh a pending order and return the WooCommerce checkout payment URL.
+	 *
+	 * Does not rely on cart session — works for logged-out visitors (order key is in the URL).
+	 *
+	 * @param object $submission    Submission row.
+	 * @param int    $submission_id Submission ID.
+	 * @param int    $product_id    Hidden NAC product ID.
+	 * @return string Checkout order-pay URL or empty string.
+	 */
+	private function build_inner_dimensions_order_pay_checkout_url($submission, $submission_id, $product_id)
+	{
+		$submission_id = (int) $submission_id;
+		$product_id = (int) $product_id;
+		if (!$submission || $submission_id <= 0 || $product_id <= 0) {
+			return '';
+		}
+
+		$product = function_exists('wc_get_product') ? wc_get_product($product_id) : null;
+		if (!$product || !is_object($product)) {
+			return '';
+		}
+
+		$customer_id = is_user_logged_in() ? (int) get_current_user_id() : 0;
+
+		$order = null;
+		$existing_id = $this->find_existing_inner_dimensions_order_id($submission_id);
+		if ($existing_id > 0) {
+			$candidate = wc_get_order($existing_id);
+			if ($candidate instanceof \WC_Order && $candidate->needs_payment()) {
+				$order = $candidate;
+				foreach ($order->get_items('line_item') as $item_id => $item) {
+					$order->remove_item($item_id);
+				}
+			}
+		}
+
+		if (!$order instanceof \WC_Order) {
+			$created = wc_create_order(
+				array(
+					'status' => 'pending',
+					'customer_id' => $customer_id,
+					'created_via' => 'ca_inner_dimensions',
+				)
+			);
+			if (is_wp_error($created) || !($created instanceof \WC_Order)) {
+				return '';
+			}
+			$order = $created;
+		} elseif ($customer_id > 0 && (int) $order->get_customer_id() !== $customer_id) {
+			$order->set_customer_id($customer_id);
+		}
+
+		$order->add_product($product, 1);
+		$this->apply_submission_billing_to_order($order, $submission);
+
+		$file_path = (string) get_post_meta($product_id, '_ca_full_results_file_path', true);
+		$template_version = (string) get_post_meta($product_id, '_ca_full_results_template_version', true);
+
+		$order->update_meta_data('_ca_submission_id', $submission_id);
+		$order->update_meta_data('_ca_assessment_type', CA_Assessment_Types::INNER_DIMENSIONS);
+		$order->update_meta_data('_ca_full_results_unlock', 'yes');
+		$order->update_meta_data('_ca_full_results_product_id', $product_id);
+		if ('' !== $file_path) {
+			$order->update_meta_data('_ca_full_results_file_path', $file_path);
+		}
+		if ('' !== $template_version) {
+			$order->update_meta_data('_ca_full_results_template_version', $template_version);
+		}
+
+		$order->calculate_totals();
+		$order->save();
+
+		$this->clear_wc_cart_for_guest_checkout();
+
+		return $this->get_inner_dimensions_order_payment_url($order);
 	}
 
 	/**
@@ -1182,31 +1267,6 @@ class CA_Ajax
 	}
 
 	/**
-	 * Build frontend URL that both matches product link pattern and adds product to cart.
-	 *
-	 * @param int $product_id
-	 * @return string
-	 */
-	private function build_inner_dimensions_checkout_url($product_id)
-	{
-		$product_id = (int) $product_id;
-		if ($product_id <= 0) {
-			$url = function_exists('wc_get_checkout_url') ? wc_get_checkout_url() : home_url('/checkout/');
-			return $this->ensure_www_url($url);
-		}
-
-		$product_url = get_permalink($product_id);
-		if ($product_url) {
-			$url = add_query_arg('add-to-cart', $product_id, $product_url);
-			return $this->ensure_www_url($url);
-		}
-
-		$checkout_url = function_exists('wc_get_checkout_url') ? wc_get_checkout_url() : home_url('/checkout/');
-		$url = add_query_arg('add-to-cart', $product_id, $checkout_url);
-		return $this->ensure_www_url($url);
-	}
-
-	/**
 	 * Normalize checkout redirect URLs (do not alter host — forcing "www." breaks many sites and causes 404s).
 	 *
 	 * @param string $url
@@ -1218,29 +1278,6 @@ class CA_Ajax
 		return '' === $url ? '' : $url;
 	}
 
-	/**
-	 * Ensure checkout cart contains only this NAC results product.
-	 *
-	 * @param int $product_id
-	 * @return void
-	 */
-	private function prepare_inner_dimensions_checkout_cart($product_id)
-	{
-		$product_id = (int) $product_id;
-		if ($product_id <= 0 || !function_exists('WC')) {
-			return;
-		}
-
-		$wc = WC();
-		if (!$wc || !isset($wc->cart) || !is_object($wc->cart)) {
-			return;
-		}
-
-		// Keep checkout focused on this order item only.
-		$wc->cart->empty_cart();
-		$wc->cart->add_to_cart($product_id, 1);
-		$wc->cart->calculate_totals();
-	}
 }
 
 
