@@ -767,6 +767,32 @@ class CA_Mailer
 					</div>';
 		}
 
+		$social_preview_html = '';
+		if (CA_Assessment_Types::SOCIAL_FLUENCY === $assessment_type && $needs_paywall && ! $paid_unlocked) {
+			$top_cat = null;
+			foreach ($cat_scores as $cat) {
+				if (!$top_cat || (float) $cat->average > (float) $top_cat->average) {
+					$top_cat = $cat;
+				}
+			}
+
+			$domain_name = $top_cat ? (string) $top_cat->category_name : __('your strongest domain', 'rtr-custom-assessment');
+			$domain_summary = $top_cat
+				? CA_Scoring::get_category_summary((string) $top_cat->category_name, (float) $top_cat->average, $assessment_type)
+				: __('This is where your social strengths show up most clearly.', 'rtr-custom-assessment');
+
+			$social_preview_html = '
+					<div class="section">
+						<div class="preview-card">
+							<p class="preview-kicker">' . esc_html__('Your overall Social Fluency tier and one domain to notice. Free.', 'rtr-custom-assessment') . '</p>
+							<div class="preview-row"><strong>' . esc_html__('Overall tier:', 'rtr-custom-assessment') . '</strong> ' . esc_html((string) $overall_profile) . '</div>
+							<div class="preview-row"><strong>' . esc_html__('Domain to notice:', 'rtr-custom-assessment') . '</strong> ' . esc_html($domain_name) . '</div>
+							<p class="preview-note">' . esc_html($domain_summary) . '</p>
+							<p class="preview-note">' . esc_html__('This is meaningful but incomplete. Unlock the full report to explore your complete breakdown and every response.', 'rtr-custom-assessment') . '</p>
+						</div>
+					</div>';
+		}
+
 		$paywall_email_cta = '';
 		if ($needs_paywall && $paid_unlocked) {
 			$paywall_email_cta = '
@@ -778,7 +804,7 @@ class CA_Mailer
 						</div>';
 		}
 
-		$body .= $nac_preview_html . '
+		$body .= $nac_preview_html . $social_preview_html . '
 					<!-- Submission Details -->
 					<div class="section">
 						<div class="section-title" style="color: #666;">Submission Details</div>

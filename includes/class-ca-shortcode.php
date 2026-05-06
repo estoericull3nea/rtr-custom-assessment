@@ -157,6 +157,8 @@ class CA_Shortcode {
 					'congrats'     => __( 'Congratulations on completing your assessment!', 'rtr-custom-assessment' ),
 					'email_lead'   => __( 'Your full report will be sent after payment to', 'rtr-custom-assessment' ),
 					'intro'        => __( 'Complete checkout to download your full PDF report with category insights and your question responses.', 'rtr-custom-assessment' ),
+					'preview_intro' => __( 'Your overall Social Fluency tier and one domain to notice. Free.', 'rtr-custom-assessment' ),
+					'preview_note'  => __( 'This is meaningful but incomplete. Unlock the full report to explore your complete breakdown and every response.', 'rtr-custom-assessment' ),
 				),
 				'mindset_results' => array(
 					'title'        => __( 'Entrepreneurial Mindset Assessment', 'rtr-custom-assessment' ),
@@ -211,7 +213,7 @@ class CA_Shortcode {
 		self::$needs_modal = true;
 		$atts              = shortcode_atts(
 			array(
-				'button_text' => __( 'Take the Social Fluency Assessment', 'rtr-custom-assessment' ),
+				'button_text' => __( 'Show me my Roots', 'rtr-custom-assessment' ),
 			),
 			$atts,
 			'social_fluency_assessment'

@@ -1567,6 +1567,57 @@
               "Remember Who You Were Before the World Told You Who to Be.",
           ) +
           "&rdquo;</p>";
+      } else if (data.assessment_type === "social_fluency") {
+        var topDomain = null;
+        if (Array.isArray(cats) && cats.length) {
+          topDomain = cats
+            .slice()
+            .sort(function (a, b) {
+              return (parseFloat(b.average) || 0) - (parseFloat(a.average) || 0);
+            })[0];
+        }
+
+        var tierText = profile ? String(profile) : "Your tier";
+        var domainName = topDomain ? topDomain.name : "your strongest domain";
+        var domainSummary = topDomain
+          ? (topDomain.summary || "")
+          : "This is where your social strengths show up most clearly.";
+
+        var socialIntro = escHtml(
+          Pack.preview_intro ||
+            "Your overall Social Fluency tier and one domain to notice. Free.",
+        );
+
+        previewHtml =
+          '<div class="ca-results-free-preview">' +
+          '<p class="ca-results-free-preview-copy">' +
+          socialIntro +
+          "</p>" +
+          '<ul class="ca-results-free-preview-list">' +
+          "<li>" +
+          "Overall tier: <strong>" +
+          escHtml(tierText) +
+          "</strong></li>" +
+          "<li>" +
+          "Domain to notice: <strong>" +
+          escHtml(domainName) +
+          "</strong> — " +
+          escHtml(domainSummary) +
+          "</li>" +
+          "</ul>" +
+          '<p class="ca-results-free-preview-note">' +
+          escHtml(
+            Pack.preview_note ||
+              "This is meaningful but incomplete. Unlock the full report to explore your complete breakdown and every response.",
+          ) +
+          "</p>" +
+          "</div>";
+
+        quoteHtml = Pack.tagline
+          ? '<p class="ca-results-nac-quote">' +
+            escHtml(Pack.tagline) +
+            "</p>"
+          : "";
       } else if (Pack.tagline) {
         quoteHtml =
           '<p class="ca-results-nac-quote">' +
