@@ -760,6 +760,20 @@
     if ($target) {
       $target.addClass("ca-screen-active");
       $modal.find(".ca-modal-body").scrollTop(0);
+
+      if (name === "bundle-order") {
+        if ($bundleInnerFirstBtn && $bundleInnerFirstBtn.length) {
+          $bundleInnerFirstBtn.removeClass("ca-selected");
+        }
+        if ($bundleSocialFirstBtn && $bundleSocialFirstBtn.length) {
+          $bundleSocialFirstBtn.removeClass("ca-selected");
+        }
+        if ($bundleOrderError && $bundleOrderError.length) {
+          hideError($bundleOrderError);
+        }
+        state.bundleFirstType = null;
+        state.bundleSecondType = null;
+      }
     }
   }
 
