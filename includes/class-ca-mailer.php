@@ -648,6 +648,35 @@ class CA_Mailer
 					background: #8b2823;
 					text-decoration: none;
 				}
+				.preview-card {
+					background: #fff;
+					border: 1px solid #e4d7ca;
+					border-radius: 8px;
+					box-shadow: 0 8px 22px rgba(0, 0, 0, 0.06);
+					padding: 16px 18px;
+				}
+				.preview-kicker {
+					margin: 0 0 12px;
+					font-size: 12px;
+					font-weight: 700;
+					letter-spacing: 0.08em;
+					text-transform: uppercase;
+					color: #8d2b28;
+				}
+				.preview-row {
+					padding: 10px 0;
+					border-top: 1px solid #efe3d6;
+					font-size: 14px;
+					color: #333;
+				}
+				.preview-row:last-of-type {
+					border-bottom: 1px solid #efe3d6;
+				}
+				.preview-note {
+					margin: 12px 0 0;
+					font-size: 13px;
+					color: #666;
+				}
 			</style>
 		</head>
 		<body>
@@ -711,6 +740,33 @@ class CA_Mailer
 					</div>';
 		}
 
+		$nac_preview_html = '';
+		if (CA_Assessment_Types::INNER_DIMENSIONS === $assessment_type) {
+			$top_cat = null;
+			foreach ($cat_scores as $cat) {
+				if (!$top_cat || (float) $cat->average > (float) $top_cat->average) {
+					$top_cat = $cat;
+				}
+			}
+
+			$top_attr_label = $top_cat
+				? (string) $top_cat->category_name
+				: __('Your strongest natural attribute', 'rtr-custom-assessment');
+			$pattern_summary = $top_cat
+				? CA_Scoring::get_category_summary((string) $top_cat->category_name, (float) $top_cat->average, $assessment_type)
+				: __('You respond most strongly where your natural strengths are already active.', 'rtr-custom-assessment');
+
+			$nac_preview_html = '
+					<div class="section">
+						<div class="preview-card">
+							<p class="preview-kicker">' . esc_html__('See your preview. A snapshot of what the assessment surfaced.', 'rtr-custom-assessment') . '</p>
+							<div class="preview-row"><strong>' . esc_html__('Top attribute surfaced:', 'rtr-custom-assessment') . '</strong> ' . esc_html($top_attr_label) . '</div>
+							<div class="preview-row"><strong>' . esc_html__('Pattern revealed:', 'rtr-custom-assessment') . '</strong> ' . esc_html($pattern_summary) . '</div>
+							<p class="preview-note">' . esc_html__('This is meaningful but incomplete. Unlock the full report for your full breakdown and all responses.', 'rtr-custom-assessment') . '</p>
+						</div>
+					</div>';
+		}
+
 		$paywall_email_cta = '';
 		if ($needs_paywall && $paid_unlocked) {
 			$paywall_email_cta = '
@@ -722,7 +778,7 @@ class CA_Mailer
 						</div>';
 		}
 
-		$body .= '
+		$body .= $nac_preview_html . '
 					<!-- Submission Details -->
 					<div class="section">
 						<div class="section-title" style="color: #666;">Submission Details</div>
