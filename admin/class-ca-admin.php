@@ -2517,6 +2517,7 @@ class CA_Admin
 		$submission = CA_Database::get_submission($submission_id);
 		$answers = CA_Database::get_answers($submission_id);
 		$cat_scores = CA_Database::get_category_scores($submission_id);
+		$woo_orders = $this->get_submission_woocommerce_orders((int) $submission_id);
 
 		if (!$submission) {
 			echo '<div class="wrap"><p>' . esc_html__('Submission not found.', 'rtr-custom-assessment') . '</p></div>';
@@ -2568,6 +2569,55 @@ class CA_Admin
 						<span><?php echo esc_html($this->admin_submission_assessment_label($submission)); ?></span>
 					</div>
 				</div>
+			</div>
+
+			<div class="ca-admin-card">
+				<h2 class="ca-admin-card-title"><?php esc_html_e('WooCommerce Orders', 'rtr-custom-assessment'); ?></h2>
+				<?php if (!function_exists('wc_get_orders')): ?>
+					<p><?php esc_html_e('WooCommerce is not active.', 'rtr-custom-assessment'); ?></p>
+				<?php elseif (empty($woo_orders)): ?>
+					<p><?php esc_html_e('No WooCommerce orders found for this submission.', 'rtr-custom-assessment'); ?></p>
+				<?php else: ?>
+					<table class="wp-list-table widefat fixed ca-admin-table">
+						<thead>
+							<tr>
+								<th><?php esc_html_e('Order', 'rtr-custom-assessment'); ?></th>
+								<th><?php esc_html_e('Status', 'rtr-custom-assessment'); ?></th>
+								<th><?php esc_html_e('Total', 'rtr-custom-assessment'); ?></th>
+								<th><?php esc_html_e('Created', 'rtr-custom-assessment'); ?></th>
+							</tr>
+						</thead>
+						<tbody>
+							<?php foreach ($woo_orders as $woo_order): ?>
+								<?php
+								$order_id = (int) $woo_order->get_id();
+								$order_number = $woo_order->get_order_number();
+								$order_edit_url = admin_url('post.php?post=' . $order_id . '&action=edit');
+								$order_status = wc_get_order_status_name($woo_order->get_status());
+								$date_created = $woo_order->get_date_created();
+								?>
+								<tr>
+									<td>
+										<a href="<?php echo esc_url($order_edit_url); ?>">
+											<?php echo esc_html('#' . $order_number); ?>
+										</a>
+									</td>
+									<td><?php echo esc_html($order_status); ?></td>
+									<td><?php echo wp_kses_post($woo_order->get_formatted_order_total()); ?></td>
+									<td>
+										<?php
+										echo esc_html(
+											$date_created
+												? date_i18n(get_option('date_format') . ' ' . get_option('time_format'), $date_created->getTimestamp())
+												: '—'
+										);
+										?>
+									</td>
+								</tr>
+							<?php endforeach; ?>
+						</tbody>
+					</table>
+				<?php endif; ?>
 			</div>
 
 			<?php if ('completed' === $submission->status): ?>
@@ -2667,6 +2717,47 @@ class CA_Admin
 
 		</div>
 		<?php
+	}
+
+	/**
+	 * Fetch WooCommerce orders linked to a submission.
+	 *
+	 * @param int $submission_id Submission ID.
+	 * @return array
+	 */
+	private function get_submission_woocommerce_orders($submission_id)
+	{
+		$submission_id = (int) $submission_id;
+		if ($submission_id <= 0 || !function_exists('wc_get_orders')) {
+			return array();
+		}
+
+		$order_ids = wc_get_orders(array(
+			'limit' => -1,
+			'orderby' => 'date',
+			'order' => 'DESC',
+			'return' => 'ids',
+			'meta_query' => array(
+				array(
+					'key' => '_ca_submission_id',
+					'value' => $submission_id,
+				),
+			),
+		));
+
+		if (empty($order_ids) || !is_array($order_ids)) {
+			return array();
+		}
+
+		$orders = array();
+		foreach ($order_ids as $order_id) {
+			$order = wc_get_order((int) $order_id);
+			if ($order instanceof WC_Order) {
+				$orders[] = $order;
+			}
+		}
+
+		return $orders;
 	}
 
 	/**

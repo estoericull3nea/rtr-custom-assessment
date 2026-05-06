@@ -18,6 +18,7 @@ class CA_Mailer
 	 */
 	public static function send_results_email($submission_id)
 	{
+		$submission_id = (int) $submission_id;
 		$submission = CA_Database::get_submission($submission_id);
 
 		if (!$submission || 'completed' !== $submission->status) {
@@ -43,8 +44,103 @@ class CA_Mailer
 
 		// Send email
 		$sent = wp_mail($submission->email, $subject, $body, $headers);
+		if ($sent) {
+			self::send_admin_results_notification($submission);
+		}
 
 		return $sent;
+	}
+
+	/**
+	 * Notify admin that a customer results email was sent.
+	 *
+	 * @param object $submission Submission row.
+	 * @return void
+	 */
+	private static function send_admin_results_notification($submission)
+	{
+		if (!$submission || empty($submission->id)) {
+			return;
+		}
+
+		$admin_email = (string) get_option('admin_email');
+		if (!is_email($admin_email)) {
+			return;
+		}
+
+		$subject = sprintf(
+			/* translators: %d: submission id */
+			__('Customer Results Email Sent (Submission #%d)', 'rtr-custom-assessment'),
+			(int) $submission->id
+		);
+
+		$detail_url = self::get_admin_submission_detail_url($submission);
+		$assessment_label = self::assessment_type_label(CA_Assessment_Types::from_submission($submission));
+		$name = trim((string) $submission->first_name . ' ' . (string) $submission->last_name);
+		if ('' === $name) {
+			$name = __('Unknown', 'rtr-custom-assessment');
+		}
+
+		$body = '<p>' . esc_html__('A customer results email has been sent.', 'rtr-custom-assessment') . '</p>';
+		$body .= '<p><strong>' . esc_html__('Submission ID:', 'rtr-custom-assessment') . '</strong> ' . esc_html((string) ((int) $submission->id)) . '<br>';
+		$body .= '<strong>' . esc_html__('Assessment:', 'rtr-custom-assessment') . '</strong> ' . esc_html($assessment_label) . '<br>';
+		$body .= '<strong>' . esc_html__('Name:', 'rtr-custom-assessment') . '</strong> ' . esc_html($name) . '<br>';
+		$body .= '<strong>' . esc_html__('Email:', 'rtr-custom-assessment') . '</strong> ' . esc_html((string) $submission->email) . '</p>';
+		$body .= '<p><a href="' . esc_url($detail_url) . '">' . esc_html__('Open submission detail in admin', 'rtr-custom-assessment') . '</a></p>';
+
+		$headers = array(
+			'Content-Type: text/html; charset=UTF-8',
+			'From: ' . get_bloginfo('name') . ' <' . $admin_email . '>',
+		);
+
+		wp_mail($admin_email, $subject, $body, $headers);
+	}
+
+	/**
+	 * Build admin detail URL for the submission.
+	 *
+	 * @param object $submission Submission row.
+	 * @return string
+	 */
+	private static function get_admin_submission_detail_url($submission)
+	{
+		$submission_id = isset($submission->id) ? (int) $submission->id : 0;
+		$page = 'custom-assessment-mindset';
+		$type = CA_Assessment_Types::from_submission($submission);
+
+		if (CA_Assessment_Types::SOCIAL_FLUENCY === $type) {
+			$page = 'custom-assessment-social';
+		} elseif (CA_Assessment_Types::INNER_DIMENSIONS === $type) {
+			$page = 'custom-assessment-inner';
+		}
+
+		return add_query_arg(
+			array(
+				'page' => $page,
+				'ca_tab' => 'submissions',
+				'view' => 'detail',
+				'id' => $submission_id,
+			),
+			admin_url('admin.php')
+		);
+	}
+
+	/**
+	 * Human label for assessment type.
+	 *
+	 * @param string $type Normalized assessment type.
+	 * @return string
+	 */
+	private static function assessment_type_label($type)
+	{
+		$type = CA_Assessment_Types::normalize($type);
+		if (CA_Assessment_Types::SOCIAL_FLUENCY === $type) {
+			return __('Social Fluency', 'rtr-custom-assessment');
+		}
+		if (CA_Assessment_Types::INNER_DIMENSIONS === $type) {
+			return __('Natural Attributes Cataloging', 'rtr-custom-assessment');
+		}
+		return __('Mindset', 'rtr-custom-assessment');
 	}
 
 	/**
