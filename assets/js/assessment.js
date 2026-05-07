@@ -1778,7 +1778,9 @@
     } else {
       Pack = CA_Config.mindset_results || {};
     }
+    var isBundle = !!state.bundleMode;
     var paidTop = "";
+    var bundleOfferBlock = "";
     if (requiresPaidDownload) {
       var emailEsc = escHtml(user.email);
       var quoteHtml = "";
@@ -1921,11 +1923,51 @@
         "</p>" +
         previewHtml +
         "</div>";
+
+      if (
+        !isBundle &&
+        (data.assessment_type === "inner_dimensions" ||
+          data.assessment_type === "social_fluency")
+      ) {
+        var bundlePack = CA_Config.bundle_results || {};
+        var bundleTitle =
+          bundlePack.title || "Bundle Option — Both Assessments Unlocked";
+        var bundleHeadline =
+          bundlePack.headline || "Your constants and your roots — the full picture.";
+        var bundlePriceLine =
+          bundlePack.price_line ||
+          "Price: $29 USD (saves $9) | PPP adjusts automatically";
+        var bundleBody =
+          bundlePack.body ||
+          "Take both assessments free. Unlock both personalized reports together for $29 — less than each one separately.";
+        var bundleStartCta =
+          data.assessment_type === "social_fluency"
+            ? "Take Natural Attributes Cataloging assessment"
+            : "Take Social Fluency Assessment";
+
+        bundleOfferBlock =
+          '<div class="ca-results-bundle-offer">' +
+          '<p class="ca-results-bundle-offer-title">' +
+          escHtml(bundleTitle) +
+          "</p>" +
+          '<p class="ca-results-bundle-offer-headline">' +
+          escHtml(bundleHeadline) +
+          "</p>" +
+          '<p class="ca-results-bundle-offer-price">' +
+          escHtml(bundlePriceLine) +
+          "</p>" +
+          '<p class="ca-results-bundle-offer-copy">' +
+          escHtml(bundleBody) +
+          "</p>" +
+          '<button type="button" class="ca-btn ca-btn--primary" id="ca-results-bundle-start">' +
+          escHtml(bundleStartCta) +
+          "</button>" +
+          "</div>";
+      }
     }
 
     var initialCheckoutUrl =
       state.checkoutUrl || CA_Config.checkout_url || "/checkout/";
-    var isBundle = !!state.bundleMode;
     var showPaywallOverlay = requiresPaidDownload;
     if (isBundle) {
       // In the bundle flow, first assessment is free-preview only.
@@ -2049,8 +2091,9 @@
           heroHtml +
           bodyHtml +
           paywallOverlay +
-          "</div>"
-        : paidTop + heroHtml + bodyHtml;
+          "</div>" +
+          bundleOfferBlock
+        : paidTop + bundleOfferBlock + heroHtml + bodyHtml;
     }
 
     $resultsContent.html(html);
@@ -2083,6 +2126,25 @@
           startBundleSecondAssessment();
         });
     }
+
+    $resultsContent
+      .off("click.caBundleStart")
+      .on("click.caBundleStart", "#ca-results-bundle-start", function () {
+        if (state.isSubmitting || state.bundleMode) {
+          return;
+        }
+        state.bundleMode = true;
+        state.bundleStage = 0;
+        state.bundleFirstType = data.assessment_type;
+        state.bundleSecondType =
+          data.assessment_type === "inner_dimensions"
+            ? "social_fluency"
+            : "inner_dimensions";
+        state.bundleSubmissionIds = {};
+        state.bundleSubmissionIds[state.bundleFirstType] = state.submissionId;
+        saveBundleProgress();
+        startBundleSecondAssessment();
+      });
   }
 
   function handlePaywallCheckout(e) {

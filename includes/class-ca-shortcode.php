@@ -181,9 +181,12 @@ class CA_Shortcode {
 					'intro'        => __( 'Pay once to unlock your downloadable full report with category scores and every response.', 'rtr-custom-assessment' ),
 				),
 				'bundle_results' => array(
+					'title'    => __( 'Bundle Option — Both Assessments Unlocked', 'rtr-custom-assessment' ),
 					'headline' => __( 'Your constants and your roots — the full picture.', 'rtr-custom-assessment' ),
+					'price_line' => __( 'Price: $29 USD (saves $9) | PPP adjusts automatically', 'rtr-custom-assessment' ),
 					'body'     => __( 'Take both assessments free. Unlock both personalized reports together for $29 — less than each one separately. If you want to see the interplay between your Natural Attributes and your Social Fluency (which is where the real insight lives), this is the move.', 'rtr-custom-assessment' ),
 					'cta'      => __( 'Unlock both reports — $29 →', 'rtr-custom-assessment' ),
+					'start_cta' => __( 'Take this assessment for bundle option', 'rtr-custom-assessment' ),
 					'price'    => 29.00,
 				),
 				'labels'      => array(
