@@ -2804,7 +2804,7 @@ class CA_Admin
 	}
 
 	/**
-	 * Shared questions list UI (add / edit / delete / bulk / search) for Mindset or Social Fluency.
+	 * Shared questions list UI (add / edit / delete / bulk / search / JSON import-export) for Mindset, Social Fluency, or Natural Attributes.
 	 *
 	 * @param string $assessment_type Normalized assessment type.
 	 */
@@ -2815,6 +2815,7 @@ class CA_Admin
 		}
 
 		$assessment_type = CA_Assessment_Types::normalize($assessment_type);
+		$questions_tab_form_action = $this->admin_screen_url('questions', $assessment_type);
 		$questions = $this->get_admin_questions_flat($assessment_type);
 		$total_questions = count($questions);
 		$categories = $this->get_admin_questions_categories($assessment_type);
@@ -2960,7 +2961,7 @@ class CA_Admin
 			<div class="ca-questions-actions">
 				<div class="ca-question-form">
 					<h3><?php esc_html_e('Add New Question', 'rtr-custom-assessment'); ?></h3>
-					<form method="post" action="">
+					<form method="post" action="<?php echo esc_url($questions_tab_form_action); ?>">
 						<?php wp_nonce_field('ca_add_question_action', '_wpnonce'); ?>
 						<input type="hidden" name="ca_action" value="add_question">
 						<div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 20px;">
@@ -3006,7 +3007,7 @@ class CA_Admin
 						<?php esc_html_e('Export this assessment question setup (questions, overrides, and categories) to JSON, then import it on this same Questions tab.', 'rtr-custom-assessment'); ?>
 					</p>
 					<div class="ca-form-actions" style="display: flex; align-items: end; gap: 12px; flex-wrap: wrap;">
-						<form method="post" action="" style="margin: 0;">
+						<form method="post" action="<?php echo esc_url($questions_tab_form_action); ?>" style="margin: 0;">
 							<?php wp_nonce_field('ca_export_questions_json_action', '_wpnonce'); ?>
 							<input type="hidden" name="ca_action" value="export_questions_json">
 							<button type="submit" class="button button-secondary">
@@ -3014,7 +3015,7 @@ class CA_Admin
 							</button>
 						</form>
 
-						<form method="post" action="" enctype="multipart/form-data" style="margin: 0; display: flex; align-items: end; gap: 8px; flex-wrap: wrap;">
+						<form method="post" action="<?php echo esc_url($questions_tab_form_action); ?>" enctype="multipart/form-data" style="margin: 0; display: flex; align-items: end; gap: 8px; flex-wrap: wrap;">
 							<?php wp_nonce_field('ca_import_questions_json_action', '_wpnonce'); ?>
 							<input type="hidden" name="ca_action" value="import_questions_json">
 							<div class="ca-form-field" style="margin: 0;">
@@ -3026,7 +3027,7 @@ class CA_Admin
 							</button>
 						</form>
 
-						<form method="post" action="" style="margin: 0;" onsubmit="return confirm('<?php echo esc_js(__('Are you sure you want to delete all saved questions configuration for this assessment? This cannot be undone.', 'rtr-custom-assessment')); ?>');">
+						<form method="post" action="<?php echo esc_url($questions_tab_form_action); ?>" style="margin: 0;" onsubmit="return confirm('<?php echo esc_js(__('Are you sure you want to delete all saved questions configuration for this assessment? This cannot be undone.', 'rtr-custom-assessment')); ?>');">
 							<?php wp_nonce_field('ca_delete_all_questions_action', '_wpnonce'); ?>
 							<input type="hidden" name="ca_action" value="delete_all_questions">
 							<button type="submit" class="button button-link-delete">
@@ -3061,7 +3062,7 @@ class CA_Admin
 			<div class="ca-bulk-edit-modal-overlay" id="ca-bulk-edit-modal-overlay" style="display:none;">
 				<div class="ca-bulk-edit-modal">
 					<h3><?php esc_html_e('Bulk Edit Questions', 'rtr-custom-assessment'); ?></h3>
-					<form method="post" action="" id="ca-bulk-edit-form">
+					<form method="post" action="<?php echo esc_url($questions_tab_form_action); ?>" id="ca-bulk-edit-form">
 						<?php wp_nonce_field('ca_bulk_edit_question_action', '_wpnonce'); ?>
 						<input type="hidden" name="ca_action" value="bulk_edit_questions">
 						<input type="hidden" name="question_indexes_count" id="ca-bulk-question-indexes-count" value="0">
@@ -3248,7 +3249,7 @@ class CA_Admin
 										data-original="<?php echo esc_attr($q['text']); ?>">
 								</td>
 								<td class="ca-col-actions">
-									<form method="post" action="" id="ca-edit-question-form-<?php echo esc_attr($q['index']); ?>"
+									<form method="post" action="<?php echo esc_url($questions_tab_form_action); ?>" id="ca-edit-question-form-<?php echo esc_attr($q['index']); ?>"
 										class="ca-question-edit-form" style="display: inline;">
 										<?php wp_nonce_field('ca_edit_question_action', '_wpnonce'); ?>
 										<input type="hidden" name="ca_action" value="edit_question">
@@ -3266,7 +3267,7 @@ class CA_Admin
 											<?php esc_html_e('Save', 'rtr-custom-assessment'); ?>
 										</button>
 									</form>
-									<form method="post" style="display: inline;"
+									<form method="post" action="<?php echo esc_url($questions_tab_form_action); ?>" style="display: inline;"
 										onsubmit="return confirm('<?php echo esc_js(__('Are you sure you want to delete this question? This action cannot be undone.', 'rtr-custom-assessment')); ?>');">
 										<?php wp_nonce_field('ca_delete_question_action', '_wpnonce'); ?>
 										<input type="hidden" name="ca_action" value="delete_question">

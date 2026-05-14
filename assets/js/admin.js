@@ -409,6 +409,8 @@ jQuery(document).ready(function ($) {
         href.includes("custom-assessment-questions") ||
         (href.includes("custom-assessment-mindset") &&
           href.includes("ca_tab=questions")) ||
+        (href.includes("custom-assessment-social") &&
+          href.includes("ca_tab=questions")) ||
         (href.includes("custom-assessment-inner") &&
           href.includes("ca_tab=questions"))
       ) {
@@ -417,6 +419,8 @@ jQuery(document).ready(function ($) {
       if (
         href.includes("custom-assessment-categories") ||
         (href.includes("custom-assessment-mindset") &&
+          href.includes("ca_tab=categories")) ||
+        (href.includes("custom-assessment-social") &&
           href.includes("ca_tab=categories")) ||
         (href.includes("custom-assessment-inner") &&
           href.includes("ca_tab=categories"))
