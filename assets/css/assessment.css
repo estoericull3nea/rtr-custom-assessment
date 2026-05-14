@@ -911,12 +911,13 @@ body,
 
 .ca-results-nac-quote {
   font-family: var(--ca-font);
-  font-size: 1.05rem;
+  font-size: 1.9rem;
   font-style: italic;
   color: var(--ca-text-muted);
   margin: 0 auto 22px;
-  line-height: 1.55;
-  max-width: 34rem;
+  line-height: 1.2;
+  max-width: 68rem;
+  font-weight: 500;
 }
 
 .ca-results-nac-subtitle {
