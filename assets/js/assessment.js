@@ -2091,9 +2091,15 @@
           '<div class="ca-results-preview-obscured">' +
           heroHtml +
           bodyHtml +
+          (paywallCardHtml
+            ? '<div class="ca-results-paywall-overlay" role="presentation">' +
+              '<div class="ca-results-paywall-stack">' +
+              paywallCardHtml +
+              (bundleOfferBlock ? bundleOfferBlock : "") +
+              "</div></div>"
+            : "") +
           "</div>" +
-          paywallCardHtml +
-          bundleOfferBlock +
+          (paywallCardHtml && bundleOfferBlock ? "" : bundleOfferBlock) +
           "</div>"
         : paidTop + bundleOfferBlock + heroHtml + bodyHtml;
     }
