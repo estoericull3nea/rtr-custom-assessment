@@ -1936,7 +1936,7 @@
           bundlePack.headline || "Your constants and your roots — the full picture.";
         var bundlePriceLine =
           bundlePack.price_line ||
-          "Price: $29 USD (saves $9) | PPP adjusts automatically";
+          "Price: $29 USD (saves $9)";
         var bundleBody =
           bundlePack.body ||
           "Take both assessments free. Unlock both personalized reports together for $29 — less than each one separately.";
@@ -1950,6 +1950,9 @@
           '<p class="ca-results-bundle-offer-title">' +
           escHtml(bundleTitle) +
           "</p>" +
+          '<button type="button" class="ca-btn ca-btn--primary ca-results-bundle-start-btn" id="ca-results-bundle-start">' +
+          escHtml(bundleStartCta) +
+          "</button>" +
           '<p class="ca-results-bundle-offer-headline">' +
           escHtml(bundleHeadline) +
           "</p>" +
@@ -1959,9 +1962,6 @@
           '<p class="ca-results-bundle-offer-copy">' +
           escHtml(bundleBody) +
           "</p>" +
-          '<button type="button" class="ca-btn ca-btn--primary" id="ca-results-bundle-start">' +
-          escHtml(bundleStartCta) +
-          "</button>" +
           "</div>";
       }
     }
@@ -1974,26 +1974,26 @@
       showPaywallOverlay = state.bundleStage === 1;
     }
 
-    var paywallOverlay = "";
+    var paywallCardHtml = "";
     if (showPaywallOverlay) {
       if (isBundle && state.bundleStage === 1) {
         var bundleCta =
           CA_Config.bundle_results && CA_Config.bundle_results.cta
             ? CA_Config.bundle_results.cta
             : "Unlock both reports — $29 →";
-        paywallOverlay =
-          '<div class="ca-results-paywall-overlay" role="presentation">' +
-          '<div class="ca-results-paywall-text"><a href="' +
+        paywallCardHtml =
+          '<div class="ca-results-paywall-card">' +
+          '<a href="' +
           escHtml(initialCheckoutUrl) +
           '" class="ca-btn ca-btn--primary ca-results-paywall-btn">&#128722; ' +
           escHtml(bundleCta) +
-          "</a></div></div>";
+          "</a></div>";
       } else {
-        paywallOverlay =
-          '<div class="ca-results-paywall-overlay" role="presentation">' +
-          '<div class="ca-results-paywall-text"><a href="' +
+        paywallCardHtml =
+          '<div class="ca-results-paywall-card">' +
+          '<a href="' +
           escHtml(initialCheckoutUrl) +
-          '" class="ca-btn ca-btn--primary ca-results-paywall-btn">&#128722; Get the Full Result</a></div></div>';
+          '" class="ca-btn ca-btn--primary ca-results-paywall-btn">&#128722; Get the Full Result</a></div>';
       }
     }
 
@@ -2088,11 +2088,13 @@
       html = requiresPaidDownload
         ? paidTop +
           '<div class="ca-results-preview-wrap">' +
+          '<div class="ca-results-preview-obscured">' +
           heroHtml +
           bodyHtml +
-          paywallOverlay +
           "</div>" +
-          bundleOfferBlock
+          paywallCardHtml +
+          bundleOfferBlock +
+          "</div>"
         : paidTop + bundleOfferBlock + heroHtml + bodyHtml;
     }
 

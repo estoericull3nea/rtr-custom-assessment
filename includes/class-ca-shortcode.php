@@ -183,7 +183,7 @@ class CA_Shortcode {
 				'bundle_results' => array(
 					'title'    => __( 'Bundle Option — Both Assessments Unlocked', 'rtr-custom-assessment' ),
 					'headline' => __( 'Your constants and your roots — the full picture.', 'rtr-custom-assessment' ),
-					'price_line' => __( 'Price: $29 USD (saves $9) | PPP adjusts automatically', 'rtr-custom-assessment' ),
+					'price_line' => __( 'Price: $29 USD (saves $9)', 'rtr-custom-assessment' ),
 					'body'     => __( 'Take both assessments free. Unlock both personalized reports together for $29 — less than each one separately. If you want to see the interplay between your Natural Attributes and your Social Fluency (which is where the real insight lives), this is the move.', 'rtr-custom-assessment' ),
 					'cta'      => __( 'Unlock both reports — $29 →', 'rtr-custom-assessment' ),
 					'start_cta' => __( 'Take this assessment for bundle option', 'rtr-custom-assessment' ),
@@ -452,7 +452,7 @@ class CA_Shortcode {
 					<div class="ca-screen-content">
 						<div class="ca-intro-badge"><?php esc_html_e( 'Step 2 of 3 — Choose what to take first', 'rtr-custom-assessment' ); ?></div>
 						<h2 class="ca-screen-title"><?php esc_html_e( 'Your constants and your roots — the full picture.', 'rtr-custom-assessment' ); ?></h2>
-						<p class="ca-screen-subtitle"><?php esc_html_e( 'Price: $29 USD (saves $9) | PPP adjusts automatically', 'rtr-custom-assessment' ); ?></p>
+						<p class="ca-screen-subtitle"><?php esc_html_e( 'Price: $29 USD (saves $9)', 'rtr-custom-assessment' ); ?></p>
 						<p class="ca-screen-subtitle" style="margin-top:10px;"><?php esc_html_e( 'Take both assessments free. Unlock both personalized reports together for $29 — less than each one separately. If you want to see the interplay between your Natural Attributes and your Social Fluency (which is where the real insight lives), this is the move.', 'rtr-custom-assessment' ); ?></p>
 
 						<div class="ca-bundle-order-grid">

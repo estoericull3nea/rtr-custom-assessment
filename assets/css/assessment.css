@@ -841,38 +841,34 @@ body,
   user-select: none;
 }
 
-/* Natural Attributes: blurred hero + body; CTA sits centered over them */
+/* Paid preview: blurred stack, then paywall card, then bundle card (stacked) */
 .ca-results-preview-wrap {
   position: relative;
 }
 
-.ca-results-paywall-overlay {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px 20px;
-  pointer-events: none;
+.ca-results-preview-obscured {
+  position: relative;
 }
 
-.ca-results-paywall-overlay .ca-results-paywall-text {
-  pointer-events: auto;
-  margin: 0;
+/* Primary checkout CTA — compact card aligned with bundle offer below */
+.ca-results-paywall-card {
+  margin: 22px auto 0;
+  max-width: 42rem;
+  background: #fff;
+  border: 1px solid #e4d7ca;
+  border-radius: var(--ca-radius);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.08);
+  padding: 18px 20px;
   text-align: center;
-  padding: 18px 22px;
-  background: rgba(255, 255, 255, 0.96);
-  border-radius: var(--ca-radius-lg);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.14);
 }
 
 .ca-results-paywall-btn {
   min-width: 240px;
   text-transform: none;
+}
+
+.ca-results-paywall-card + .ca-results-bundle-offer {
+  margin-top: 14px;
 }
 
 /* Natural Attributes Cataloging — completion header */
@@ -1042,11 +1038,15 @@ body,
 }
 
 .ca-results-bundle-offer-copy {
-  margin: 0 0 14px;
+  margin: 0;
   font-family: var(--ca-font);
   font-size: 0.92rem;
   color: var(--ca-text);
   line-height: 1.6;
+}
+
+.ca-results-bundle-start-btn {
+  margin: 6px 0 16px;
 }
 
 .ca-results-hero {
