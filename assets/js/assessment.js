@@ -1947,12 +1947,12 @@
 
         bundleOfferBlock =
           '<div class="ca-results-bundle-offer">' +
-          '<p class="ca-results-bundle-offer-title">' +
-          escHtml(bundleTitle) +
-          "</p>" +
           '<button type="button" class="ca-btn ca-btn--primary ca-results-bundle-start-btn" id="ca-results-bundle-start">' +
           escHtml(bundleStartCta) +
           "</button>" +
+          '<p class="ca-results-bundle-offer-title">' +
+          escHtml(bundleTitle) +
+          "</p>" +
           '<p class="ca-results-bundle-offer-headline">' +
           escHtml(bundleHeadline) +
           "</p>" +

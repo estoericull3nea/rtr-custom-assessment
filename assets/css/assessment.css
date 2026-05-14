@@ -941,7 +941,7 @@ body,
   color: var(--ca-text-muted);
   margin: 0 auto 22px;
   line-height: 1.2;
-  max-width: 68rem;
+  max-width: 80rem;
   font-weight: 500;
 }
 
@@ -980,7 +980,7 @@ body,
 
 .ca-results-free-preview {
   margin: 22px auto 0;
-  max-width: 42rem;
+  max-width: 45rem;
   background: #fff;
   border: 1px solid #e4d7ca;
   border-radius: var(--ca-radius);
@@ -1040,7 +1040,7 @@ body,
 }
 
 .ca-results-bundle-offer-title {
-  margin: 0 0 8px;
+  margin: 0 0 10px;
   font-family: var(--ca-font-ui);
   font-size: 0.9rem;
   font-weight: 700;
@@ -1075,7 +1075,7 @@ body,
 }
 
 .ca-results-bundle-start-btn {
-  margin: 6px 0 16px;
+  margin: 0 0 12px;
 }
 
 .ca-results-hero {
