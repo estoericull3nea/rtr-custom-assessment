@@ -1078,6 +1078,21 @@ body,
   margin: 0 0 12px;
 }
 
+@media (max-width: 600px) {
+  .ca-results-bundle-offer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .ca-results-bundle-offer > * {
+    width: 100%;
+    max-width: 100%;
+    text-align: center;
+  }
+}
+
 .ca-results-hero {
   background: linear-gradient(135deg, var(--ca-primary) 0%, #8a2120 100%);
   color: #fff;
