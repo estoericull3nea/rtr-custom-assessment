@@ -84,6 +84,15 @@ class CA_Admin
 
 		add_submenu_page(
 			'custom-assessment-hub',
+			__('Unpaid Full Results', 'rtr-custom-assessment'),
+			__('Unpaid Full Results', 'rtr-custom-assessment'),
+			'manage_options',
+			'custom-assessment-unpaid',
+			array($this, 'render_unpaid_full_results_page')
+		);
+
+		add_submenu_page(
+			'custom-assessment-hub',
 			__('Logs', 'rtr-custom-assessment'),
 			__('Logs', 'rtr-custom-assessment'),
 			'manage_options',
@@ -1870,6 +1879,406 @@ class CA_Admin
 	public function render_all_submissions_page()
 	{
 		$this->render_submissions_list_for_type(null);
+	}
+
+	/**
+	 * Completed assessments with full results not yet purchased (per assessment + bundle).
+	 */
+	public function render_unpaid_full_results_page()
+	{
+		if (!current_user_can('manage_options')) {
+			wp_die(esc_html__('You do not have permission to view this page.', 'rtr-custom-assessment'));
+		}
+
+		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- Read-only routing for admin UI.
+		$tab = isset($_GET['ca_unpaid_tab']) ? sanitize_key(wp_unslash($_GET['ca_unpaid_tab'])) : 'inner';
+		$list_view = isset($_GET['view']) ? sanitize_key(wp_unslash($_GET['view'])) : '';
+		$list_id = isset($_GET['id']) ? absint($_GET['id']) : 0;
+		$current_page = max(1, isset($_GET['paged']) ? absint($_GET['paged']) : 1);
+		// phpcs:enable WordPress.Security.NonceVerification.Recommended
+
+		$allowed_tabs = array('inner', 'social', 'bundle');
+		if (!in_array($tab, $allowed_tabs, true)) {
+			$tab = 'inner';
+		}
+
+		$page_args = array(
+			'page' => 'custom-assessment-unpaid',
+			'ca_unpaid_tab' => $tab,
+		);
+
+		if ('detail' === $list_view && $list_id > 0 && 'bundle' !== $tab) {
+			$this->render_detail_page($list_id, $page_args);
+			return;
+		}
+
+		if ('inner' === $tab) {
+			$heading = __('Natural Attributes Quick Scan — Unpaid Full Results', 'rtr-custom-assessment');
+			$description = __('Completed Natural Attributes Cataloging assessments where the customer has not purchased the full PDF report (standalone, not bundle).', 'rtr-custom-assessment');
+			$rows = $this->get_unpaid_full_results_submissions(CA_Assessment_Types::INNER_DIMENSIONS);
+		} elseif ('social' === $tab) {
+			$heading = __('Social Fluency — Unpaid Full Results', 'rtr-custom-assessment');
+			$description = __('Completed Social Fluency assessments where the customer has not purchased the full PDF report (standalone, not bundle).', 'rtr-custom-assessment');
+			$rows = $this->get_unpaid_full_results_submissions(CA_Assessment_Types::SOCIAL_FLUENCY);
+		} else {
+			$heading = __('Bundle — Unpaid Full Results', 'rtr-custom-assessment');
+			$description = __('Customers who completed both Natural Attributes and Social Fluency via the bundle flow but have not paid for the combined full results.', 'rtr-custom-assessment');
+			$rows = $this->get_unpaid_bundle_pairs();
+		}
+
+		$per_page = 10;
+		$total_count = count($rows);
+		$total_pages = max(1, (int) ceil($total_count / $per_page));
+		$offset = ($current_page - 1) * $per_page;
+		$paged_rows = array_slice($rows, $offset, $per_page);
+
+		$ajax = CA_Ajax::get_instance();
+		?>
+		<div class="wrap ca-admin-wrap">
+			<?php $this->render_unpaid_full_results_nav_tabs($tab); ?>
+			<h1 class="ca-admin-title">
+				<span class="ca-admin-title-icon dashicons dashicons-money-alt"></span>
+				<?php echo esc_html($heading); ?>
+			</h1>
+			<p class="description"><?php echo esc_html($description); ?></p>
+
+			<?php if (!function_exists('wc_get_orders')) : ?>
+				<div class="notice notice-warning">
+					<p><?php esc_html_e('WooCommerce is not active. Payment status cannot be determined.', 'rtr-custom-assessment'); ?></p>
+				</div>
+			<?php endif; ?>
+
+			<div class="ca-questions-stats-grid" style="margin-top:16px;">
+				<div class="ca-stat-card">
+					<div class="ca-stat-value"><?php echo esc_html($total_count); ?></div>
+					<div class="ca-stat-label"><?php esc_html_e('Awaiting payment', 'rtr-custom-assessment'); ?></div>
+				</div>
+			</div>
+
+			<?php if (empty($rows)) : ?>
+				<div class="ca-admin-empty" style="margin-top:24px;">
+					<span class="dashicons dashicons-yes-alt" aria-hidden="true"></span>
+					<p><?php esc_html_e('No unpaid full-results customers in this category.', 'rtr-custom-assessment'); ?></p>
+				</div>
+			<?php else : ?>
+				<table class="wp-list-table widefat fixed striped ca-admin-table" style="margin-top:20px;">
+					<thead>
+						<tr>
+							<?php if ('bundle' === $tab) : ?>
+								<th scope="col"><?php esc_html_e('Name', 'rtr-custom-assessment'); ?></th>
+								<th scope="col"><?php esc_html_e('Email', 'rtr-custom-assessment'); ?></th>
+								<th scope="col"><?php esc_html_e('NAC #', 'rtr-custom-assessment'); ?></th>
+								<th scope="col"><?php esc_html_e('SF #', 'rtr-custom-assessment'); ?></th>
+								<th scope="col"><?php esc_html_e('Order', 'rtr-custom-assessment'); ?></th>
+								<th scope="col"><?php esc_html_e('Completed', 'rtr-custom-assessment'); ?></th>
+							<?php else : ?>
+								<th scope="col" class="ca-col-id"><?php esc_html_e('#', 'rtr-custom-assessment'); ?></th>
+								<th scope="col"><?php esc_html_e('Name', 'rtr-custom-assessment'); ?></th>
+								<th scope="col"><?php esc_html_e('Email', 'rtr-custom-assessment'); ?></th>
+								<th scope="col"><?php esc_html_e('Phone', 'rtr-custom-assessment'); ?></th>
+								<th scope="col"><?php esc_html_e('Order', 'rtr-custom-assessment'); ?></th>
+								<th scope="col"><?php esc_html_e('Completed', 'rtr-custom-assessment'); ?></th>
+							<?php endif; ?>
+							<th scope="col"><?php esc_html_e('Actions', 'rtr-custom-assessment'); ?></th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php
+						foreach ($paged_rows as $row) :
+							if ('bundle' === $tab) :
+								$inner = $row['inner'];
+								$social = $row['social'];
+								$pay_url = $ajax ? (string) $ajax->get_bundle_order_pay_url_for_submissions((int) $row['inner_id'], (int) $row['social_id']) : '';
+								$completed_at = max(strtotime((string) $inner->updated_at), strtotime((string) $social->updated_at));
+								?>
+								<tr>
+									<td><strong><?php echo esc_html(trim((string) $inner->first_name . ' ' . (string) $inner->last_name)); ?></strong></td>
+									<td><?php echo esc_html((string) $inner->email); ?></td>
+									<td class="ca-col-id"><?php echo esc_html((string) $row['inner_id']); ?></td>
+									<td class="ca-col-id"><?php echo esc_html((string) $row['social_id']); ?></td>
+									<td>
+										<?php if (!empty($row['order_id'])) : ?>
+											<a href="<?php echo esc_url(get_edit_post_link((int) $row['order_id'])); ?>">#<?php echo esc_html((string) $row['order_id']); ?></a>
+											<span class="ca-status-badge ca-status--<?php echo esc_attr(sanitize_html_class((string) $row['order_status'])); ?>"><?php echo esc_html((string) $row['order_status']); ?></span>
+										<?php else : ?>
+											—
+										<?php endif; ?>
+									</td>
+									<td><?php echo esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), $completed_at)); ?></td>
+									<td>
+										<a href="<?php echo esc_url(add_query_arg(array_merge($page_args, array('view' => 'detail', 'id' => (int) $row['inner_id'])), admin_url('admin.php'))); ?>" class="button button-small"><?php esc_html_e('View NAC', 'rtr-custom-assessment'); ?></a>
+										<a href="<?php echo esc_url(add_query_arg(array_merge($page_args, array('view' => 'detail', 'id' => (int) $row['social_id'], 'ca_unpaid_tab' => 'bundle')), admin_url('admin.php'))); ?>" class="button button-small"><?php esc_html_e('View SF', 'rtr-custom-assessment'); ?></a>
+										<?php if ('' !== $pay_url) : ?>
+											<a href="<?php echo esc_url($pay_url); ?>" class="button button-small" target="_blank" rel="noopener noreferrer"><?php esc_html_e('Pay link', 'rtr-custom-assessment'); ?></a>
+										<?php endif; ?>
+									</td>
+								</tr>
+								<?php
+							else :
+								$sub = $row;
+								$pay_url = $ajax ? (string) $ajax->get_paid_full_results_order_pay_url_for_submission((int) $sub->id) : '';
+								$order_info = $this->get_latest_unpaid_full_results_order_for_submission((int) $sub->id, CA_Assessment_Types::from_submission($sub));
+								?>
+								<tr>
+									<td class="ca-col-id"><?php echo esc_html((string) $sub->id); ?></td>
+									<td><strong><?php echo esc_html(trim((string) $sub->first_name . ' ' . (string) $sub->last_name)); ?></strong></td>
+									<td><?php echo esc_html((string) $sub->email); ?></td>
+									<td><?php echo esc_html((string) $sub->phone); ?></td>
+									<td>
+										<?php if (!empty($order_info['order_id'])) : ?>
+											<a href="<?php echo esc_url(get_edit_post_link((int) $order_info['order_id'])); ?>">#<?php echo esc_html((string) $order_info['order_id']); ?></a>
+											<span class="ca-status-badge ca-status--<?php echo esc_attr(sanitize_html_class((string) $order_info['status'])); ?>"><?php echo esc_html((string) $order_info['status']); ?></span>
+										<?php else : ?>
+											—
+										<?php endif; ?>
+									</td>
+									<td><?php echo esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime((string) $sub->updated_at))); ?></td>
+									<td>
+										<a href="<?php echo esc_url(add_query_arg(array_merge($page_args, array('view' => 'detail', 'id' => (int) $sub->id)), admin_url('admin.php'))); ?>" class="button button-small"><?php esc_html_e('View', 'rtr-custom-assessment'); ?></a>
+										<?php if ('' !== $pay_url) : ?>
+											<a href="<?php echo esc_url($pay_url); ?>" class="button button-small" target="_blank" rel="noopener noreferrer"><?php esc_html_e('Pay link', 'rtr-custom-assessment'); ?></a>
+										<?php endif; ?>
+									</td>
+								</tr>
+							<?php endif; ?>
+						<?php endforeach; ?>
+					</tbody>
+				</table>
+
+				<?php if ($total_pages > 1) : ?>
+					<div class="tablenav bottom">
+						<div class="tablenav-pages">
+							<span class="displaying-num">
+								<?php
+								printf(
+									/* translators: %d: number of rows */
+									esc_html(_n('%d customer', '%d customers', $total_count, 'rtr-custom-assessment')),
+									(int) $total_count
+								);
+								?>
+							</span>
+							<span class="pagination-links">
+								<?php
+								$base_url = add_query_arg($page_args, admin_url('admin.php'));
+								$prev_disabled = $current_page <= 1 ? 'disabled' : '';
+								$next_disabled = $current_page >= $total_pages ? 'disabled' : '';
+								echo '<a class="prev-page button ' . esc_attr($prev_disabled) . '" href="' . esc_url(add_query_arg('paged', max(1, $current_page - 1), $base_url)) . '">&laquo;</a>';
+								for ($i = 1; $i <= $total_pages; $i++) {
+									$active_class = ($i === $current_page) ? 'current' : '';
+									echo '<a class="page-numbers ' . esc_attr($active_class) . '" href="' . esc_url(add_query_arg('paged', $i, $base_url)) . '">' . esc_html((string) $i) . '</a>';
+								}
+								echo '<a class="next-page button ' . esc_attr($next_disabled) . '" href="' . esc_url(add_query_arg('paged', min($total_pages, $current_page + 1), $base_url)) . '">&raquo;</a>';
+								?>
+							</span>
+						</div>
+					</div>
+				<?php endif; ?>
+			<?php endif; ?>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Tabs for unpaid full-results admin screen.
+	 *
+	 * @param string $current_tab inner|social|bundle.
+	 */
+	private function render_unpaid_full_results_nav_tabs($current_tab)
+	{
+		$tabs = array(
+			'inner' => __('Natural Attributes Quick Scan', 'rtr-custom-assessment'),
+			'social' => __('Social Fluency', 'rtr-custom-assessment'),
+			'bundle' => __('Bundle', 'rtr-custom-assessment'),
+		);
+
+		echo '<nav class="nav-tab-wrapper ca-assessment-nav-tabs" aria-label="' . esc_attr__('Unpaid full results', 'rtr-custom-assessment') . '">';
+		foreach ($tabs as $slug => $label) {
+			$url = add_query_arg(
+				array(
+					'page' => 'custom-assessment-unpaid',
+					'ca_unpaid_tab' => $slug,
+				),
+				admin_url('admin.php')
+			);
+			$classes = 'nav-tab' . ($slug === $current_tab ? ' nav-tab-active' : '');
+			printf(
+				'<a href="%1$s" class="%2$s">%3$s</a>',
+				esc_url($url),
+				esc_attr($classes),
+				esc_html($label)
+			);
+		}
+		echo '</nav>';
+	}
+
+	/**
+	 * Completed submissions without paid full results (excludes bundle pairs).
+	 *
+	 * @param string $assessment_type inner_dimensions|social_fluency.
+	 * @return array<int, object>
+	 */
+	private function get_unpaid_full_results_submissions($assessment_type)
+	{
+		$assessment_type = CA_Assessment_Types::normalize($assessment_type);
+		$all = CA_Database::get_all_submissions($assessment_type);
+		$unpaid = array();
+
+		foreach ($all as $sub) {
+			if ('completed' !== (string) $sub->status) {
+				continue;
+			}
+			if ($this->submission_is_part_of_bundle((int) $sub->id)) {
+				continue;
+			}
+			if (CA_Mailer::submission_has_paid_full_results_order($sub)) {
+				continue;
+			}
+			$unpaid[] = $sub;
+		}
+
+		return $unpaid;
+	}
+
+	/**
+	 * Bundle pairs (NAC + SF) with no paid bundle order.
+	 *
+	 * @return array<int, array<string, mixed>>
+	 */
+	private function get_unpaid_bundle_pairs()
+	{
+		if (!function_exists('wc_get_orders')) {
+			return array();
+		}
+
+		$orders = wc_get_orders(
+			array(
+				'limit' => -1,
+				'orderby' => 'date',
+				'order' => 'DESC',
+				'meta_query' => array(
+					array(
+						'key' => '_ca_bundle_full_results',
+						'value' => 'yes',
+					),
+				),
+				'return' => 'objects',
+			)
+		);
+
+		$pairs = array();
+		foreach ($orders as $order) {
+			if (!$order instanceof \WC_Order) {
+				continue;
+			}
+
+			$inner_id = (int) $order->get_meta('_ca_bundle_inner_submission_id');
+			$social_id = (int) $order->get_meta('_ca_bundle_social_submission_id');
+			if ($inner_id <= 0 || $social_id <= 0) {
+				continue;
+			}
+
+			$key = $inner_id . ':' . $social_id;
+			if (!isset($pairs[$key])) {
+				$pairs[$key] = array(
+					'inner_id' => $inner_id,
+					'social_id' => $social_id,
+					'paid' => false,
+					'order_id' => 0,
+					'order_status' => '',
+				);
+			}
+
+			if ($order->is_paid()) {
+				$pairs[$key]['paid'] = true;
+			}
+
+			if (0 === (int) $pairs[$key]['order_id']) {
+				$pairs[$key]['order_id'] = (int) $order->get_id();
+				$pairs[$key]['order_status'] = (string) $order->get_status();
+			}
+		}
+
+		$result = array();
+		foreach ($pairs as $pair) {
+			if (!empty($pair['paid'])) {
+				continue;
+			}
+
+			$inner = CA_Database::get_submission((int) $pair['inner_id']);
+			$social = CA_Database::get_submission((int) $pair['social_id']);
+			if (
+				!$inner || !$social
+				|| 'completed' !== (string) $inner->status
+				|| 'completed' !== (string) $social->status
+			) {
+				continue;
+			}
+
+			$pair['inner'] = $inner;
+			$pair['social'] = $social;
+			$result[] = $pair;
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Latest pending/failed paid-results order for a submission (if any).
+	 *
+	 * @param int    $submission_id   Submission ID.
+	 * @param string $assessment_type Normalized assessment type.
+	 * @return array{order_id:int,status:string}
+	 */
+	private function get_latest_unpaid_full_results_order_for_submission($submission_id, $assessment_type)
+	{
+		$submission_id = (int) $submission_id;
+		$assessment_type = CA_Assessment_Types::normalize($assessment_type);
+		if ($submission_id <= 0 || !function_exists('wc_get_orders')) {
+			return array(
+				'order_id' => 0,
+				'status' => '',
+			);
+		}
+
+		$order_ids = wc_get_orders(
+			array(
+				'limit' => 1,
+				'orderby' => 'date',
+				'order' => 'DESC',
+				'status' => array('pending', 'failed', 'on-hold', 'cancelled'),
+				'meta_query' => array(
+					array(
+						'key' => '_ca_submission_id',
+						'value' => $submission_id,
+					),
+					array(
+						'key' => '_ca_assessment_type',
+						'value' => $assessment_type,
+					),
+				),
+				'return' => 'ids',
+			)
+		);
+
+		if (empty($order_ids)) {
+			return array(
+				'order_id' => 0,
+				'status' => '',
+			);
+		}
+
+		$order = wc_get_order((int) $order_ids[0]);
+		if (!$order instanceof \WC_Order) {
+			return array(
+				'order_id' => 0,
+				'status' => '',
+			);
+		}
+
+		return array(
+			'order_id' => (int) $order->get_id(),
+			'status' => (string) $order->get_status(),
+		);
 	}
 
 	/**

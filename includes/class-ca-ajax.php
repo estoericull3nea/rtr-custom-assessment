@@ -66,6 +66,8 @@ class CA_Ajax
 		add_action('woocommerce_order_details_after_order_table', array($this, 'render_bundle_download_after_order_table'), 25);
 		add_action('woocommerce_checkout_create_order', array($this, 'attach_inner_dimensions_meta_to_checkout_order'), 20, 2);
 		add_filter('woocommerce_checkout_get_value', array($this, 'checkout_prefill_billing_from_pay_order'), 20, 2);
+		add_filter('user_has_cap', array($this, 'allow_guest_pay_for_ca_order_pay_links'), 10, 4);
+		add_filter('woocommerce_order_email_verification_required', array($this, 'ca_orders_skip_email_verification'), 10, 3);
 		add_filter('woocommerce_payment_complete_order_status', array($this, 'inner_dimensions_payment_complete_order_status'), 10, 3);
 		add_action('woocommerce_payment_complete', array($this, 'mark_inner_dimensions_product_out_of_stock_on_payment'), 10, 1);
 		add_action('woocommerce_payment_complete', array($this, 'maybe_send_customer_paid_bundle_pdf_email'), 15, 1);
@@ -665,7 +667,12 @@ class CA_Ajax
 
 			$order_id = $order instanceof \WC_Order ? (int) $order->get_id() : 0;
 			if ($order_id <= 0) {
-				$order = wc_create_order(array('status' => 'pending'));
+				$order = wc_create_order(
+					array(
+						'status' => 'pending',
+						'customer_id' => 0,
+					)
+				);
 				if (!$order instanceof \WC_Order) {
 					$this->send_error('ca_prepare_bundle_checkout', __('Could not create checkout order. Please try again.', 'rtr-custom-assessment'));
 				}
@@ -704,6 +711,11 @@ class CA_Ajax
 				$order->save();
 
 				$this->clear_wc_cart_for_guest_checkout();
+			}
+
+			if ($order instanceof \WC_Order) {
+				$this->ensure_guest_pay_order($order);
+				$order->save();
 			}
 
 			$checkout_url = $order instanceof \WC_Order ? $order->get_checkout_payment_url(false) : '';
@@ -840,7 +852,12 @@ class CA_Ajax
 		}
 
 		if (!$order instanceof \WC_Order) {
-			$order = wc_create_order(array('status' => 'pending'));
+			$order = wc_create_order(
+				array(
+					'status' => 'pending',
+					'customer_id' => 0,
+				)
+			);
 			if (!$order instanceof \WC_Order) {
 				return '';
 			}
@@ -874,6 +891,12 @@ class CA_Ajax
 			$order->calculate_totals();
 			$order->save();
 			$this->clear_wc_cart_for_guest_checkout();
+		}
+
+		if ($order instanceof \WC_Order) {
+			$this->ensure_guest_pay_order($order);
+			$this->apply_submission_billing_to_order($order, $inner_submission);
+			$order->save();
 		}
 
 		$checkout_url = $order->get_checkout_payment_url(false);
@@ -1279,8 +1302,6 @@ class CA_Ajax
 			return '';
 		}
 
-		$customer_id = is_user_logged_in() ? (int) get_current_user_id() : 0;
-
 		$order = null;
 		$existing_id = $this->find_existing_paid_full_results_order_id($submission_id, $assessment_type);
 		if ($existing_id > 0) {
@@ -1304,7 +1325,7 @@ class CA_Ajax
 			$created = wc_create_order(
 				array(
 					'status' => 'pending',
-					'customer_id' => $customer_id,
+					'customer_id' => 0,
 					'created_via' => $created_via,
 				)
 			);
@@ -1312,9 +1333,9 @@ class CA_Ajax
 				return '';
 			}
 			$order = $created;
-		} elseif ($customer_id > 0 && (int) $order->get_customer_id() !== $customer_id) {
-			$order->set_customer_id($customer_id);
 		}
+
+		$this->ensure_guest_pay_order($order);
 
 		$order->add_product($product, 1);
 		$this->apply_submission_billing_to_order($order, $submission);
@@ -1435,8 +1456,125 @@ class CA_Ajax
 	}
 
 	/**
-	 * Copy assessment step-1 fields (name, email, phone) onto the order billing address.
-	 * Does not set billing_company (job title is not copied to checkout).
+	 * Assessment pay links are guest checkout via order key — never attach a WP user to the order.
+	 *
+	 * @param \WC_Order $order Order instance.
+	 * @return void
+	 */
+	private function ensure_guest_pay_order($order)
+	{
+		if (!$order instanceof \WC_Order) {
+			return;
+		}
+		if ((int) $order->get_customer_id() !== 0) {
+			$order->set_customer_id(0);
+		}
+	}
+
+	/**
+	 * Allow paying assessment orders with a valid order-pay key (no WP login required).
+	 *
+	 * @param array<string, bool> $allcaps All capabilities for the user.
+	 * @param array<int, string>  $caps    Requested capabilities.
+	 * @param array<int, mixed>   $args    Capability check arguments.
+	 * @param WP_User|stdClass     $user    User object.
+	 * @return array<string, bool>
+	 */
+	public function allow_guest_pay_for_ca_order_pay_links($allcaps, $caps, $args, $user)
+	{
+		unset($user);
+		if (empty($caps[0]) || 'pay_for_order' !== $caps[0]) {
+			return $allcaps;
+		}
+
+		$order_id = isset($args[2]) ? (int) $args[2] : 0;
+		if ($order_id <= 0 || !$this->is_ca_paid_results_order($order_id)) {
+			return $allcaps;
+		}
+
+		if ($this->request_has_valid_order_key($order_id)) {
+			$allcaps['pay_for_order'] = true;
+		}
+
+		return $allcaps;
+	}
+
+	/**
+	 * Show full order-received / order-pay details for assessment orders (no extra email verification step).
+	 *
+	 * @param bool            $required Whether email verification is required.
+	 * @param \WC_Order|false $order    Order instance.
+	 * @param string          $context  order-received|order-pay|view.
+	 * @return bool
+	 */
+	public function ca_orders_skip_email_verification($required, $order, $context)
+	{
+		unset($context);
+		if (!$required || !$order instanceof \WC_Order) {
+			return $required;
+		}
+
+		if ($this->is_ca_paid_results_order((int) $order->get_id())) {
+			return false;
+		}
+
+		return $required;
+	}
+
+	/**
+	 * Whether the order belongs to this plugin's paid full-results or bundle checkout.
+	 *
+	 * @param int $order_id Order ID.
+	 * @return bool
+	 */
+	private function is_ca_paid_results_order($order_id)
+	{
+		$order = wc_get_order((int) $order_id);
+		if (!$order instanceof \WC_Order) {
+			return false;
+		}
+
+		if ('yes' === (string) $order->get_meta('_ca_bundle_full_results')) {
+			return true;
+		}
+
+		if ('yes' === (string) $order->get_meta('_ca_full_results_unlock')) {
+			return true;
+		}
+
+		$submission_id = (int) $order->get_meta('_ca_submission_id');
+		return $submission_id > 0 && CA_Assessment_Types::requires_paid_full_results(
+			CA_Assessment_Types::normalize((string) $order->get_meta('_ca_assessment_type'))
+		);
+	}
+
+	/**
+	 * Whether the current request includes a valid WooCommerce order key (order-pay or order-received URL).
+	 *
+	 * @param int $order_id Order ID.
+	 * @return bool
+	 */
+	private function request_has_valid_order_key($order_id)
+	{
+		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- WC order key in URL.
+		if (empty($_GET['key'])) {
+			return false;
+		}
+
+		$order = wc_get_order((int) $order_id);
+		if (!$order instanceof \WC_Order) {
+			return false;
+		}
+
+		$key = isset($_GET['key']) ? wc_clean(wp_unslash($_GET['key'])) : '';
+		// phpcs:enable WordPress.Security.NonceVerification.Recommended
+
+		return '' !== $key && hash_equals((string) $order->get_order_key(), (string) $key);
+	}
+
+	/**
+	 * Copy respondent billing from submission onto the order.
+	 *
 	 * Fills required WC billing placeholders using store base location and filterable defaults.
 	 *
 	 * @param \WC_Order $order      Order instance.

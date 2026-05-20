@@ -1215,7 +1215,7 @@ class CA_Mailer
 	 * @param object $submission Submission row.
 	 * @return bool
 	 */
-	private static function submission_has_paid_full_results_order($submission)
+	public static function submission_has_paid_full_results_order($submission)
 	{
 		if (!$submission || empty($submission->id) || !function_exists('wc_get_orders')) {
 			return false;
