@@ -112,7 +112,7 @@ class CA_Admin
 	}
 
 	/**
-	 * Plugin settings (reCAPTCHA for Natural Attributes + Social Fluency).
+	 * Plugin settings (reCAPTCHA for all assessment types).
 	 */
 	public function render_settings_page()
 	{
@@ -145,7 +145,7 @@ class CA_Admin
 				<div class="ca-admin-card" style="max-width:720px;">
 					<h2 class="ca-admin-card-title"><?php esc_html_e('Google reCAPTCHA', 'rtr-custom-assessment'); ?></h2>
 					<p class="description">
-						<?php esc_html_e('When enabled, visitors must pass reCAPTCHA on the user information step before starting the Natural Attributes Quick Scan or Social Fluency assessment.', 'rtr-custom-assessment'); ?>
+						<?php esc_html_e('When enabled, visitors must pass reCAPTCHA on the user information step before starting any assessment (Natural Attributes, Social Fluency, Entrepreneurial Mindset, or Bundle).', 'rtr-custom-assessment'); ?>
 					</p>
 
 					<table class="form-table" role="presentation">
@@ -163,7 +163,7 @@ class CA_Admin
 										</p>
 									<?php elseif ($configured) : ?>
 										<p class="description" style="color:#1e4620;">
-											<?php esc_html_e('reCAPTCHA is active for Natural Attributes and Social Fluency.', 'rtr-custom-assessment'); ?>
+											<?php esc_html_e('reCAPTCHA is active for all assessment types.', 'rtr-custom-assessment'); ?>
 										</p>
 									<?php endif; ?>
 								</td>

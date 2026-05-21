@@ -352,10 +352,31 @@
   }
 
   function requiresRecaptchaForType(type) {
-    if (!recaptchaConfig().enabled) {
-      return false;
+    return recaptchaConfig().enabled && !!type;
+  }
+
+  function replaceRecaptchaWidgetElement() {
+    var $wrap = $("#ca-recaptcha-wrap");
+    if (!$wrap.length) {
+      return;
     }
-    return type === "inner_dimensions" || type === "social_fluency";
+    var $new = $(
+      '<div id="ca-recaptcha-widget" class="ca-recaptcha-widget"></div>',
+    );
+    var $old = $("#ca-recaptcha-widget");
+    if ($old.length) {
+      $old.replaceWith($new);
+    } else {
+      $wrap.append($new);
+    }
+  }
+
+  function scheduleRecaptchaRender() {
+    window.requestAnimationFrame(function () {
+      window.requestAnimationFrame(function () {
+        ensureRecaptchaRendered();
+      });
+    });
   }
 
   function updateRecaptchaVisibility() {
@@ -363,17 +384,13 @@
     if (!$wrap.length) {
       return;
     }
-    var show = false;
-    if (state.bundleMode) {
-      show = recaptchaConfig().enabled;
-    } else {
-      show = requiresRecaptchaForType(state.assessmentType);
-    }
-    if (show) {
+    var type = state.bundleMode ? "bundle" : state.assessmentType;
+    if (requiresRecaptchaForType(type)) {
       $wrap.removeAttr("hidden");
-      ensureRecaptchaRendered();
+      scheduleRecaptchaRender();
     } else {
       $wrap.attr("hidden", "hidden");
+      destroyRecaptchaWidget();
     }
   }
 
@@ -389,16 +406,26 @@
     if (!cfg.enabled || !cfg.siteKey) {
       return;
     }
-    var $widget = $("#ca-recaptcha-widget");
-    if (!$widget.length || recaptchaState.widgetId !== null) {
-      return;
-    }
     if (typeof window.grecaptcha === "undefined") {
       recaptchaState.pendingRender = true;
       return;
     }
     recaptchaState.pendingRender = false;
-    $widget.empty();
+
+    if (recaptchaState.widgetId !== null) {
+      try {
+        window.grecaptcha.reset(recaptchaState.widgetId);
+        return;
+      } catch (err) {
+        recaptchaState.widgetId = null;
+      }
+    }
+
+    replaceRecaptchaWidgetElement();
+    if (!$("#ca-recaptcha-widget").length) {
+      return;
+    }
+
     recaptchaState.widgetId = window.grecaptcha.render("ca-recaptcha-widget", {
       sitekey: cfg.siteKey,
     });
@@ -433,7 +460,7 @@
     }
     recaptchaState.widgetId = null;
     recaptchaState.pendingRender = false;
-    $("#ca-recaptcha-widget").empty();
+    replaceRecaptchaWidgetElement();
   }
 
   /**
@@ -717,14 +744,14 @@
     $modal.attr("aria-hidden", "false");
     $body.addClass("ca-modal-open");
 
-    requestAnimationFrame(function () {
-      $modal.addClass("ca-modal--open");
-    });
-
     resetState();
     showScreen("info");
     hideProgress();
-    updateRecaptchaVisibility();
+
+    requestAnimationFrame(function () {
+      $modal.addClass("ca-modal--open");
+      updateRecaptchaVisibility();
+    });
   }
 
   function closeModal() {
@@ -1130,7 +1157,8 @@
       job_title: $("#ca-job-title").val().trim(),
     });
 
-    if (requiresRecaptchaForType(state.assessmentType)) {
+    var recaptchaType = state.bundleMode ? "bundle" : state.assessmentType;
+    if (requiresRecaptchaForType(recaptchaType)) {
       data["g-recaptcha-response"] = getRecaptchaResponse();
     }
 
@@ -1235,11 +1263,8 @@
       return;
     }
 
-    if (state.bundleMode) {
-      if (!validateRecaptchaForStart("inner_dimensions")) {
-        return;
-      }
-    } else if (!validateRecaptchaForStart(state.assessmentType)) {
+    var recaptchaType = state.bundleMode ? "bundle" : state.assessmentType;
+    if (!validateRecaptchaForStart(recaptchaType)) {
       return;
     }
 

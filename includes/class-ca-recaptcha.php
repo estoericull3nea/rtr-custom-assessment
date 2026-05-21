@@ -1,6 +1,6 @@
 <?php
 /**
- * Google reCAPTCHA v2 for Natural Attributes and Social Fluency assessments.
+ * Google reCAPTCHA v2 for all assessment types when enabled in settings.
  */
 
 if (!defined('ABSPATH')) {
@@ -67,7 +67,7 @@ class CA_Recaptcha
 	}
 
 	/**
-	 * reCAPTCHA applies before starting these assessment types.
+	 * reCAPTCHA applies before starting any assessment when configured.
 	 *
 	 * @param string $assessment_type Normalized type.
 	 * @return bool
@@ -78,8 +78,10 @@ class CA_Recaptcha
 			return false;
 		}
 		$t = CA_Assessment_Types::normalize($assessment_type);
-		return CA_Assessment_Types::INNER_DIMENSIONS === $t
-			|| CA_Assessment_Types::SOCIAL_FLUENCY === $t;
+		return CA_Assessment_Types::MINDSET === $t
+			|| CA_Assessment_Types::INNER_DIMENSIONS === $t
+			|| CA_Assessment_Types::SOCIAL_FLUENCY === $t
+			|| CA_Assessment_Types::BUNDLE === $t;
 	}
 
 	/**
