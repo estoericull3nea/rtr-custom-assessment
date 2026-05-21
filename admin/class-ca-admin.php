@@ -94,12 +94,106 @@ class CA_Admin
 
 		add_submenu_page(
 			'custom-assessment-hub',
+			__('Settings', 'rtr-custom-assessment'),
+			__('Settings', 'rtr-custom-assessment'),
+			'manage_options',
+			'custom-assessment-settings',
+			array($this, 'render_settings_page')
+		);
+
+		add_submenu_page(
+			'custom-assessment-hub',
 			__('Logs', 'rtr-custom-assessment'),
 			__('Logs', 'rtr-custom-assessment'),
 			'manage_options',
 			'custom-assessment-logs',
 			array($this, 'render_logs_page')
 		);
+	}
+
+	/**
+	 * Plugin settings (reCAPTCHA for Natural Attributes + Social Fluency).
+	 */
+	public function render_settings_page()
+	{
+		if (!current_user_can('manage_options')) {
+			wp_die(esc_html__('You do not have permission to view this page.', 'rtr-custom-assessment'));
+		}
+
+		$enabled = 'yes' === get_option(CA_Recaptcha::OPTION_ENABLED, 'no');
+		$site_key = CA_Recaptcha::get_site_key();
+		$secret_key = CA_Recaptcha::get_secret_key();
+		$configured = CA_Recaptcha::is_enabled();
+		?>
+		<div class="wrap ca-admin-wrap">
+			<h1 class="ca-admin-title">
+				<span class="ca-admin-title-icon dashicons dashicons-admin-settings"></span>
+				<?php esc_html_e('Assessment Settings', 'rtr-custom-assessment'); ?>
+			</h1>
+
+			<?php if (isset($_GET['settings-updated'])) : ?>
+				<div class="notice notice-success is-dismissible">
+					<p><?php esc_html_e('Settings saved.', 'rtr-custom-assessment'); ?></p>
+				</div>
+			<?php endif; ?>
+
+			<form method="post" action="options.php" class="ca-settings-form">
+				<?php
+				settings_fields('ca_recaptcha_settings');
+				?>
+
+				<div class="ca-admin-card" style="max-width:720px;">
+					<h2 class="ca-admin-card-title"><?php esc_html_e('Google reCAPTCHA', 'rtr-custom-assessment'); ?></h2>
+					<p class="description">
+						<?php esc_html_e('When enabled, visitors must pass reCAPTCHA on the user information step before starting the Natural Attributes Quick Scan or Social Fluency assessment.', 'rtr-custom-assessment'); ?>
+					</p>
+
+					<table class="form-table" role="presentation">
+						<tbody>
+							<tr>
+								<th scope="row"><?php esc_html_e('Enable reCAPTCHA', 'rtr-custom-assessment'); ?></th>
+								<td>
+									<label>
+										<input type="checkbox" name="<?php echo esc_attr(CA_Recaptcha::OPTION_ENABLED); ?>" value="yes" <?php checked($enabled); ?>>
+										<?php esc_html_e('Require verification before starting assessment', 'rtr-custom-assessment'); ?>
+									</label>
+									<?php if ($enabled && !$configured) : ?>
+										<p class="description" style="color:#b32d2e;">
+											<?php esc_html_e('Add both keys below for reCAPTCHA to take effect on the site.', 'rtr-custom-assessment'); ?>
+										</p>
+									<?php elseif ($configured) : ?>
+										<p class="description" style="color:#1e4620;">
+											<?php esc_html_e('reCAPTCHA is active for Natural Attributes and Social Fluency.', 'rtr-custom-assessment'); ?>
+										</p>
+									<?php endif; ?>
+								</td>
+							</tr>
+							<tr>
+								<th scope="row">
+									<label for="ca-recaptcha-site-key"><?php esc_html_e('Site key', 'rtr-custom-assessment'); ?></label>
+								</th>
+								<td>
+									<input type="text" id="ca-recaptcha-site-key" name="<?php echo esc_attr(CA_Recaptcha::OPTION_SITE_KEY); ?>" value="<?php echo esc_attr($site_key); ?>" class="regular-text" autocomplete="off">
+									<p class="description"><?php esc_html_e('Public key from Google reCAPTCHA admin (v2 “I’m not a robot” Checkbox).', 'rtr-custom-assessment'); ?></p>
+								</td>
+							</tr>
+							<tr>
+								<th scope="row">
+									<label for="ca-recaptcha-secret-key"><?php esc_html_e('Secret key', 'rtr-custom-assessment'); ?></label>
+								</th>
+								<td>
+									<input type="password" id="ca-recaptcha-secret-key" name="<?php echo esc_attr(CA_Recaptcha::OPTION_SECRET_KEY); ?>" value="<?php echo esc_attr($secret_key); ?>" class="regular-text" autocomplete="off">
+									<p class="description"><?php esc_html_e('Secret key used for server-side verification.', 'rtr-custom-assessment'); ?></p>
+								</td>
+							</tr>
+						</tbody>
+					</table>
+
+					<?php submit_button(__('Save settings', 'rtr-custom-assessment')); ?>
+				</div>
+			</form>
+		</div>
+		<?php
 	}
 
 	/**

@@ -38,6 +38,7 @@ require_once CA_PLUGIN_DIR . 'includes/class-ca-ajax.php';
 require_once CA_PLUGIN_DIR . 'includes/class-ca-shortcode.php';
 require_once CA_PLUGIN_DIR . 'includes/class-ca-mailer.php';
 require_once CA_PLUGIN_DIR . 'includes/class-ca-unpaid-email-log.php';
+require_once CA_PLUGIN_DIR . 'includes/class-ca-recaptcha.php';
 require_once CA_PLUGIN_DIR . 'admin/class-ca-admin.php';
 
 // Activation / Deactivation hooks
@@ -46,6 +47,7 @@ register_activation_hook(__FILE__, array('CA_Database', 'create_tables'));
 // Boot the plugin
 add_action('plugins_loaded', static function () {
 	CA_Database::maybe_upgrade();
+	add_action('admin_init', array('CA_Recaptcha', 'register_settings'));
 	new CA_Ajax();
 	new CA_Shortcode();
 	new CA_Admin();

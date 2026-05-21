@@ -164,6 +164,20 @@ class CA_Ajax
 			$this->send_error('ca_save_user_info', implode(' ', $errors));
 		}
 
+		if (CA_Recaptcha::applies_to_assessment($assessment_type)) {
+			// phpcs:disable WordPress.Security.NonceVerification.Missing -- Nonce verified; reCAPTCHA token is one-time.
+			$recaptcha_token = isset($_POST['g-recaptcha-response'])
+				? sanitize_text_field(wp_unslash($_POST['g-recaptcha-response']))
+				: '';
+			// phpcs:enable WordPress.Security.NonceVerification.Missing
+			if (!CA_Recaptcha::verify_response($recaptcha_token)) {
+				$this->send_error(
+					'ca_save_user_info',
+					__('reCAPTCHA verification failed. Please try again.', 'rtr-custom-assessment')
+				);
+			}
+		}
+
 		$submission_id = CA_Database::insert_submission(array(
 			'first_name' => $first_name,
 			'last_name' => $last_name,

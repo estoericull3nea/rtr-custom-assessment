@@ -61,6 +61,16 @@ class CA_Shortcode {
 			true
 		);
 
+		if ( CA_Recaptcha::is_enabled() ) {
+			wp_enqueue_script(
+				'google-recaptcha',
+				'https://www.google.com/recaptcha/api.js?onload=caRecaptchaOnload&render=explicit',
+				array(),
+				null,
+				true
+			);
+		}
+
 		$mindset_labels = array(
 			1 => __( 'Least like me', 'rtr-custom-assessment' ),
 			2 => __( 'Slightly like me', 'rtr-custom-assessment' ),
@@ -189,6 +199,7 @@ class CA_Shortcode {
 					'start_cta' => __( 'Take this assessment for bundle option', 'rtr-custom-assessment' ),
 					'price'    => 29.00,
 				),
+				'recaptcha'   => CA_Recaptcha::get_client_config(),
 				'labels'      => array(
 					'next'          => __( 'Next', 'rtr-custom-assessment' ),
 					'back'          => __( 'Back', 'rtr-custom-assessment' ),
@@ -426,6 +437,10 @@ class CA_Shortcode {
 								</div>
 
 								<div class="ca-form-error" id="ca-info-error" role="alert" aria-live="polite"></div>
+
+								<div id="ca-recaptcha-wrap" class="ca-recaptcha-wrap" hidden>
+									<div id="ca-recaptcha-widget" class="ca-recaptcha-widget"></div>
+								</div>
 
 								<div class="ca-form-actions" style="display: flex; justify-content: flex-end;">
 									<button type="submit" class="ca-btn ca-btn--primary ca-btn--lg" id="ca-start-btn">

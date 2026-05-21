@@ -341,6 +341,119 @@
     return data;
   }
 
+  var recaptchaState = {
+    widgetId: null,
+    ready: false,
+    pendingRender: false,
+  };
+
+  function recaptchaConfig() {
+    return (CA_Config && CA_Config.recaptcha) || { enabled: false, siteKey: "" };
+  }
+
+  function requiresRecaptchaForType(type) {
+    if (!recaptchaConfig().enabled) {
+      return false;
+    }
+    return type === "inner_dimensions" || type === "social_fluency";
+  }
+
+  function updateRecaptchaVisibility() {
+    var $wrap = $("#ca-recaptcha-wrap");
+    if (!$wrap.length) {
+      return;
+    }
+    var show = false;
+    if (state.bundleMode) {
+      show = recaptchaConfig().enabled;
+    } else {
+      show = requiresRecaptchaForType(state.assessmentType);
+    }
+    if (show) {
+      $wrap.removeAttr("hidden");
+      ensureRecaptchaRendered();
+    } else {
+      $wrap.attr("hidden", "hidden");
+    }
+  }
+
+  window.caRecaptchaOnload = function () {
+    recaptchaState.ready = true;
+    if (recaptchaState.pendingRender) {
+      ensureRecaptchaRendered();
+    }
+  };
+
+  function ensureRecaptchaRendered() {
+    var cfg = recaptchaConfig();
+    if (!cfg.enabled || !cfg.siteKey) {
+      return;
+    }
+    var $widget = $("#ca-recaptcha-widget");
+    if (!$widget.length || recaptchaState.widgetId !== null) {
+      return;
+    }
+    if (typeof window.grecaptcha === "undefined") {
+      recaptchaState.pendingRender = true;
+      return;
+    }
+    recaptchaState.pendingRender = false;
+    $widget.empty();
+    recaptchaState.widgetId = window.grecaptcha.render("ca-recaptcha-widget", {
+      sitekey: cfg.siteKey,
+    });
+  }
+
+  function getRecaptchaResponse() {
+    if (
+      typeof window.grecaptcha === "undefined" ||
+      recaptchaState.widgetId === null
+    ) {
+      return "";
+    }
+    return window.grecaptcha.getResponse(recaptchaState.widgetId) || "";
+  }
+
+  function resetRecaptchaWidget() {
+    if (
+      typeof window.grecaptcha !== "undefined" &&
+      recaptchaState.widgetId !== null
+    ) {
+      window.grecaptcha.reset(recaptchaState.widgetId);
+    }
+  }
+
+  function destroyRecaptchaWidget() {
+    if (recaptchaState.widgetId !== null && typeof window.grecaptcha !== "undefined") {
+      try {
+        window.grecaptcha.reset(recaptchaState.widgetId);
+      } catch (err) {
+        /* ignore */
+      }
+    }
+    recaptchaState.widgetId = null;
+    recaptchaState.pendingRender = false;
+    $("#ca-recaptcha-widget").empty();
+  }
+
+  /**
+   * @param {string} type Assessment type to validate for.
+   * @returns {boolean}
+   */
+  function validateRecaptchaForStart(type) {
+    if (!requiresRecaptchaForType(type)) {
+      return true;
+    }
+    if (getRecaptchaResponse()) {
+      return true;
+    }
+    var msg =
+      recaptchaConfig().errorMessage ||
+      "Please complete the reCAPTCHA verification before starting the assessment.";
+    showError($infoError, msg);
+    return false;
+  }
+
   function init() {
     $modal = $("#ca-modal");
     if (!$modal.length) {
@@ -502,6 +615,12 @@
           return;
         }
 
+        if (!validateRecaptchaForStart(state.bundleFirstType)) {
+          showScreen("info");
+          updateRecaptchaVisibility();
+          return;
+        }
+
         state.isSubmitting = true;
         setBtnLoading($startBtn, true);
         hideError($bundleOrderError);
@@ -605,11 +724,13 @@
     resetState();
     showScreen("info");
     hideProgress();
+    updateRecaptchaVisibility();
   }
 
   function closeModal() {
     setAssessmentSubmitting(false);
     hideSaveProgressDialog();
+    destroyRecaptchaWidget();
     $modal.removeClass("ca-modal--open");
     $modal.attr("aria-hidden", "true");
     $body.removeClass("ca-modal-open");
@@ -730,6 +851,7 @@
     state.questionOrder = buildQuestionOrder();
     if (!keepInfoFields && $infoForm && $infoForm[0]) {
       $infoForm[0].reset();
+      destroyRecaptchaWidget();
     }
     syncPhonePlaceholderWithCountry();
     hideError($infoError);
@@ -1008,9 +1130,14 @@
       job_title: $("#ca-job-title").val().trim(),
     });
 
+    if (requiresRecaptchaForType(state.assessmentType)) {
+      data["g-recaptcha-response"] = getRecaptchaResponse();
+    }
+
     caPost(data)
       .done(function (response) {
         if (response.success) {
+          resetRecaptchaWidget();
           state.submissionId = response.data.submission_id;
           if (state.bundleMode) {
             state.bundleSubmissionIds[state.assessmentType] =
@@ -1105,6 +1232,14 @@
     var email = $("#ca-email").val().trim();
     if (!email) {
       showError($infoError, "Email is required.");
+      return;
+    }
+
+    if (state.bundleMode) {
+      if (!validateRecaptchaForStart("inner_dimensions")) {
+        return;
+      }
+    } else if (!validateRecaptchaForStart(state.assessmentType)) {
       return;
     }
 
@@ -2271,11 +2406,19 @@
 
     resetState({ keepInfoFields: true });
     hideError($infoError);
-    showProgress();
+    hideProgress();
 
-    state.isSubmitting = true;
-    setBtnLoading($startBtn, true);
-    saveUserInfo();
+    var $infoBadge = $("#ca-screen-info .ca-intro-badge");
+    if ($infoBadge.length) {
+      $infoBadge.text("Your Information — second assessment");
+    }
+
+    showScreen("info");
+    updateRecaptchaVisibility();
+    resetRecaptchaWidget();
+
+    state.isSubmitting = false;
+    setBtnLoading($startBtn, false);
   }
 
   function preparePaidFullResultsCheckout(redirectAfterPrepare, buttonEl) {

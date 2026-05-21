@@ -451,6 +451,14 @@ body,
   display: block;
 }
 
+.ca-recaptcha-wrap {
+  margin: 16px 0 8px;
+}
+
+.ca-recaptcha-widget {
+  display: inline-block;
+}
+
 /* --- Buttons ---------------------------------------------- */
 .ca-form-actions {
   margin-top: 8px;
