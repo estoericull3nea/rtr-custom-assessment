@@ -1595,4 +1595,104 @@ jQuery(document).ready(function ($) {
       updateBar();
     })();
   }
+
+  // Unpaid listing — email send history modal
+  if ($("#ca-unpaid-history-modal-overlay").length && typeof caUnpaidBulkEmail !== "undefined") {
+    (function initUnpaidEmailHistory() {
+      var cfg = caUnpaidBulkEmail;
+      var $overlay = $("#ca-unpaid-history-modal-overlay");
+      var $list = $(".ca-unpaid-email-history-list");
+      var $subtitle = $(".ca-unpaid-history-modal-subtitle");
+
+      function formatDisplayTime(entry) {
+        if (entry && entry.time_display) {
+          return entry.time_display;
+        }
+        if (entry && entry.time) {
+          return entry.time;
+        }
+        if (entry && entry.timestamp) {
+          return new Date(entry.timestamp * 1000).toLocaleString();
+        }
+        return "—";
+      }
+
+      function openHistoryModal(token, name, history) {
+        var items = [];
+        try {
+          items = typeof history === "string" ? JSON.parse(history) : history;
+        } catch (err) {
+          items = [];
+        }
+        if (!Array.isArray(items)) {
+          items = [];
+        }
+
+        $subtitle.text(
+          name ? name + (token ? " (" + token + ")" : "") : token || ""
+        );
+        $list.empty();
+
+        if (!items.length) {
+          $list.append(
+            "<li>" + (cfg.strings.noEmailHistory || "No send history.") + "</li>"
+          );
+        } else {
+          items.forEach(function (entry) {
+            var when = formatDisplayTime(entry);
+            var subject = entry.subject || "—";
+            var email = entry.email || "";
+            var by = entry.user || "";
+            var tab = entry.tab || "";
+
+            var html =
+              "<li><strong>" +
+              when +
+              "</strong>" +
+              "<span>Subject: " +
+              subject +
+              "</span>";
+            if (email) {
+              html += "<span>Email: " + email + "</span>";
+            }
+            if (by) {
+              html += "<span>Sent by: " + by + "</span>";
+            }
+            if (tab) {
+              html += "<span>Tab: " + tab + "</span>";
+            }
+            html += "</li>";
+            $list.append(html);
+          });
+        }
+
+        $overlay.show().attr("aria-hidden", "false");
+      }
+
+      function closeHistoryModal() {
+        $overlay.hide().attr("aria-hidden", "true");
+      }
+
+      $(document).on("click", ".ca-unpaid-email-history-open", function (e) {
+        e.preventDefault();
+        var $btn = $(this);
+        openHistoryModal(
+          $btn.data("token") || "",
+          $btn.data("name") || "",
+          $btn.attr("data-history") || "[]"
+        );
+      });
+
+      $(document).on("click", ".ca-unpaid-history-close", function (e) {
+        e.preventDefault();
+        closeHistoryModal();
+      });
+
+      $overlay.on("click", function (e) {
+        if (e.target === $overlay[0]) {
+          closeHistoryModal();
+        }
+      });
+    })();
+  }
 });

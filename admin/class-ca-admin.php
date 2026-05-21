@@ -493,6 +493,9 @@ class CA_Admin
 						'confirmSend' => __('Send this email to all selected recipients?', 'rtr-custom-assessment'),
 						'sendEmails' => __('Send emails', 'rtr-custom-assessment'),
 						'reloading' => __('Reloading page in %d seconds…', 'rtr-custom-assessment'),
+						'viewTimestamp' => __('View timestamp', 'rtr-custom-assessment'),
+						'emailHistoryTitle' => __('Email send history', 'rtr-custom-assessment'),
+						'noEmailHistory' => __('No send history recorded.', 'rtr-custom-assessment'),
 					),
 				)
 			);
@@ -2034,6 +2037,7 @@ class CA_Admin
 								<th scope="col"><?php esc_html_e('SF #', 'rtr-custom-assessment'); ?></th>
 								<th scope="col"><?php esc_html_e('Order', 'rtr-custom-assessment'); ?></th>
 								<th scope="col"><?php esc_html_e('Completed', 'rtr-custom-assessment'); ?></th>
+								<th scope="col"><?php esc_html_e('Email status', 'rtr-custom-assessment'); ?></th>
 							<?php else : ?>
 								<th scope="col" class="ca-col-id"><?php esc_html_e('#', 'rtr-custom-assessment'); ?></th>
 								<th scope="col"><?php esc_html_e('Name', 'rtr-custom-assessment'); ?></th>
@@ -2041,6 +2045,7 @@ class CA_Admin
 								<th scope="col"><?php esc_html_e('Phone', 'rtr-custom-assessment'); ?></th>
 								<th scope="col"><?php esc_html_e('Order', 'rtr-custom-assessment'); ?></th>
 								<th scope="col"><?php esc_html_e('Completed', 'rtr-custom-assessment'); ?></th>
+								<th scope="col"><?php esc_html_e('Email status', 'rtr-custom-assessment'); ?></th>
 							<?php endif; ?>
 							<th scope="col"><?php esc_html_e('Actions', 'rtr-custom-assessment'); ?></th>
 						</tr>
@@ -2081,6 +2086,7 @@ class CA_Admin
 										<?php endif; ?>
 									</td>
 									<td><?php echo esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), $completed_at)); ?></td>
+									<?php $this->render_unpaid_email_status_cell($recipient_token, $recipient_name); ?>
 									<td>
 										<a href="<?php echo esc_url(add_query_arg(array_merge($page_args, array('view' => 'detail', 'id' => (int) $row['inner_id'])), admin_url('admin.php'))); ?>" class="button button-small"><?php esc_html_e('View NAC', 'rtr-custom-assessment'); ?></a>
 										<a href="<?php echo esc_url(add_query_arg(array_merge($page_args, array('view' => 'detail', 'id' => (int) $row['social_id'], 'ca_unpaid_tab' => 'bundle')), admin_url('admin.php'))); ?>" class="button button-small"><?php esc_html_e('View SF', 'rtr-custom-assessment'); ?></a>
@@ -2123,6 +2129,7 @@ class CA_Admin
 										<?php endif; ?>
 									</td>
 									<td><?php echo esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime((string) $sub->updated_at))); ?></td>
+									<?php $this->render_unpaid_email_status_cell($recipient_token, $recipient_name); ?>
 									<td>
 										<a href="<?php echo esc_url(add_query_arg(array_merge($page_args, array('view' => 'detail', 'id' => (int) $sub->id)), admin_url('admin.php'))); ?>" class="button button-small"><?php esc_html_e('View', 'rtr-custom-assessment'); ?></a>
 										<?php if ('' !== $pay_url) : ?>
@@ -2165,7 +2172,59 @@ class CA_Admin
 				<?php endif; ?>
 
 				<?php $this->render_unpaid_bulk_email_modal($tab); ?>
+				<?php $this->render_unpaid_email_history_modal(); ?>
 			<?php endif; ?>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Email status column for unpaid listing rows.
+	 *
+	 * @param string $recipient_token sub:{id} or bundle:{inner}:{social}.
+	 * @param string $recipient_label Display name for history modal.
+	 */
+	private function render_unpaid_email_status_cell($recipient_token, $recipient_label = '')
+	{
+		$history = CA_Unpaid_Email_Log::get_history($recipient_token);
+		$has_sent = !empty($history);
+		$history_json = wp_json_encode($history);
+		if (false === $history_json) {
+			$history_json = '[]';
+		}
+		?>
+		<td class="ca-unpaid-email-status-cell">
+			<?php if ($has_sent) : ?>
+				<span class="ca-email-status-badge ca-email-status-badge--sent"><?php esc_html_e('Sent', 'rtr-custom-assessment'); ?></span>
+				<button
+					type="button"
+					class="button button-small ca-unpaid-email-history-open"
+					data-token="<?php echo esc_attr($recipient_token); ?>"
+					data-name="<?php echo esc_attr($recipient_label); ?>"
+					data-history="<?php echo esc_attr($history_json); ?>"
+				><?php esc_html_e('View timestamp', 'rtr-custom-assessment'); ?></button>
+			<?php else : ?>
+				<span class="ca-email-status-badge ca-email-status-badge--not-sent"><?php esc_html_e('Not sent', 'rtr-custom-assessment'); ?></span>
+			<?php endif; ?>
+		</td>
+		<?php
+	}
+
+	/**
+	 * Modal listing send timestamps for a recipient.
+	 */
+	private function render_unpaid_email_history_modal()
+	{
+		?>
+		<div class="ca-bulk-edit-modal-overlay ca-unpaid-history-modal-overlay" id="ca-unpaid-history-modal-overlay" style="display:none;" aria-hidden="true">
+			<div class="ca-bulk-edit-modal ca-unpaid-history-modal" role="dialog" aria-labelledby="ca-unpaid-history-modal-title">
+				<h3 id="ca-unpaid-history-modal-title"><?php esc_html_e('Email send history', 'rtr-custom-assessment'); ?></h3>
+				<p class="description ca-unpaid-history-modal-subtitle"></p>
+				<ul class="ca-unpaid-email-history-list"></ul>
+				<div class="ca-bulk-edit-actions">
+					<button type="button" class="button ca-unpaid-history-close"><?php esc_html_e('Close', 'rtr-custom-assessment'); ?></button>
+				</div>
+			</div>
 		</div>
 		<?php
 	}
@@ -2363,6 +2422,14 @@ class CA_Admin
 			$ok = wp_mail($to, $subject, $body, $headers, $attachments);
 			if ($ok) {
 				$sent++;
+				CA_Unpaid_Email_Log::record_sent(
+					(string) $token,
+					array(
+						'subject' => $subject,
+						'email' => $to,
+						'tab' => $tab,
+					)
+				);
 				CA_Logger::log(
 					'admin_unpaid_bulk_email',
 					'success',

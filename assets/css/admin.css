@@ -828,6 +828,64 @@ body,
   vertical-align: middle;
 }
 
+.ca-unpaid-email-status-cell {
+  min-width: 140px;
+}
+
+.ca-unpaid-email-status-cell .ca-email-status-badge {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ca-email-status-badge--sent {
+  background: #edfaef;
+  color: #1e4620;
+}
+
+.ca-email-status-badge--not-sent {
+  background: #f0f0f1;
+  color: #50575e;
+}
+
+.ca-unpaid-email-history-list {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.ca-unpaid-email-history-list li {
+  padding: 12px 14px;
+  border: 1px solid var(--ca-border);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  background: #fafafa;
+}
+
+.ca-unpaid-email-history-list li strong {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.ca-unpaid-email-history-list li span {
+  display: block;
+  font-size: 12px;
+  color: var(--ca-text-muted);
+  margin-top: 2px;
+}
+
+.ca-unpaid-history-modal {
+  max-width: 520px;
+}
+
 /* --- Dashboard hub (Mindset / Social Fluency) ------------- */
 .ca-dashboard-hub-grid {
   display: grid;
