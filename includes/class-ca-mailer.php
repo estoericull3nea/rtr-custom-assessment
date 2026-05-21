@@ -928,17 +928,21 @@ class CA_Mailer
 			);
 		}
 
-		$paywall_email_cta = '';
+		$unlock_block = '';
 		if ($paid_unlocked) {
-			$paywall_email_cta = '<p style="margin:12px 0 0;color:#666;font-size:14px;">'
+			$unlock_block = '<p class="letter-p">'
 				. esc_html__('Your payment is complete — your full personalized report is available from your order confirmation.', 'rtr-custom-assessment')
 				. '</p>';
 		} elseif ('' !== trim($paywall_url)) {
-			$paywall_email_cta = '<div class="paywall-btn-wrap">'
-				. '<a href="' . esc_url($paywall_url) . '" class="paywall-btn">'
-				. esc_html__('Unlock my full report', 'rtr-custom-assessment')
-				. '</a></div>';
+			$unlock_block = '<p class="letter-p" style="margin:14px 0;">'
+				. '<a href="' . esc_url($paywall_url) . '" class="unlock-link" style="color:#aa3130;font-weight:600;font-size:16px;text-decoration:none;">'
+				. esc_html__('→ Unlock my full report', 'rtr-custom-assessment')
+				. '</a></p>';
 		}
+
+		$follow_up_block = '<p class="letter-p">'
+			. esc_html__('If the preview was enough for this season, that\'s a valid choice too. I\'ll check in again in a couple of days with the next piece of the equation.', 'rtr-custom-assessment')
+			. '</p>';
 
 		$preheader = __('Your free assessment, one insight in.', 'rtr-custom-assessment');
 		$blog_name = get_bloginfo('name');
@@ -988,88 +992,49 @@ class CA_Mailer
 				.email-content {
 					padding: 30px;
 				}
-				.intro-text {
-					margin-bottom: 24px;
-					font-size: 16px;
-					color: #555;
-				}
-				.intro-text p {
-					margin-bottom: 14px;
-				}
-				.intro-text strong {
-					color: #333;
-				}
-				.section {
+				.letter-panel {
+					background: #fafafa;
+					border: 1px solid #e4d7ca;
+					border-radius: 8px;
+					padding: 22px 24px;
 					margin-bottom: 28px;
 				}
-				.section-title {
-					font-size: 18px;
+				.letter-panel p,
+				.letter-panel .letter-p {
+					margin: 0 0 14px;
+					font-size: 16px;
+					line-height: 1.65;
+					color: #555;
+				}
+				.letter-panel strong {
+					color: #333;
+				}
+				.letter-panel .preview-line {
+					color: #333;
+				}
+				.letter-panel .section-title {
+					font-size: 16px;
 					font-weight: 600;
 					color: #333;
-					margin-bottom: 14px;
+					margin: 18px 0 10px;
 				}
 				.notice-list {
-					margin: 0 0 0 20px;
+					margin: 0 0 14px 22px;
 					padding: 0;
 					color: #555;
-					font-size: 15px;
+					font-size: 16px;
+					line-height: 1.65;
 				}
 				.notice-list li {
 					margin-bottom: 10px;
 				}
-				.preview-card {
-					background: #fff;
-					border: 1px solid #e4d7ca;
-					border-radius: 8px;
-					box-shadow: 0 8px 22px rgba(0, 0, 0, 0.06);
-					padding: 16px 18px;
-				}
-				.preview-kicker {
-					margin: 0 0 12px;
-					font-size: 12px;
-					font-weight: 700;
-					letter-spacing: 0.08em;
-					text-transform: uppercase;
-					color: #8d2b28;
-				}
-				.preview-insight {
-					margin: 0;
-					font-size: 15px;
-					line-height: 1.65;
-					color: #333;
-				}
-				.paywall-btn-wrap {
-					margin-top: 14px;
-				}
-				.paywall-btn {
-					display: inline-block;
-					background: #aa3130;
-					color: #ffffff !important;
-					text-decoration: none;
-					padding: 10px 18px;
-					border-radius: 6px;
+				.unlock-link {
+					color: #aa3130 !important;
 					font-weight: 600;
-					font-size: 14px;
-				}
-				.paywall-btn:hover {
-					background: #8b2823;
 					text-decoration: none;
 				}
-				.cta-box {
-					background-color: #f0f0f0;
-					border-radius: 6px;
-					padding: 20px;
-					text-align: center;
-					margin-top: 28px;
-				}
-				.cta-box p {
-					margin: 0 0 10px;
-					color: #666;
-					font-size: 14px;
-					line-height: 1.6;
-				}
-				.sign-off {
-					margin-top: 28px;
+				.letter-panel .sign-off {
+					margin: 18px 0 0;
 					font-size: 16px;
 					color: #333;
 				}
@@ -1095,7 +1060,7 @@ class CA_Mailer
 				</div>
 
 				<div class="email-content">
-					<div class="intro-text">
+					<div class="letter-panel" style="background-color:#fafafa;border:1px solid #e4d7ca;border-radius:8px;padding:22px 24px;margin-bottom:28px;">
 						<p>' . sprintf(
 							/* translators: %s: first name (may include HTML strong tags). */
 							__('Hi %s,', 'rtr-custom-assessment'),
@@ -1104,32 +1069,19 @@ class CA_Mailer
 						<p>' . esc_html__('You just took the assessment. Thank you for the time — genuinely. It\'s harder than people admit to sit still for ten minutes and answer questions about yourself honestly.', 'rtr-custom-assessment') . '</p>
 						<p>' . esc_html__('Your preview insight is below. But before you read it, one request: read it slowly.', 'rtr-custom-assessment') . '</p>
 						<p>' . esc_html__('Most of us scan these kinds of results looking for a label. A type. Something to put on our LinkedIn bio and keep moving. That\'s not what this is.', 'rtr-custom-assessment') . '</p>
-					</div>
-
-					<div class="section">
-						<div class="preview-card">
-							<p class="preview-kicker">' . esc_html__('Your preview', 'rtr-custom-assessment') . '</p>
-							<p class="preview-insight">' . esc_html($preview_insight) . '</p>
-						</div>
-					</div>
-
-					<div class="section">
-						<div class="section-title">' . esc_html__('Three things I\'d invite you to notice:', 'rtr-custom-assessment') . '</div>
+						<p class="preview-line"><strong>' . esc_html__('Your preview:', 'rtr-custom-assessment') . '</strong> ' . esc_html($preview_insight) . '</p>
+						<p class="section-title">' . esc_html__('Three things I\'d invite you to notice:', 'rtr-custom-assessment') . '</p>
 						<ol class="notice-list">
 							<li>' . esc_html__('Did this surprise you, or confirm something? Both are useful.', 'rtr-custom-assessment') . '</li>
 							<li>' . esc_html__('Where does this show up in your current work? Where does it go dormant?', 'rtr-custom-assessment') . '</li>
 							<li>' . esc_html__('When was the last time you credited yourself for it?', 'rtr-custom-assessment') . '</li>
 						</ol>
-						<p style="margin-top:16px;font-size:16px;color:#555;">' . esc_html__('You don\'t need to answer today. Just let it sit.', 'rtr-custom-assessment') . '</p>
-					</div>
-
-					<div class="cta-box">
+						<p>' . esc_html__('You don\'t need to answer today. Just let it sit.', 'rtr-custom-assessment') . '</p>
 						<p>' . esc_html($full_report_teaser) . '</p>
-						' . $paywall_email_cta . '
-						<p style="margin-top:14px;">' . esc_html__('If the preview was enough for this season, that\'s a valid choice too. I\'ll check in again in a couple of days with the next piece of the equation.', 'rtr-custom-assessment') . '</p>
+						' . $unlock_block . '
+						' . $follow_up_block . '
+						<p class="sign-off">' . esc_html__('With courage and grace,', 'rtr-custom-assessment') . ' Meg</p>
 					</div>
-
-					<p class="sign-off">' . esc_html__('With courage and grace,', 'rtr-custom-assessment') . '<br>Meg</p>
 				</div>
 
 				<div class="footer-section">
