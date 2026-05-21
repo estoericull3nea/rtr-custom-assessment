@@ -1368,15 +1368,6 @@ class CA_Ajax
 			$order->update_meta_data('_ca_full_results_template_version', $template_version);
 		}
 
-		$expiry_seconds = (int) apply_filters(
-			'ca_paid_full_results_order_pay_link_expiry_seconds',
-			apply_filters('ca_nac_order_pay_link_expiry_seconds', 2 * HOUR_IN_SECONDS),
-			$assessment_type,
-			$submission_id
-		);
-		$expiry_seconds = max(60, $expiry_seconds);
-		$order->update_meta_data('_ca_order_pay_expires_at', time() + $expiry_seconds);
-
 		$order->calculate_totals();
 		$order->save();
 
@@ -1386,7 +1377,7 @@ class CA_Ajax
 	}
 
 	/**
-	 * On order-pay: 404 if the NAC link expired (unpaid past window) or the order no longer needs payment (e.g. completed).
+	 * On order-pay: 404 if the order no longer needs payment (e.g. already completed).
 	 *
 	 * Requires a valid `key` query arg matching the order (same as WooCommerce’s pay flow).
 	 *
@@ -1427,23 +1418,6 @@ class CA_Ajax
 		}
 
 		if (!$order->needs_payment()) {
-			$this->nac_order_pay_send_404();
-		}
-
-		$expiry_seconds = (int) apply_filters(
-			'ca_paid_full_results_order_pay_link_expiry_seconds',
-			apply_filters('ca_nac_order_pay_link_expiry_seconds', 2 * HOUR_IN_SECONDS),
-			(string) $order->get_meta('_ca_assessment_type'),
-			(int) $order->get_meta('_ca_submission_id')
-		);
-		$expiry_seconds = max(60, $expiry_seconds);
-
-		$expires_at = (int) $order->get_meta('_ca_order_pay_expires_at');
-		if ($expires_at <= 0 && $order->get_date_created()) {
-			$expires_at = $order->get_date_created()->getTimestamp() + $expiry_seconds;
-		}
-
-		if ($expires_at > 0 && time() > $expires_at) {
 			$this->nac_order_pay_send_404();
 		}
 	}

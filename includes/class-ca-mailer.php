@@ -26,15 +26,19 @@ class CA_Mailer
 		}
 
 		$cat_scores = CA_Database::get_category_scores($submission_id);
+		$assessment_type = CA_Assessment_Types::from_submission($submission);
 
-		// Build email subject and body
-		$subject = sprintf(
-			/* translators: %s: Site name. */
-			__('Your Assessment Results - %s', 'rtr-custom-assessment'),
-			get_bloginfo('name')
-		);
-
-		$body = self::build_email_body($submission, $cat_scores);
+		if (self::uses_meg_preview_completion_email($assessment_type)) {
+			$subject = __('Your preview is ready — and one thing I want you to notice', 'rtr-custom-assessment');
+			$body = self::build_meg_preview_completion_email_body($submission, $cat_scores);
+		} else {
+			$subject = sprintf(
+				/* translators: %s: Site name. */
+				__('Your Assessment Results - %s', 'rtr-custom-assessment'),
+				get_bloginfo('name')
+			);
+			$body = self::build_email_body($submission, $cat_scores);
+		}
 
 		// Setup email headers
 		$headers = array(
@@ -783,6 +787,217 @@ class CA_Mailer
 			return __('Natural Attributes Cataloging', 'rtr-custom-assessment');
 		}
 		return __('Mindset', 'rtr-custom-assessment');
+	}
+
+	/**
+	 * Whether completion email uses the Meg preview letter (NAC + Social Fluency).
+	 *
+	 * @param string $assessment_type Normalized type.
+	 * @return bool
+	 */
+	private static function uses_meg_preview_completion_email($assessment_type)
+	{
+		$t = CA_Assessment_Types::normalize($assessment_type);
+		return CA_Assessment_Types::INNER_DIMENSIONS === $t
+			|| CA_Assessment_Types::SOCIAL_FLUENCY === $t;
+	}
+
+	/**
+	 * Full-results price for email copy.
+	 *
+	 * @param object $submission Submission row.
+	 * @return float
+	 */
+	private static function get_full_results_price_for_email($submission)
+	{
+		$submission_id = (int) $submission->id;
+		$t = CA_Assessment_Types::from_submission($submission);
+		if (CA_Assessment_Types::SOCIAL_FLUENCY === $t) {
+			return (float) apply_filters('ca_social_fluency_full_results_price', 19.00, $submission_id);
+		}
+		if (CA_Assessment_Types::INNER_DIMENSIONS === $t) {
+			return (float) apply_filters('ca_inner_dimensions_full_results_price', 19.00, $submission_id);
+		}
+		return (float) apply_filters('ca_mindset_full_results_price', 9.99, $submission_id);
+	}
+
+	/**
+	 * Top category row by average score.
+	 *
+	 * @param array $cat_scores Category score rows.
+	 * @return object|null
+	 */
+	private static function get_top_category_score($cat_scores)
+	{
+		$top = null;
+		foreach ($cat_scores as $cat) {
+			if (!$top || (float) $cat->average > (float) $top->average) {
+				$top = $cat;
+			}
+		}
+		return $top;
+	}
+
+	/**
+	 * Single preview insight sentence for the Meg completion email.
+	 *
+	 * @param object $submission Submission row.
+	 * @param array  $cat_scores Category scores.
+	 * @return string
+	 */
+	private static function get_meg_preview_insight_line($submission, $cat_scores)
+	{
+		$assessment_type = CA_Assessment_Types::from_submission($submission);
+		$top_cat = self::get_top_category_score($cat_scores);
+
+		if (CA_Assessment_Types::SOCIAL_FLUENCY === $assessment_type) {
+			$domain_name = $top_cat
+				? (string) $top_cat->category_name
+				: __('your strongest domain', 'rtr-custom-assessment');
+			$summary = $top_cat
+				? CA_Scoring::get_category_summary((string) $top_cat->category_name, (float) $top_cat->average, $assessment_type)
+				: __('This is where your social strengths show up most clearly.', 'rtr-custom-assessment');
+			$tier = CA_Scoring::get_overall_profile((float) $submission->average_score, $assessment_type);
+
+			return sprintf(
+				/* translators: 1: social fluency tier, 2: domain name, 3: insight summary */
+				__('Your overall Social Fluency tier is %1$s — and your strongest domain, %2$s, stands out: %3$s', 'rtr-custom-assessment'),
+				$tier,
+				$domain_name,
+				$summary
+			);
+		}
+
+		$attr_name = $top_cat
+			? (string) $top_cat->category_name
+			: __('your strongest constant', 'rtr-custom-assessment');
+		$summary = $top_cat
+			? CA_Scoring::get_category_summary((string) $top_cat->category_name, (float) $top_cat->average, $assessment_type)
+			: __('You respond most strongly where your natural strengths are already active.', 'rtr-custom-assessment');
+
+		return sprintf(
+			/* translators: 1: constant/attribute name, 2: insight summary */
+			__('Your strongest constant appears to be %1$s — %2$s', 'rtr-custom-assessment'),
+			$attr_name,
+			$summary
+		);
+	}
+
+	/**
+	 * Meg-style completion email for Natural Attributes + Social Fluency previews.
+	 *
+	 * @param object $submission Submission record.
+	 * @param array  $cat_scores Category scores.
+	 * @return string HTML email body.
+	 */
+	private static function build_meg_preview_completion_email_body($submission, $cat_scores)
+	{
+		$assessment_type = CA_Assessment_Types::from_submission($submission);
+		$first_name = trim((string) $submission->first_name);
+		if ('' === $first_name) {
+			$first_name = __('there', 'rtr-custom-assessment');
+		}
+
+		$preview_insight = self::get_meg_preview_insight_line($submission, $cat_scores);
+		$paid_unlocked = self::submission_has_paid_full_results_order($submission);
+		$price = self::get_full_results_price_for_email($submission);
+		$price_display = '$' . number_format($price, 0);
+
+		$paywall_url = '';
+		if (!$paid_unlocked) {
+			$ajax = CA_Ajax::get_instance();
+			if ($ajax) {
+				$paywall_url = (string) $ajax->get_paid_full_results_order_pay_url_for_submission((int) $submission->id);
+			}
+			if ('' === $paywall_url && function_exists('wc_get_checkout_url')) {
+				$paywall_url = wc_get_checkout_url();
+			}
+		}
+
+		if (CA_Assessment_Types::SOCIAL_FLUENCY === $assessment_type) {
+			$full_report_teaser = sprintf(
+				/* translators: %s: price e.g. $19 */
+				__('If you want to see the full read — your complete domain breakdown, how your social patterns interact, and where they\'re likely underused right now — your personalized report is %s.', 'rtr-custom-assessment'),
+				$price_display
+			);
+		} else {
+			$full_report_teaser = sprintf(
+				/* translators: %s: price e.g. $19 */
+				__('If you want to see the full read — your top five constants ranked, how they interact, and where they\'re likely underused right now — your personalized report is %s.', 'rtr-custom-assessment'),
+				$price_display
+			);
+		}
+
+		$unlock_block = '';
+		if ($paid_unlocked) {
+			$unlock_block = '<p style="margin:24px 0 0;font-size:15px;line-height:1.7;color:#444;">'
+				. esc_html__('Your payment is complete — your full personalized report is available from your order confirmation.', 'rtr-custom-assessment')
+				. '</p>';
+		} elseif ('' !== trim($paywall_url)) {
+			$unlock_block = '<p style="margin:24px 0 16px;font-size:15px;line-height:1.7;color:#444;">'
+				. esc_html($full_report_teaser)
+				. '</p>'
+				. '<p style="margin:0 0 24px;text-align:left;">'
+				. '<a href="' . esc_url($paywall_url) . '" style="display:inline-block;color:#aa3130;font-weight:600;font-size:15px;text-decoration:none;">'
+				. esc_html__('→ Unlock my full report', 'rtr-custom-assessment')
+				. '</a></p>'
+				. '<p style="margin:0 0 8px;font-size:15px;line-height:1.7;color:#444;">'
+				. esc_html__('If the preview was enough for this season, that\'s a valid choice too. I\'ll check in again in a couple of days with the next piece of the equation.', 'rtr-custom-assessment')
+				. '</p>';
+		} else {
+			$unlock_block = '<p style="margin:24px 0 8px;font-size:15px;line-height:1.7;color:#444;">'
+				. esc_html($full_report_teaser)
+				. '</p>'
+				. '<p style="margin:0 0 8px;font-size:15px;line-height:1.7;color:#444;">'
+				. esc_html__('If the preview was enough for this season, that\'s a valid choice too. I\'ll check in again in a couple of days with the next piece of the equation.', 'rtr-custom-assessment')
+				. '</p>';
+		}
+
+		$preheader = __('Your free assessment, one insight in.', 'rtr-custom-assessment');
+
+		return '
+		<!DOCTYPE html>
+		<html lang="en">
+		<head>
+			<meta charset="UTF-8">
+			<meta name="viewport" content="width=device-width, initial-scale=1.0">
+			<title>' . esc_html__('Your preview is ready', 'rtr-custom-assessment') . '</title>
+			<style>
+				body { margin:0; padding:0; background:#f5f5f5; font-family:"Segoe UI",Tahoma,Geneva,Verdana,sans-serif; color:#333; line-height:1.65; }
+				.wrap { max-width:600px; margin:20px auto; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,.08); }
+				.content { padding:32px 28px 28px; font-size:15px; color:#444; }
+				.preview-box { background:#faf8f6; border:1px solid #e9e2d9; border-radius:8px; padding:16px 18px; margin:20px 0; }
+				.preview-label { font-size:12px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#8d2b28; margin:0 0 8px; }
+				ol.notice-list { margin:16px 0 0 18px; padding:0; }
+				ol.notice-list li { margin:0 0 10px; }
+				.sign { margin-top:28px; font-size:15px; color:#333; }
+			</style>
+		</head>
+		<body>
+			<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">' . esc_html($preheader) . '</div>
+			<div class="wrap">
+				<div class="content">
+					<p style="margin:0 0 18px;">' . sprintf(esc_html__('Hi %s,', 'rtr-custom-assessment'), esc_html($first_name)) . '</p>
+					<p style="margin:0 0 16px;">' . esc_html__('You just took the assessment. Thank you for the time — genuinely. It\'s harder than people admit to sit still for ten minutes and answer questions about yourself honestly.', 'rtr-custom-assessment') . '</p>
+					<p style="margin:0 0 16px;">' . esc_html__('Your preview insight is below. But before you read it, one request: read it slowly.', 'rtr-custom-assessment') . '</p>
+					<p style="margin:0 0 20px;">' . esc_html__('Most of us scan these kinds of results looking for a label. A type. Something to put on our LinkedIn bio and keep moving. That\'s not what this is.', 'rtr-custom-assessment') . '</p>
+					<div class="preview-box">
+						<p class="preview-label">' . esc_html__('Your preview', 'rtr-custom-assessment') . '</p>
+						<p style="margin:0;font-size:15px;line-height:1.65;color:#333;">' . esc_html($preview_insight) . '</p>
+					</div>
+					<p style="margin:20px 0 8px;font-weight:600;color:#333;">' . esc_html__('Three things I\'d invite you to notice:', 'rtr-custom-assessment') . '</p>
+					<ol class="notice-list">
+						<li>' . esc_html__('Did this surprise you, or confirm something? Both are useful.', 'rtr-custom-assessment') . '</li>
+						<li>' . esc_html__('Where does this show up in your current work? Where does it go dormant?', 'rtr-custom-assessment') . '</li>
+						<li>' . esc_html__('When was the last time you credited yourself for it?', 'rtr-custom-assessment') . '</li>
+					</ol>
+					<p style="margin:18px 0 0;">' . esc_html__('You don\'t need to answer today. Just let it sit.', 'rtr-custom-assessment') . '</p>
+					' . $unlock_block . '
+					<p class="sign">' . esc_html__('With courage and grace,', 'rtr-custom-assessment') . '<br>Meg</p>
+				</div>
+			</div>
+		</body>
+		</html>';
 	}
 
 	/**
