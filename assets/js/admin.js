@@ -1503,7 +1503,11 @@ jQuery(document).ready(function ($) {
         }
 
         $sendBtn.prop("disabled", true).text(cfg.strings.sending);
-        $result.hide();
+        $result.hide().removeClass("is-loading is-success is-error");
+
+        var willReload = false;
+        var reloadTimer = null;
+        var countdownTimer = null;
 
         $.ajax({
           url: cfg.ajaxUrl,
@@ -1514,41 +1518,76 @@ jQuery(document).ready(function ($) {
         })
           .done(function (response) {
             if (response && response.success) {
-              $result
-                .addClass("is-success")
-                .removeClass("is-error")
-                .text(
-                  (response.data && response.data.message) ||
-                    cfg.strings.sent
-                )
-                .show();
-            } else {
-              var msg =
-                (response && response.data && response.data.message) ||
-                cfg.strings.failed;
-              if (
-                response &&
-                response.data &&
-                response.data.errors &&
-                response.data.errors.length
-              ) {
-                msg += " " + response.data.errors.join(" ");
+              willReload = true;
+              var successMsg =
+                (response.data && response.data.message) || cfg.strings.sent;
+              var secondsLeft = 3;
+
+              function updateReloadMessage() {
+                var reloadText = cfg.strings.reloading
+                  ? cfg.strings.reloading.replace("%d", String(secondsLeft))
+                  : "Reloading page in " + secondsLeft + " seconds…";
+                $result
+                  .addClass("is-success is-loading")
+                  .removeClass("is-error")
+                  .html(
+                    "<span class=\"ca-unpaid-email-result-text\">" +
+                      successMsg +
+                      "</span> <span class=\"ca-unpaid-email-reload-text\">" +
+                      reloadText +
+                      "</span>"
+                  )
+                  .show();
               }
-              $result
-                .addClass("is-error")
-                .removeClass("is-success")
-                .text(msg)
-                .show();
+
+              updateReloadMessage();
+              countdownTimer = window.setInterval(function () {
+                secondsLeft -= 1;
+                if (secondsLeft > 0) {
+                  updateReloadMessage();
+                }
+              }, 1000);
+
+              reloadTimer = window.setTimeout(function () {
+                window.location.reload();
+              }, 3000);
+              return;
             }
+
+            var msg =
+              (response && response.data && response.data.message) ||
+              cfg.strings.failed;
+            if (
+              response &&
+              response.data &&
+              response.data.errors &&
+              response.data.errors.length
+            ) {
+              msg += " " + response.data.errors.join(" ");
+            }
+            $result
+              .addClass("is-error")
+              .removeClass("is-success is-loading")
+              .text(msg)
+              .show();
           })
           .fail(function () {
             $result
               .addClass("is-error")
-              .removeClass("is-success")
+              .removeClass("is-success is-loading")
               .text(cfg.strings.failed)
               .show();
           })
           .always(function () {
+            if (willReload) {
+              return;
+            }
+            if (reloadTimer) {
+              window.clearTimeout(reloadTimer);
+            }
+            if (countdownTimer) {
+              window.clearInterval(countdownTimer);
+            }
             $sendBtn.prop("disabled", false).text(cfg.strings.sendEmails);
           });
       });

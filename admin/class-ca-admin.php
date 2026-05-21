@@ -492,6 +492,7 @@ class CA_Admin
 						'failed' => __('Could not send emails.', 'rtr-custom-assessment'),
 						'confirmSend' => __('Send this email to all selected recipients?', 'rtr-custom-assessment'),
 						'sendEmails' => __('Send emails', 'rtr-custom-assessment'),
+						'reloading' => __('Reloading page in %d seconds…', 'rtr-custom-assessment'),
 					),
 				)
 			);

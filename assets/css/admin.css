@@ -796,6 +796,33 @@ body,
   color: #8a2424;
 }
 
+.ca-unpaid-email-send-result.is-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ca-unpaid-email-send-result.is-loading::before {
+  content: "";
+  width: 18px;
+  height: 18px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: ca-unpaid-spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes ca-unpaid-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ca-unpaid-email-reload-text {
+  opacity: 0.85;
+}
+
 .ca-unpaid-table .check-column {
   width: 2.2em;
   vertical-align: middle;
