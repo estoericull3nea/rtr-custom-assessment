@@ -750,6 +750,57 @@ body,
   margin-top: 16px;
 }
 
+/* --- Unpaid bulk email modal ------------------------------ */
+.ca-unpaid-email-modal {
+  max-width: 920px;
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+}
+
+.ca-unpaid-email-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ca-unpaid-field-full {
+  width: 100%;
+}
+
+.ca-unpaid-email-to {
+  width: 100%;
+  box-sizing: border-box;
+  background: #f6f7f7;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.ca-unpaid-email-send-result {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.ca-unpaid-email-send-result.is-success {
+  background: #edfaef;
+  border: 1px solid #68de7c;
+  color: #1e4620;
+}
+
+.ca-unpaid-email-send-result.is-error {
+  background: #fcf0f1;
+  border: 1px solid #d63638;
+  color: #8a2424;
+}
+
+.ca-unpaid-table .check-column {
+  width: 2.2em;
+  vertical-align: middle;
+}
+
 /* --- Dashboard hub (Mindset / Social Fluency) ------------- */
 .ca-dashboard-hub-grid {
   display: grid;

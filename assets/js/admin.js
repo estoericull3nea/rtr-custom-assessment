@@ -1352,4 +1352,208 @@ jQuery(document).ready(function ($) {
       updateBulkBar();
     })();
   }
+
+  // Unpaid Full Results — bulk email modal
+  if ($("#ca-unpaid-email-modal-overlay").length && typeof caUnpaidBulkEmail !== "undefined") {
+    (function initUnpaidBulkEmail() {
+      var cfg = caUnpaidBulkEmail;
+      var $overlay = $("#ca-unpaid-email-modal-overlay");
+      var $openBtn = $(".ca-unpaid-bulk-email-open");
+      var $cancelBtn = $(".ca-unpaid-email-cancel");
+      var $sendBtn = $(".ca-unpaid-email-send");
+      var $selectAll = $("#ca-unpaid-select-all");
+      var $count = $(".ca-unpaid-selected-count");
+      var $toField = $("#ca-unpaid-email-to");
+      var $subject = $("#ca-unpaid-email-subject");
+      var $cc = $("#ca-unpaid-email-cc");
+      var $attachment = $("#ca-unpaid-email-attachment");
+      var $result = $("#ca-unpaid-email-send-result");
+      var $hint = $(".ca-unpaid-email-recipient-hint");
+
+      function getSelectedItems() {
+        return $(".ca-unpaid-select:checked");
+      }
+
+      function getEditorHtml() {
+        var editorId = "ca_unpaid_email_body";
+        if (typeof tinymce !== "undefined" && tinymce.get(editorId)) {
+          return tinymce.get(editorId).getContent();
+        }
+        var $ta = $("#" + editorId);
+        return $ta.length ? $ta.val() : "";
+      }
+
+      function syncSelectAll() {
+        var $items = $(".ca-unpaid-select");
+        var total = $items.length;
+        var selected = $items.filter(":checked").length;
+        if (total === 0) {
+          $selectAll.prop("checked", false);
+          return;
+        }
+        $selectAll.prop("checked", selected === total);
+      }
+
+      function updateBar() {
+        var $selected = getSelectedItems();
+        var count = $selected.length;
+        $count.text(
+          count +
+            " " +
+            (count === 1 ? "selected" : "selected")
+        );
+        $openBtn.prop("disabled", count === 0);
+        syncSelectAll();
+      }
+
+      function buildToPreview($selected) {
+        var lines = [];
+        $selected.each(function () {
+          var email = $(this).data("email") || "";
+          var name = $(this).data("name") || "";
+          if (email) {
+            lines.push(
+              (name ? name + " <" + email + ">" : email)
+            );
+          }
+        });
+        return lines.join("\n");
+      }
+
+      function openModal() {
+        var $selected = getSelectedItems();
+        if (!$selected.length) {
+          window.alert(cfg.strings.selectOne);
+          return;
+        }
+        $toField.val(buildToPreview($selected));
+        $hint.text(
+          $selected.length +
+            " recipient(s) — each will receive a personalized message."
+        );
+        $result.hide().removeClass("is-success is-error").empty();
+        $attachment.val("");
+        $overlay.show().attr("aria-hidden", "false");
+        window.setTimeout(function () {
+          if (typeof tinymce !== "undefined" && tinymce.get("ca_unpaid_email_body")) {
+            tinymce.get("ca_unpaid_email_body").show();
+          }
+        }, 50);
+      }
+
+      function closeModal() {
+        $overlay.hide().attr("aria-hidden", "true");
+      }
+
+      $(document).on("click", ".ca-unpaid-bulk-email-open", function (e) {
+        e.preventDefault();
+        openModal();
+      });
+
+      $(document).on("click", ".ca-unpaid-email-cancel", function (e) {
+        e.preventDefault();
+        closeModal();
+      });
+
+      $overlay.on("click", function (e) {
+        if (e.target === $overlay[0]) {
+          closeModal();
+        }
+      });
+
+      $selectAll.on("change", function () {
+        var checked = $(this).is(":checked");
+        $(".ca-unpaid-select").prop("checked", checked);
+        updateBar();
+      });
+
+      $(document).on("change", ".ca-unpaid-select", updateBar);
+
+      $sendBtn.on("click", function (e) {
+        e.preventDefault();
+        var $selected = getSelectedItems();
+        if (!$selected.length) {
+          window.alert(cfg.strings.selectOne);
+          return;
+        }
+        if (!window.confirm(cfg.strings.confirmSend)) {
+          return;
+        }
+
+        var recipients = $selected
+          .map(function () {
+            return $(this).val();
+          })
+          .get();
+
+        var formData = new FormData();
+        formData.append("action", "ca_unpaid_bulk_send_emails");
+        formData.append("nonce", cfg.nonce);
+        formData.append("tab", cfg.tab);
+        formData.append("subject", $subject.val() || "");
+        formData.append("body", getEditorHtml());
+        formData.append("cc", $cc.val() || "");
+        recipients.forEach(function (token) {
+          formData.append("recipients[]", token);
+        });
+
+        var fileInput = $attachment[0];
+        if (fileInput && fileInput.files && fileInput.files[0]) {
+          formData.append("attachment", fileInput.files[0]);
+        }
+
+        $sendBtn.prop("disabled", true).text(cfg.strings.sending);
+        $result.hide();
+
+        $.ajax({
+          url: cfg.ajaxUrl,
+          method: "POST",
+          data: formData,
+          processData: false,
+          contentType: false,
+        })
+          .done(function (response) {
+            if (response && response.success) {
+              $result
+                .addClass("is-success")
+                .removeClass("is-error")
+                .text(
+                  (response.data && response.data.message) ||
+                    cfg.strings.sent
+                )
+                .show();
+            } else {
+              var msg =
+                (response && response.data && response.data.message) ||
+                cfg.strings.failed;
+              if (
+                response &&
+                response.data &&
+                response.data.errors &&
+                response.data.errors.length
+              ) {
+                msg += " " + response.data.errors.join(" ");
+              }
+              $result
+                .addClass("is-error")
+                .removeClass("is-success")
+                .text(msg)
+                .show();
+            }
+          })
+          .fail(function () {
+            $result
+              .addClass("is-error")
+              .removeClass("is-success")
+              .text(cfg.strings.failed)
+              .show();
+          })
+          .always(function () {
+            $sendBtn.prop("disabled", false).text(cfg.strings.sendEmails);
+          });
+      });
+
+      updateBar();
+    })();
+  }
 });

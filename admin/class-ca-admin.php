@@ -21,6 +21,7 @@ class CA_Admin
 		add_action('admin_init', array($this, 'handle_edit_category_action'));
 		add_action('admin_init', array($this, 'handle_questions_action'));
 		add_action('wp_ajax_ca_edit_question_ajax', array($this, 'handle_edit_question_ajax'));
+		add_action('wp_ajax_ca_unpaid_bulk_send_emails', array($this, 'ajax_unpaid_bulk_send_emails'));
 		add_action('admin_menu', array($this, 'register_menu'));
 		add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
 	}
@@ -470,6 +471,56 @@ class CA_Admin
 			CA_VERSION,
 			true
 		);
+
+		if ($this->is_unpaid_full_results_admin_screen($hook)) {
+			wp_enqueue_editor();
+			$tab = $this->get_unpaid_admin_tab();
+			wp_localize_script(
+				'ca-admin-scripts',
+				'caUnpaidBulkEmail',
+				array(
+					'ajaxUrl' => admin_url('admin-ajax.php'),
+					'nonce' => wp_create_nonce('ca_unpaid_bulk_email'),
+					'tab' => $tab,
+					'defaults' => $this->get_unpaid_bulk_email_defaults($tab),
+					'defaultCc' => (string) get_option('ca_unpaid_bulk_email_default_cc', ''),
+					'strings' => array(
+						'selectOne' => __('Select at least one customer.', 'rtr-custom-assessment'),
+						'sending' => __('Sending…', 'rtr-custom-assessment'),
+						'sent' => __('Emails sent successfully.', 'rtr-custom-assessment'),
+						'partial' => __('Some emails could not be sent.', 'rtr-custom-assessment'),
+						'failed' => __('Could not send emails.', 'rtr-custom-assessment'),
+						'confirmSend' => __('Send this email to all selected recipients?', 'rtr-custom-assessment'),
+						'sendEmails' => __('Send emails', 'rtr-custom-assessment'),
+					),
+				)
+			);
+		}
+	}
+
+	/**
+	 * Whether the current admin screen is Unpaid Full Results.
+	 *
+	 * @param string $hook_suffix Admin page hook.
+	 * @return bool
+	 */
+	private function is_unpaid_full_results_admin_screen($hook_suffix)
+	{
+		return false !== strpos((string) $hook_suffix, 'custom-assessment-unpaid');
+	}
+
+	/**
+	 * Active tab on the unpaid full-results screen.
+	 *
+	 * @return string inner|social|bundle
+	 */
+	private function get_unpaid_admin_tab()
+	{
+		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- Read-only routing.
+		$tab = isset($_GET['ca_unpaid_tab']) ? sanitize_key(wp_unslash($_GET['ca_unpaid_tab'])) : 'inner';
+		// phpcs:enable WordPress.Security.NonceVerification.Recommended
+		$allowed = array('inner', 'social', 'bundle');
+		return in_array($tab, $allowed, true) ? $tab : 'inner';
 	}
 
 	/**
@@ -1961,9 +2012,20 @@ class CA_Admin
 					<p><?php esc_html_e('No unpaid full-results customers in this category.', 'rtr-custom-assessment'); ?></p>
 				</div>
 			<?php else : ?>
-				<table class="wp-list-table widefat fixed striped ca-admin-table" style="margin-top:20px;">
+				<div class="ca-bulk-actions-bar ca-unpaid-bulk-bar">
+					<button type="button" class="button button-primary ca-unpaid-bulk-email-open" disabled>
+						<?php esc_html_e('Send emails', 'rtr-custom-assessment'); ?>
+					</button>
+					<span class="ca-bulk-selected-count ca-unpaid-selected-count">0 <?php esc_html_e('selected', 'rtr-custom-assessment'); ?></span>
+				</div>
+
+				<table class="wp-list-table widefat fixed striped ca-admin-table ca-unpaid-table" style="margin-top:12px;">
 					<thead>
 						<tr>
+							<td class="manage-column column-cb check-column">
+								<label class="screen-reader-text" for="ca-unpaid-select-all"><?php esc_html_e('Select all', 'rtr-custom-assessment'); ?></label>
+								<input type="checkbox" id="ca-unpaid-select-all">
+							</td>
 							<?php if ('bundle' === $tab) : ?>
 								<th scope="col"><?php esc_html_e('Name', 'rtr-custom-assessment'); ?></th>
 								<th scope="col"><?php esc_html_e('Email', 'rtr-custom-assessment'); ?></th>
@@ -1990,9 +2052,22 @@ class CA_Admin
 								$social = $row['social'];
 								$pay_url = $ajax ? (string) $ajax->get_bundle_order_pay_url_for_submissions((int) $row['inner_id'], (int) $row['social_id']) : '';
 								$completed_at = max(strtotime((string) $inner->updated_at), strtotime((string) $social->updated_at));
+								$recipient_token = 'bundle:' . (int) $row['inner_id'] . ':' . (int) $row['social_id'];
+								$recipient_name = trim((string) $inner->first_name . ' ' . (string) $inner->last_name);
 								?>
 								<tr>
-									<td><strong><?php echo esc_html(trim((string) $inner->first_name . ' ' . (string) $inner->last_name)); ?></strong></td>
+									<th scope="row" class="check-column">
+										<input
+											type="checkbox"
+											class="ca-unpaid-select"
+											value="<?php echo esc_attr($recipient_token); ?>"
+											data-email="<?php echo esc_attr((string) $inner->email); ?>"
+											data-name="<?php echo esc_attr($recipient_name); ?>"
+											data-pay-link="<?php echo esc_attr($pay_url); ?>"
+											data-assessment="<?php echo esc_attr__('Bundle: Natural Attributes + Social Fluency', 'rtr-custom-assessment'); ?>"
+										>
+									</th>
+									<td><strong><?php echo esc_html($recipient_name); ?></strong></td>
 									<td><?php echo esc_html((string) $inner->email); ?></td>
 									<td class="ca-col-id"><?php echo esc_html((string) $row['inner_id']); ?></td>
 									<td class="ca-col-id"><?php echo esc_html((string) $row['social_id']); ?></td>
@@ -2018,8 +2093,22 @@ class CA_Admin
 								$sub = $row;
 								$pay_url = $ajax ? (string) $ajax->get_paid_full_results_order_pay_url_for_submission((int) $sub->id) : '';
 								$order_info = $this->get_latest_unpaid_full_results_order_for_submission((int) $sub->id, CA_Assessment_Types::from_submission($sub));
+								$recipient_token = 'sub:' . (int) $sub->id;
+								$recipient_name = trim((string) $sub->first_name . ' ' . (string) $sub->last_name);
+								$assessment_label = $this->admin_submission_assessment_label($sub);
 								?>
 								<tr>
+									<th scope="row" class="check-column">
+										<input
+											type="checkbox"
+											class="ca-unpaid-select"
+											value="<?php echo esc_attr($recipient_token); ?>"
+											data-email="<?php echo esc_attr((string) $sub->email); ?>"
+											data-name="<?php echo esc_attr($recipient_name); ?>"
+											data-pay-link="<?php echo esc_attr($pay_url); ?>"
+											data-assessment="<?php echo esc_attr($assessment_label); ?>"
+										>
+									</th>
 									<td class="ca-col-id"><?php echo esc_html((string) $sub->id); ?></td>
 									<td><strong><?php echo esc_html(trim((string) $sub->first_name . ' ' . (string) $sub->last_name)); ?></strong></td>
 									<td><?php echo esc_html((string) $sub->email); ?></td>
@@ -2073,9 +2162,436 @@ class CA_Admin
 						</div>
 					</div>
 				<?php endif; ?>
+
+				<?php $this->render_unpaid_bulk_email_modal($tab); ?>
 			<?php endif; ?>
 		</div>
 		<?php
+	}
+
+	/**
+	 * Modal for composing and sending bulk emails to unpaid customers.
+	 *
+	 * @param string $tab inner|social|bundle.
+	 */
+	private function render_unpaid_bulk_email_modal($tab)
+	{
+		$defaults = $this->get_unpaid_bulk_email_defaults($tab);
+		$default_cc = (string) get_option('ca_unpaid_bulk_email_default_cc', '');
+		?>
+		<div class="ca-bulk-edit-modal-overlay ca-unpaid-email-modal-overlay" id="ca-unpaid-email-modal-overlay" style="display:none;" aria-hidden="true">
+			<div class="ca-bulk-edit-modal ca-unpaid-email-modal" role="dialog" aria-labelledby="ca-unpaid-email-modal-title">
+				<h3 id="ca-unpaid-email-modal-title"><?php esc_html_e('Send email to selected customers', 'rtr-custom-assessment'); ?></h3>
+				<p class="description ca-unpaid-email-recipient-hint"></p>
+
+				<div class="ca-unpaid-email-fields">
+					<div class="ca-bulk-field ca-unpaid-field-full">
+						<label for="ca-unpaid-email-to"><?php esc_html_e('To', 'rtr-custom-assessment'); ?></label>
+						<textarea id="ca-unpaid-email-to" rows="3" readonly class="ca-unpaid-email-to"></textarea>
+						<p class="description"><?php esc_html_e('One recipient per send. Placeholders in the message are replaced per customer.', 'rtr-custom-assessment'); ?></p>
+					</div>
+
+					<div class="ca-bulk-field ca-unpaid-field-full">
+						<label for="ca-unpaid-email-subject"><?php esc_html_e('Subject', 'rtr-custom-assessment'); ?></label>
+						<input type="text" id="ca-unpaid-email-subject" class="widefat" value="<?php echo esc_attr((string) $defaults['subject']); ?>">
+					</div>
+
+					<div class="ca-bulk-field ca-unpaid-field-full">
+						<label for="ca-unpaid-email-body"><?php esc_html_e('Message', 'rtr-custom-assessment'); ?></label>
+						<p class="description">
+							<?php
+							esc_html_e('Placeholders:', 'rtr-custom-assessment');
+							echo ' {name}, {first_name}, {last_name}, {email}, {pay_link}, {pay_link_html}, {assessment}';
+							?>
+						</p>
+						<?php
+						wp_editor(
+							(string) $defaults['body'],
+							'ca_unpaid_email_body',
+							array(
+								'textarea_name' => 'ca_unpaid_email_body',
+								'textarea_rows' => 12,
+								'media_buttons' => false,
+								'teeny' => false,
+								'quicktags' => true,
+							)
+						);
+						?>
+					</div>
+
+					<div class="ca-bulk-field">
+						<label for="ca-unpaid-email-cc"><?php esc_html_e('CC', 'rtr-custom-assessment'); ?></label>
+						<input type="text" id="ca-unpaid-email-cc" class="widefat" value="<?php echo esc_attr($default_cc); ?>" placeholder="<?php esc_attr_e('email@example.com, another@example.com', 'rtr-custom-assessment'); ?>">
+						<p class="description"><?php esc_html_e('Comma-separated addresses. Saved as default for next time.', 'rtr-custom-assessment'); ?></p>
+					</div>
+
+					<div class="ca-bulk-field">
+						<label for="ca-unpaid-email-attachment"><?php esc_html_e('Attachment', 'rtr-custom-assessment'); ?></label>
+						<input type="file" id="ca-unpaid-email-attachment" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.gif,.webp">
+						<p class="description"><?php esc_html_e('Optional. Max 10 MB. PDF, Word, or image.', 'rtr-custom-assessment'); ?></p>
+					</div>
+				</div>
+
+				<div id="ca-unpaid-email-send-result" class="ca-unpaid-email-send-result" style="display:none;"></div>
+
+				<div class="ca-bulk-edit-actions">
+					<button type="button" class="button ca-unpaid-email-cancel"><?php esc_html_e('Cancel', 'rtr-custom-assessment'); ?></button>
+					<button type="button" class="button button-primary ca-unpaid-email-send"><?php esc_html_e('Send emails', 'rtr-custom-assessment'); ?></button>
+				</div>
+			</div>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Default subject/body for unpaid bulk email by tab.
+	 *
+	 * @param string $tab inner|social|bundle.
+	 * @return array{subject:string,body:string}
+	 */
+	private function get_unpaid_bulk_email_defaults($tab)
+	{
+		$blog_name = get_bloginfo('name');
+		$tab = in_array($tab, array('inner', 'social', 'bundle'), true) ? $tab : 'inner';
+
+		if ('bundle' === $tab) {
+			$subject = sprintf(
+				/* translators: %s: site name */
+				__('Unlock your full assessment bundle — %s', 'rtr-custom-assessment'),
+				$blog_name
+			);
+			$assessment = __('Natural Attributes + Social Fluency bundle', 'rtr-custom-assessment');
+		} elseif ('social' === $tab) {
+			$subject = sprintf(
+				/* translators: %s: site name */
+				__('Unlock your Social Fluency full results — %s', 'rtr-custom-assessment'),
+				$blog_name
+			);
+			$assessment = __('Social Fluency', 'rtr-custom-assessment');
+		} else {
+			$subject = sprintf(
+				/* translators: %s: site name */
+				__('Unlock your Natural Attributes full results — %s', 'rtr-custom-assessment'),
+				$blog_name
+			);
+			$assessment = __('Natural Attributes Quick Scan', 'rtr-custom-assessment');
+		}
+
+		$body = '<p>' . esc_html__('Hi {name},', 'rtr-custom-assessment') . '</p>';
+		$body .= '<p>' . sprintf(
+			/* translators: %s: assessment name */
+			esc_html__('Thank you for completing the %s assessment. Your full personalized report is ready — complete checkout using your secure link below.', 'rtr-custom-assessment'),
+			esc_html($assessment)
+		) . '</p>';
+		$body .= '<p style="margin:24px 0;"><a href="{pay_link}" style="display:inline-block;background:#aa3130;color:#fff;text-decoration:none;padding:12px 22px;border-radius:6px;font-weight:600;">' . esc_html__('Unlock full results', 'rtr-custom-assessment') . '</a></p>';
+		$body .= '<p style="font-size:13px;color:#666;">' . esc_html__('If the button does not work, copy and paste this link into your browser:', 'rtr-custom-assessment') . '<br>{pay_link_html}</p>';
+		$body .= '<p>' . esc_html__('Thank you,', 'rtr-custom-assessment') . '<br>' . esc_html($blog_name) . '</p>';
+
+		return array(
+			'subject' => $subject,
+			'body' => $body,
+		);
+	}
+
+	/**
+	 * AJAX: send bulk emails to selected unpaid customers.
+	 */
+	public function ajax_unpaid_bulk_send_emails()
+	{
+		check_ajax_referer('ca_unpaid_bulk_email', 'nonce');
+
+		if (!current_user_can('manage_options')) {
+			wp_send_json_error(array('message' => __('Permission denied.', 'rtr-custom-assessment')), 403);
+		}
+
+		// phpcs:disable WordPress.Security.NonceVerification.Missing -- Verified above.
+		$raw_recipients = isset($_POST['recipients']) ? wp_unslash($_POST['recipients']) : array();
+		$subject_tpl = isset($_POST['subject']) ? sanitize_text_field(wp_unslash($_POST['subject'])) : '';
+		$body_tpl = isset($_POST['body']) ? wp_kses_post(wp_unslash($_POST['body'])) : '';
+		$cc = isset($_POST['cc']) ? sanitize_text_field(wp_unslash($_POST['cc'])) : '';
+		$tab = isset($_POST['tab']) ? sanitize_key(wp_unslash($_POST['tab'])) : $this->get_unpaid_admin_tab();
+		// phpcs:enable WordPress.Security.NonceVerification.Missing
+
+		if (!is_array($raw_recipients) || array() === $raw_recipients) {
+			wp_send_json_error(array('message' => __('No recipients selected.', 'rtr-custom-assessment')));
+		}
+
+		if ('' === trim($subject_tpl) || '' === trim(wp_strip_all_tags($body_tpl))) {
+			wp_send_json_error(array('message' => __('Subject and message are required.', 'rtr-custom-assessment')));
+		}
+
+		update_option('ca_unpaid_bulk_email_default_cc', $cc, false);
+
+		$attachment_path = $this->handle_unpaid_bulk_email_attachment_upload();
+		if (is_wp_error($attachment_path)) {
+			wp_send_json_error(array('message' => $attachment_path->get_error_message()));
+		}
+
+		$attachments = array();
+		if (is_string($attachment_path) && '' !== $attachment_path) {
+			$attachments[] = $attachment_path;
+		}
+
+		$sent = 0;
+		$failed = 0;
+		$errors = array();
+
+		foreach ($raw_recipients as $token) {
+			$recipient = $this->resolve_unpaid_bulk_recipient(sanitize_text_field((string) $token));
+			if (is_wp_error($recipient)) {
+				$failed++;
+				$errors[] = $recipient->get_error_message();
+				continue;
+			}
+
+			$to = sanitize_email((string) $recipient['email']);
+			if (!is_email($to)) {
+				$failed++;
+				$errors[] = sprintf(
+					/* translators: %s: recipient label */
+					__('Invalid email for %s.', 'rtr-custom-assessment'),
+					(string) $recipient['name']
+				);
+				continue;
+			}
+
+			$subject = $this->replace_unpaid_email_placeholders($subject_tpl, $recipient);
+			$body = $this->replace_unpaid_email_placeholders($body_tpl, $recipient);
+			$headers = $this->build_unpaid_bulk_email_headers($cc);
+
+			$ok = wp_mail($to, $subject, $body, $headers, $attachments);
+			if ($ok) {
+				$sent++;
+				CA_Logger::log(
+					'admin_unpaid_bulk_email',
+					'success',
+					'Bulk reminder email sent.',
+					array(
+						'email' => $to,
+						'tab' => $tab,
+						'token' => (string) $token,
+					)
+				);
+			} else {
+				$failed++;
+				$errors[] = sprintf(
+					/* translators: %s: email address */
+					__('Failed to send to %s.', 'rtr-custom-assessment'),
+					$to
+				);
+				CA_Logger::log(
+					'admin_unpaid_bulk_email',
+					'error',
+					'Bulk reminder email failed.',
+					array('email' => $to, 'tab' => $tab)
+				);
+			}
+		}
+
+		if (is_string($attachment_path) && '' !== $attachment_path && file_exists($attachment_path)) {
+			wp_delete_file($attachment_path);
+		}
+
+		if ($sent > 0 && 0 === $failed) {
+			wp_send_json_success(
+				array(
+					'message' => sprintf(
+						/* translators: %d: number of emails */
+						_n('%d email sent.', '%d emails sent.', $sent, 'rtr-custom-assessment'),
+						$sent
+					),
+					'sent' => $sent,
+					'failed' => $failed,
+				)
+			);
+		}
+
+		if ($sent > 0) {
+			wp_send_json_success(
+				array(
+					'message' => sprintf(
+						/* translators: 1: sent count, 2: failed count */
+						__('%1$d sent, %2$d failed.', 'rtr-custom-assessment'),
+						$sent,
+						$failed
+					),
+					'sent' => $sent,
+					'failed' => $failed,
+					'errors' => $errors,
+				)
+			);
+		}
+
+		wp_send_json_error(
+			array(
+				'message' => __('No emails were sent.', 'rtr-custom-assessment'),
+				'errors' => $errors,
+			)
+		);
+	}
+
+	/**
+	 * Build headers for unpaid bulk email.
+	 *
+	 * @param string $cc Comma-separated CC addresses.
+	 * @return array<int, string>
+	 */
+	private function build_unpaid_bulk_email_headers($cc)
+	{
+		$headers = array(
+			'Content-Type: text/html; charset=UTF-8',
+			'From: ' . get_bloginfo('name') . ' <' . get_option('admin_email') . '>',
+		);
+
+		$cc_list = array_filter(array_map('trim', explode(',', (string) $cc)));
+		$valid_cc = array();
+		foreach ($cc_list as $addr) {
+			$clean = sanitize_email($addr);
+			if (is_email($clean)) {
+				$valid_cc[] = $clean;
+			}
+		}
+		if (!empty($valid_cc)) {
+			$headers[] = 'Cc: ' . implode(', ', $valid_cc);
+		}
+
+		return $headers;
+	}
+
+	/**
+	 * Handle optional attachment upload for bulk email.
+	 *
+	 * @return string|\WP_Error Path to temp file, empty string if none, or error.
+	 */
+	private function handle_unpaid_bulk_email_attachment_upload()
+	{
+		if (empty($_FILES['attachment']['name'])) {
+			return '';
+		}
+
+		require_once ABSPATH . 'wp-admin/includes/file.php';
+
+		$overrides = array(
+			'test_form' => false,
+			'mimes' => array(
+				'pdf' => 'application/pdf',
+				'doc' => 'application/msword',
+				'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+				'png' => 'image/png',
+				'jpg|jpeg' => 'image/jpeg',
+				'gif' => 'image/gif',
+				'webp' => 'image/webp',
+			),
+		);
+
+		$uploaded = wp_handle_upload($_FILES['attachment'], $overrides);
+		if (isset($uploaded['error'])) {
+			return new WP_Error('ca_upload_failed', (string) $uploaded['error']);
+		}
+
+		if (empty($uploaded['file'])) {
+			return new WP_Error('ca_upload_failed', __('Could not upload attachment.', 'rtr-custom-assessment'));
+		}
+
+		$max_bytes = 10 * 1024 * 1024;
+		if (filesize($uploaded['file']) > $max_bytes) {
+			wp_delete_file($uploaded['file']);
+			return new WP_Error('ca_upload_too_large', __('Attachment must be 10 MB or smaller.', 'rtr-custom-assessment'));
+		}
+
+		return (string) $uploaded['file'];
+	}
+
+	/**
+	 * Resolve a bulk-email recipient token to send data.
+	 *
+	 * @param string $token sub:{id} or bundle:{inner}:{social}.
+	 * @return array<string, string>|\WP_Error
+	 */
+	private function resolve_unpaid_bulk_recipient($token)
+	{
+		$ajax = CA_Ajax::get_instance();
+
+		if (0 === strpos($token, 'sub:')) {
+			$submission_id = (int) substr($token, 4);
+			$submission = CA_Database::get_submission($submission_id);
+			if (!$submission || 'completed' !== (string) $submission->status) {
+				return new WP_Error('ca_invalid_submission', __('Invalid submission.', 'rtr-custom-assessment'));
+			}
+			if (CA_Mailer::submission_has_paid_full_results_order($submission)) {
+				return new WP_Error('ca_already_paid', __('Submission already paid.', 'rtr-custom-assessment'));
+			}
+
+			$pay_link = $ajax ? (string) $ajax->get_paid_full_results_order_pay_url_for_submission($submission_id) : '';
+
+			return array(
+				'email' => (string) $submission->email,
+				'first_name' => (string) $submission->first_name,
+				'last_name' => (string) $submission->last_name,
+				'name' => trim((string) $submission->first_name . ' ' . (string) $submission->last_name),
+				'pay_link' => $pay_link,
+				'assessment' => $this->admin_submission_assessment_label($submission),
+			);
+		}
+
+		if (0 === strpos($token, 'bundle:')) {
+			$parts = explode(':', $token);
+			if (count($parts) < 3) {
+				return new WP_Error('ca_invalid_bundle', __('Invalid bundle selection.', 'rtr-custom-assessment'));
+			}
+			$inner_id = (int) $parts[1];
+			$social_id = (int) $parts[2];
+			$inner = CA_Database::get_submission($inner_id);
+			$social = CA_Database::get_submission($social_id);
+			if (
+				!$inner || !$social
+				|| 'completed' !== (string) $inner->status
+				|| 'completed' !== (string) $social->status
+			) {
+				return new WP_Error('ca_invalid_bundle', __('Invalid bundle submissions.', 'rtr-custom-assessment'));
+			}
+
+			$pay_link = $ajax ? (string) $ajax->get_bundle_order_pay_url_for_submissions($inner_id, $social_id) : '';
+
+			return array(
+				'email' => (string) $inner->email,
+				'first_name' => (string) $inner->first_name,
+				'last_name' => (string) $inner->last_name,
+				'name' => trim((string) $inner->first_name . ' ' . (string) $inner->last_name),
+				'pay_link' => $pay_link,
+				'assessment' => __('Bundle: Natural Attributes + Social Fluency', 'rtr-custom-assessment'),
+			);
+		}
+
+		return new WP_Error('ca_invalid_token', __('Invalid recipient.', 'rtr-custom-assessment'));
+	}
+
+	/**
+	 * Replace merge tags in bulk email subject/body.
+	 *
+	 * @param string               $text      Template text.
+	 * @param array<string, string> $recipient Recipient data.
+	 * @return string
+	 */
+	private function replace_unpaid_email_placeholders($text, $recipient)
+	{
+		$pay_link = (string) $recipient['pay_link'];
+		$pay_link_url = '' !== $pay_link ? esc_url($pay_link) : '';
+		$pay_link_html = '' !== $pay_link
+			? '<a href="' . esc_url($pay_link) . '">' . esc_html($pay_link) . '</a>'
+			: esc_html__('(payment link unavailable)', 'rtr-custom-assessment');
+
+		$map = array(
+			'{name}' => (string) $recipient['name'],
+			'{first_name}' => (string) $recipient['first_name'],
+			'{last_name}' => (string) $recipient['last_name'],
+			'{email}' => (string) $recipient['email'],
+			'{pay_link}' => $pay_link_url,
+			'{pay_link_html}' => $pay_link_html,
+			'{assessment}' => (string) $recipient['assessment'],
+		);
+
+		return str_replace(array_keys($map), array_values($map), $text);
 	}
 
 	/**
