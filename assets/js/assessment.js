@@ -857,9 +857,6 @@
   function clearSavedSession() {
     localStorage.removeItem(sessionStorageKey());
     clearDraftAnswers();
-    if (state.bundleMode) {
-      clearBundleProgress();
-    }
   }
 
   function resetState(options) {
@@ -1146,7 +1143,8 @@
       });
   }
 
-  function saveUserInfo() {
+  function saveUserInfo(options) {
+    options = options || {};
     var data = withAssessment({
       action: "ca_save_user_info",
       nonce: CA_Config.nonce,
@@ -1157,8 +1155,17 @@
       job_title: $("#ca-job-title").val().trim(),
     });
 
-    var recaptchaType = state.bundleMode ? "bundle" : state.assessmentType;
-    if (requiresRecaptchaForType(recaptchaType)) {
+    if (state.bundleMode) {
+      data.bundle_mode = 1;
+      data.bundle_stage = state.bundleStage;
+    }
+    var recaptchaType =
+      state.bundleMode && state.bundleStage >= 1
+        ? null
+        : state.bundleMode
+          ? "bundle"
+          : state.assessmentType;
+    if (recaptchaType && requiresRecaptchaForType(recaptchaType)) {
       data["g-recaptcha-response"] = getRecaptchaResponse();
     }
 
@@ -1170,6 +1177,7 @@
           if (state.bundleMode) {
             state.bundleSubmissionIds[state.assessmentType] =
               state.submissionId;
+            saveBundleProgress();
           }
           state.stepIndex = 0;
           saveSession(data.email, state.submissionId);
@@ -1225,6 +1233,9 @@
 
           loadQuestion(state.stepIndex);
         } else {
+          if (options.fromBundleContinue) {
+            showScreen("info");
+          }
           showError(
             $infoError,
             (response &&
@@ -1244,12 +1255,48 @@
           responseText:
             xhr && xhr.responseText ? xhr.responseText.slice(0, 500) : null,
         });
-        showError($infoError, getAjaxErrorMessage(xhr));
+        var msg = getAjaxErrorMessage(xhr);
+        if (options.fromBundleContinue) {
+          showScreen("info");
+          showError($infoError, msg);
+        } else {
+          showError($infoError, msg);
+        }
       })
       .always(function () {
         setBtnLoading($startBtn, false);
         state.isSubmitting = false;
       });
+  }
+
+  function beginBundleSecondAssessmentSave(email) {
+    state.isSubmitting = true;
+    setBtnLoading($startBtn, true);
+
+    findInProgressByEmail(email, function (response) {
+      if (
+        response &&
+        response.success &&
+        response.data &&
+        response.data.found &&
+        (response.data.status === "in_progress" ||
+          response.data.status === "started")
+      ) {
+        state.bundleSubmissionIds[state.bundleSecondType] =
+          response.data.submission_id;
+        saveBundleProgress();
+        state.isSubmitting = false;
+        setBtnLoading($startBtn, false);
+        resumeAssessment(
+          response.data.submission_id,
+          response.data.answers_map,
+          response.data.total,
+        );
+        return;
+      }
+
+      saveUserInfo({ fromBundleContinue: true });
+    });
   }
 
   function handleInfoSubmit(e) {
@@ -1263,8 +1310,13 @@
       return;
     }
 
-    var recaptchaType = state.bundleMode ? "bundle" : state.assessmentType;
-    if (!validateRecaptchaForStart(recaptchaType)) {
+    var recaptchaType =
+      state.bundleMode && state.bundleStage >= 1
+        ? null
+        : state.bundleMode
+          ? "bundle"
+          : state.assessmentType;
+    if (recaptchaType && !validateRecaptchaForStart(recaptchaType)) {
       return;
     }
 
@@ -1290,27 +1342,29 @@
         state.assessmentType =
           state.bundleStage >= 1 ? state.bundleSecondType : state.bundleFirstType;
 
-        if (state.bundleSubmissionIds[state.bundleFirstType]) {
-          alert(
-            "Your first bundle assessment is already done. You will proceed to the next assessment.",
-          );
+        if (
+          state.bundleSubmissionIds[state.bundleFirstType] &&
+          !state.bundleSubmissionIds[state.bundleSecondType]
+        ) {
+          state.isSubmitting = false;
+          setBtnLoading($startBtn, false);
           startBundleSecondAssessment();
           return;
         }
 
-        showResumeDialog(
-          email,
-          function () {
-            startBundleSecondAssessment();
-          },
-          function () {
-            clearBundleProgress();
-            state.isSubmitting = false;
-            setBtnLoading($startBtn, false);
-            hideProgress();
-            showScreen("bundle-order");
-          },
-        );
+        if (state.bundleSubmissionIds[state.bundleSecondType]) {
+          state.isSubmitting = false;
+          setBtnLoading($startBtn, false);
+          beginBundleSecondAssessmentSave(email);
+          return;
+        }
+      }
+
+      if (
+        state.bundleSubmissionIds[state.bundleFirstType] &&
+        !state.bundleSubmissionIds[state.bundleSecondType]
+      ) {
+        saveUserInfo();
         return;
       }
 
@@ -1794,6 +1848,13 @@
     caPost(data)
       .done(function (response) {
         if (response.success) {
+          if (state.bundleMode) {
+            state.bundleSubmissionIds[state.assessmentType] = state.submissionId;
+            saveBundleProgress();
+            if (state.bundleStage >= 1) {
+              clearBundleProgress();
+            }
+          }
           updateSubmitLoadingProgress(pAfter);
           clearSavedSession();
           loadResultsPreview(null, previewFloor);
@@ -2412,17 +2473,21 @@
   }
 
   function startBundleSecondAssessment() {
-    if (!state.bundleMode || state.bundleStage !== 0) {
-      // Only allow continue from the first assessment.
+    if (!state.bundleMode || !state.bundleSecondType) {
       return;
     }
-    if (!state.bundleSecondType) {
-      alert(CA_Config.labels.error_generic);
+
+    if (state.bundleSubmissionIds[state.bundleSecondType]) {
+      var email = $("#ca-email").val().trim();
+      if (email) {
+        beginBundleSecondAssessmentSave(email);
+      }
       return;
     }
 
     state.bundleStage = 1;
     state.assessmentType = state.bundleSecondType;
+    saveBundleProgress();
 
     var cfg = getCurrentConfig();
     if ($modalTitle && $modalTitle.length) {
@@ -2433,17 +2498,14 @@
     hideError($infoError);
     hideProgress();
 
-    var $infoBadge = $("#ca-screen-info .ca-intro-badge");
-    if ($infoBadge.length) {
-      $infoBadge.text("Your Information — second assessment");
+    var email = $("#ca-email").val().trim();
+    if (!email) {
+      showScreen("info");
+      showError($infoError, "Email is required.");
+      return;
     }
 
-    showScreen("info");
-    updateRecaptchaVisibility();
-    resetRecaptchaWidget();
-
-    state.isSubmitting = false;
-    setBtnLoading($startBtn, false);
+    beginBundleSecondAssessmentSave(email);
   }
 
   function preparePaidFullResultsCheckout(redirectAfterPrepare, buttonEl) {

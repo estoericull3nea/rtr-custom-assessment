@@ -164,7 +164,13 @@ class CA_Ajax
 			$this->send_error('ca_save_user_info', implode(' ', $errors));
 		}
 
-		if (CA_Recaptcha::applies_to_assessment($assessment_type)) {
+		// phpcs:disable WordPress.Security.NonceVerification.Missing -- Nonce verified above.
+		$bundle_mode = isset($_POST['bundle_mode']) ? absint($_POST['bundle_mode']) : 0;
+		$bundle_stage = isset($_POST['bundle_stage']) ? absint($_POST['bundle_stage']) : 0;
+		// phpcs:enable WordPress.Security.NonceVerification.Missing
+		$skip_recaptcha_for_bundle_continue = $bundle_mode && $bundle_stage >= 1;
+
+		if (CA_Recaptcha::applies_to_assessment($assessment_type) && !$skip_recaptcha_for_bundle_continue) {
 			// phpcs:disable WordPress.Security.NonceVerification.Missing -- Nonce verified; reCAPTCHA token is one-time.
 			$recaptcha_token = isset($_POST['g-recaptcha-response'])
 				? sanitize_text_field(wp_unslash($_POST['g-recaptcha-response']))
