@@ -31,7 +31,7 @@ class CA_Course {
 		add_action( 'wp_ajax_ca_get_course_access',       array( $this, 'ajax_get_course_access' ) );
 		add_action( 'wp_ajax_nopriv_ca_get_course_access', array( $this, 'ajax_get_course_access' ) );
 
-		add_action( 'woocommerce_thankyou', array( $this, 'render_course_link_on_thankyou' ), 20 );
+		add_action( 'woocommerce_thankyou', array( $this, 'render_course_link_on_thankyou' ), 5 );
 		add_action( 'woocommerce_order_details_after_order_table', array( $this, 'render_course_link_on_thankyou' ), 20 );
 	}
 
