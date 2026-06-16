@@ -192,6 +192,56 @@ class CA_Admin
 					<?php submit_button(__('Save settings', 'rtr-custom-assessment')); ?>
 				</div>
 			</form>
+
+			<form method="post" action="options.php" class="ca-settings-form" style="margin-top:32px;">
+				<?php settings_fields('ca_course_settings'); ?>
+
+				<div class="ca-admin-card" style="max-width:720px;">
+					<h2 class="ca-admin-card-title"><?php esc_html_e('Course Access', 'rtr-custom-assessment'); ?></h2>
+					<p class="description">
+						<?php esc_html_e('Configure the Personal Equity Course paywall. The course URL is stored securely here and is only revealed to users after a completed WooCommerce payment.', 'rtr-custom-assessment'); ?>
+					</p>
+
+					<table class="form-table" role="presentation">
+						<tbody>
+							<tr>
+								<th scope="row">
+									<label for="ca-course-name"><?php esc_html_e('Course Name', 'rtr-custom-assessment'); ?></label>
+								</th>
+								<td>
+									<input type="text" id="ca-course-name" name="<?php echo esc_attr(CA_Course::OPTION_NAME); ?>"
+										value="<?php echo esc_attr(CA_Course::get_course_name()); ?>" class="regular-text">
+									<p class="description"><?php esc_html_e('Displayed on the button modal and WooCommerce order.', 'rtr-custom-assessment'); ?></p>
+								</td>
+							</tr>
+							<tr>
+								<th scope="row">
+									<label for="ca-course-price"><?php esc_html_e('Price (USD)', 'rtr-custom-assessment'); ?></label>
+								</th>
+								<td>
+									<input type="number" id="ca-course-price" name="<?php echo esc_attr(CA_Course::OPTION_PRICE); ?>"
+										value="<?php echo esc_attr(CA_Course::get_course_price()); ?>"
+										class="small-text" min="0" step="0.01">
+									<p class="description"><?php esc_html_e('Set to 0 to grant free access after form submission.', 'rtr-custom-assessment'); ?></p>
+								</td>
+							</tr>
+							<tr>
+								<th scope="row">
+									<label for="ca-course-url"><?php esc_html_e('Course URL', 'rtr-custom-assessment'); ?></label>
+								</th>
+								<td>
+									<input type="url" id="ca-course-url" name="<?php echo esc_attr(CA_Course::OPTION_URL); ?>"
+										value="<?php echo esc_attr(CA_Course::get_course_url()); ?>" class="regular-text"
+										placeholder="https://...">
+									<p class="description"><?php esc_html_e('The private S3 or hosted course URL. Never exposed to the public — only returned after payment verification.', 'rtr-custom-assessment'); ?></p>
+								</td>
+							</tr>
+						</tbody>
+					</table>
+
+					<?php submit_button(__('Save course settings', 'rtr-custom-assessment')); ?>
+				</div>
+			</form>
 		</div>
 		<?php
 	}
