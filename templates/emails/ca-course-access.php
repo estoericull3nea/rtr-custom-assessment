@@ -30,7 +30,7 @@ do_action( 'woocommerce_email_header', $email_heading, $email );
 
 <p><?php esc_html_e( 'Thank you for your purchase. Your course access is ready — use the button or link below to get started.', 'rtr-custom-assessment' ); ?></p>
 
-<div style="margin:24px 0;padding:20px 24px;background:#f9f5f5;border-left:4px solid #aa3130;border-radius:4px;font-family:Helvetica,Arial,sans-serif;">
+<div style="margin:24px 0;padding:20px 24px;background:#f9f5f5;border-radius:4px;font-family:Helvetica,Arial,sans-serif;">
 	<h2 style="margin:0 0 8px;font-size:18px;line-height:1.4;color:#1a1a2e;"><?php echo esc_html( $course_name ); ?></h2>
 	<p style="margin:0 0 16px;font-size:15px;line-height:1.5;color:#444;">
 		<?php esc_html_e( 'Click below to open your course. This link is personal to your order.', 'rtr-custom-assessment' ); ?>
