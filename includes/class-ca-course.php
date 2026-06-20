@@ -19,6 +19,9 @@ class CA_Course {
 
 	const META_ACCESS_TOKEN   = '_ca_course_access_token';
 	const META_TOKEN_CREATED  = '_ca_course_token_created';
+	const META_COURSE_SLUG    = '_ca_course_slug';
+
+	const DEFAULT_COURSE_SLUG = 'personal-equity';
 
 	/** @var bool */
 	private static $modal_printed = false;
@@ -720,6 +723,7 @@ class CA_Course {
 
 		$order->update_meta_data( '_ca_course_order', 'yes' );
 		$order->update_meta_data( '_ca_course_email', $email );
+		$order->update_meta_data( self::META_COURSE_SLUG, self::DEFAULT_COURSE_SLUG );
 
 		$order->calculate_totals();
 		$order->save();
@@ -764,6 +768,208 @@ class CA_Course {
 	 */
 	public static function get_verify_api_url() {
 		return rest_url( 'ca/v1/course/verify' );
+	}
+
+	/**
+	 * Registered courses for admin catalog (extensible for multiple courses).
+	 *
+	 * @return array<int, array<string, mixed>>
+	 */
+	public static function get_catalog_courses() {
+		return array(
+			array(
+				'slug'           => self::DEFAULT_COURSE_SLUG,
+				'name'           => self::get_course_name(),
+				'price'          => self::get_course_price(),
+				'url'            => self::get_course_url(),
+				'redirect_url'   => self::get_redirect_url(),
+				'verify_api_url' => self::get_verify_api_url(),
+				'shortcode'      => '[ca_course_access]',
+				'product_id'     => self::get_course_product_id(),
+			),
+		);
+	}
+
+	/**
+	 * Hidden WooCommerce product used for course checkout.
+	 *
+	 * @return int
+	 */
+	public static function get_course_product_id() {
+		if ( ! function_exists( 'get_posts' ) ) {
+			return 0;
+		}
+
+		$existing = get_posts(
+			array(
+				'post_type'      => 'product',
+				'post_status'    => array( 'publish', 'private', 'draft' ),
+				'posts_per_page' => 1,
+				'fields'         => 'ids',
+				'meta_query'     => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+					array(
+						'key'   => '_ca_course_product',
+						'value' => 'yes',
+					),
+				),
+			)
+		);
+
+		return ! empty( $existing ) ? (int) $existing[0] : 0;
+	}
+
+	/**
+	 * @param array<string, mixed> $args wc_get_orders args.
+	 * @return array<int, \WC_Order>
+	 */
+	public static function get_all_course_orders( $args = array() ) {
+		if ( ! function_exists( 'wc_get_orders' ) ) {
+			return array();
+		}
+
+		$query_args = array_merge(
+			array(
+				'limit'    => -1,
+				'orderby'  => 'date',
+				'order'    => 'DESC',
+				'return'   => 'objects',
+				'meta_query' => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+					array(
+						'key'   => '_ca_course_order',
+						'value' => 'yes',
+					),
+				),
+			),
+			$args
+		);
+
+		$orders = wc_get_orders( $query_args );
+		if ( ! is_array( $orders ) ) {
+			return array();
+		}
+
+		return array_values(
+			array_filter(
+				$orders,
+				static function ( $order ) {
+					return $order instanceof \WC_Order;
+				}
+			)
+		);
+	}
+
+	/**
+	 * Summary stats for the courses dashboard.
+	 *
+	 * @return array<string, int|float|string>
+	 */
+	public static function get_course_order_stats() {
+		$stats = array(
+			'total'             => 0,
+			'paid'              => 0,
+			'pending'           => 0,
+			'revenue'           => 0.0,
+			'with_token'        => 0,
+			'latest_order_date' => '',
+		);
+
+		foreach ( self::get_all_course_orders() as $order ) {
+			$stats['total']++;
+
+			if ( self::order_has_access( $order ) ) {
+				$stats['paid']++;
+				$stats['revenue'] += (float) $order->get_total();
+			}
+
+			if ( in_array( $order->get_status(), array( 'pending', 'on-hold', 'failed', 'cancelled' ), true ) ) {
+				$stats['pending']++;
+			}
+
+			if ( '' !== (string) $order->get_meta( self::META_ACCESS_TOKEN ) ) {
+				$stats['with_token']++;
+			}
+
+			$date = $order->get_date_created();
+			if ( $date ) {
+				$created = $date->date( 'Y-m-d H:i:s' );
+				if ( '' === $stats['latest_order_date'] || $created > $stats['latest_order_date'] ) {
+					$stats['latest_order_date'] = $created;
+				}
+			}
+		}
+
+		return $stats;
+	}
+
+	/**
+	 * Whether a course order currently has access (paid / processing / completed).
+	 *
+	 * @param \WC_Order $order Order.
+	 * @return bool
+	 */
+	public static function order_has_access( $order ) {
+		if ( ! $order instanceof \WC_Order ) {
+			return false;
+		}
+		if ( $order->is_paid() ) {
+			return true;
+		}
+		return in_array( $order->get_status(), array( 'processing', 'completed' ), true );
+	}
+
+	/**
+	 * Normalize a course order for admin list/detail views.
+	 *
+	 * @param \WC_Order $order Order.
+	 * @return array<string, mixed>
+	 */
+	public static function format_order_admin_row( $order ) {
+		$token         = (string) $order->get_meta( self::META_ACCESS_TOKEN );
+		$token_created = (string) $order->get_meta( self::META_TOKEN_CREATED );
+		$access_url    = '' !== $token ? self::build_course_access_url( $order ) : '';
+		$course_slug   = (string) $order->get_meta( self::META_COURSE_SLUG );
+		if ( '' === $course_slug ) {
+			$course_slug = self::DEFAULT_COURSE_SLUG;
+		}
+
+		$date_created = $order->get_date_created();
+		$date_paid    = $order->get_date_paid();
+
+		return array(
+			'id'            => $order->get_id(),
+			'name'          => trim( $order->get_billing_first_name() . ' ' . $order->get_billing_last_name() ),
+			'email'         => (string) $order->get_billing_email(),
+			'status'        => (string) $order->get_status(),
+			'status_label'  => function_exists( 'wc_get_order_status_name' )
+				? wc_get_order_status_name( $order->get_status() )
+				: $order->get_status(),
+			'total'         => (float) $order->get_total(),
+			'currency'      => (string) $order->get_currency(),
+			'date_created'  => $date_created ? $date_created->date( 'Y-m-d H:i:s' ) : '',
+			'date_paid'     => $date_paid ? $date_paid->date( 'Y-m-d H:i:s' ) : '',
+			'has_access'    => self::order_has_access( $order ),
+			'token'         => $token,
+			'token_created' => $token_created,
+			'access_url'    => $access_url,
+			'course_slug'   => $course_slug,
+			'wc_edit_url'   => method_exists( $order, 'get_edit_order_url' ) ? $order->get_edit_order_url() : '',
+		);
+	}
+
+	/**
+	 * Course label from slug.
+	 *
+	 * @param string $slug Course slug.
+	 * @return string
+	 */
+	public static function get_course_label_for_slug( $slug ) {
+		$slug = sanitize_key( $slug );
+		foreach ( self::get_catalog_courses() as $course ) {
+			if ( isset( $course['slug'] ) && $slug === $course['slug'] ) {
+				return (string) $course['name'];
+			}
+		}
+		return $slug;
 	}
 
 	/**

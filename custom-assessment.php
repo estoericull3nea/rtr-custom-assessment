@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Constants
-define('CA_VERSION', '2.0.3');
+define('CA_VERSION', '2.0.4');
 define('CA_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CA_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('CA_TEXT_DOMAIN', 'rtr-custom-assessment');
@@ -41,6 +41,7 @@ require_once CA_PLUGIN_DIR . 'includes/class-ca-unpaid-email-log.php';
 require_once CA_PLUGIN_DIR . 'includes/class-ca-recaptcha.php';
 require_once CA_PLUGIN_DIR . 'includes/class-ca-course.php';
 require_once CA_PLUGIN_DIR . 'admin/class-ca-admin.php';
+require_once CA_PLUGIN_DIR . 'admin/class-ca-courses-admin.php';
 
 // Activation / Deactivation hooks
 register_activation_hook(__FILE__, array('CA_Database', 'create_tables'));
@@ -54,4 +55,5 @@ add_action('plugins_loaded', static function () {
 	new CA_Shortcode();
 	new CA_Course();
 	new CA_Admin();
+	new CA_Courses_Admin();
 });
