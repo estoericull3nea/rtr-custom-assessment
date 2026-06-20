@@ -408,6 +408,7 @@ class CA_Courses_Admin {
 							<th scope="col" class="ca-col-status"><?php esc_html_e( 'Status', 'rtr-custom-assessment' ); ?></th>
 							<th scope="col"><?php esc_html_e( 'Total', 'rtr-custom-assessment' ); ?></th>
 							<th scope="col"><?php esc_html_e( 'Token', 'rtr-custom-assessment' ); ?></th>
+							<th scope="col"><?php esc_html_e( 'Course Expired?', 'rtr-custom-assessment' ); ?></th>
 							<th scope="col"><?php esc_html_e( 'Date', 'rtr-custom-assessment' ); ?></th>
 							<th scope="col"><?php esc_html_e( 'Actions', 'rtr-custom-assessment' ); ?></th>
 						</tr>
@@ -415,7 +416,7 @@ class CA_Courses_Admin {
 					<tbody>
 						<?php if ( empty( $paged_orders ) ) : ?>
 							<tr>
-								<td colspan="9"><?php esc_html_e( 'No orders match your search.', 'rtr-custom-assessment' ); ?></td>
+								<td colspan="10"><?php esc_html_e( 'No orders match your search.', 'rtr-custom-assessment' ); ?></td>
 							</tr>
 						<?php else : ?>
 							<?php foreach ( $paged_orders as $order ) : ?>
@@ -442,6 +443,13 @@ class CA_Courses_Admin {
 									<td><?php echo $row['token'] ? esc_html__( 'Yes', 'rtr-custom-assessment' ) : esc_html__( 'No', 'rtr-custom-assessment' ); ?></td>
 									<td>
 										<?php
+										echo ! empty( $row['is_expired'] )
+											? esc_html__( 'Yes', 'rtr-custom-assessment' )
+											: esc_html__( 'No', 'rtr-custom-assessment' );
+										?>
+									</td>
+									<td>
+										<?php
 										echo $row['date_created']
 											? esc_html( date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), strtotime( $row['date_created'] ) ) )
 											: '—';
@@ -451,7 +459,7 @@ class CA_Courses_Admin {
 										<a href="<?php echo esc_url( $this->order_detail_url( (int) $row['id'] ) ); ?>" class="button button-small">
 											<?php esc_html_e( 'View', 'rtr-custom-assessment' ); ?>
 										</a>
-										<?php if ( $row['has_access'] ) : ?>
+										<?php if ( ! empty( $row['is_expired'] ) && $row['has_access'] ) : ?>
 											<button type="button" class="button button-small ca-course-resend-access" data-order-id="<?php echo esc_attr( (string) $row['id'] ); ?>">
 												<?php esc_html_e( 'Resend access', 'rtr-custom-assessment' ); ?>
 											</button>
