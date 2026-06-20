@@ -10,9 +10,15 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class CA_Course {
 
-	const OPTION_NAME  = 'ca_course_name';
-	const OPTION_PRICE = 'ca_course_price';
-	const OPTION_URL   = 'ca_course_url';
+	const OPTION_NAME         = 'ca_course_name';
+	const OPTION_PRICE        = 'ca_course_price';
+	const OPTION_URL          = 'ca_course_url';
+	const OPTION_REDIRECT_URL = 'ca_course_redirect_url';
+	const OPTION_TEST_TOKEN   = 'ca_course_test_token';
+	const OPTION_TEST_TOKEN_CREATED = 'ca_course_test_token_created';
+
+	const META_ACCESS_TOKEN   = '_ca_course_access_token';
+	const META_TOKEN_CREATED  = '_ca_course_token_created';
 
 	/** @var bool */
 	private static $modal_printed = false;
@@ -33,6 +39,17 @@ class CA_Course {
 
 		add_action( 'woocommerce_thankyou', array( $this, 'render_course_link_on_thankyou' ), 5 );
 		add_action( 'woocommerce_order_details_after_order_table', array( $this, 'render_course_link_on_thankyou' ), 20 );
+
+		add_action( 'woocommerce_payment_complete', array( $this, 'on_course_order_paid' ), 20, 1 );
+		add_action( 'woocommerce_order_status_processing', array( $this, 'on_course_order_paid' ), 20, 1 );
+		add_action( 'woocommerce_order_status_completed', array( $this, 'on_course_order_paid' ), 20, 1 );
+
+		add_action( 'rest_api_init', array( $this, 'register_rest_routes' ) );
+		add_filter( 'rest_pre_serve_request', array( $this, 'send_course_verify_cors_headers' ), 10, 4 );
+
+		add_action( 'wp_ajax_ca_course_test_create_token', array( $this, 'ajax_admin_create_test_token' ) );
+		add_action( 'wp_ajax_ca_course_test_verify_token', array( $this, 'ajax_admin_verify_test_token' ) );
+		add_action( 'wp_ajax_ca_course_test_delete_token', array( $this, 'ajax_admin_delete_test_token' ) );
 	}
 
 	// -------------------------------------------------------------------------
@@ -368,7 +385,8 @@ class CA_Course {
 			return;
 		}
 
-		$course_url = get_option( self::OPTION_URL, '' );
+		$this->ensure_access_token_for_order( $order );
+		$course_url = self::build_course_access_url( $order );
 		if ( ! $course_url ) {
 			return;
 		}
@@ -390,29 +408,237 @@ class CA_Course {
 	// -------------------------------------------------------------------------
 
 	/**
-	 * Returns the stored course URL if this email has a paid course order, otherwise ''.
+	 * Create access token when a course order is paid.
 	 *
-	 * @param string $email
+	 * @param int $order_id Order ID.
+	 * @return void
+	 */
+	public function on_course_order_paid( $order_id ) {
+		$order = wc_get_order( (int) $order_id );
+		if ( $order instanceof \WC_Order ) {
+			$this->ensure_access_token_for_order( $order );
+		}
+	}
+
+	/**
+	 * REST: verify course access token (called from index.html on S3/CloudFront).
+	 *
+	 * @return void
+	 */
+	public function register_rest_routes() {
+		register_rest_route(
+			'ca/v1',
+			'/course/verify',
+			array(
+				'methods'             => \WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'rest_verify_course_token' ),
+				'permission_callback' => '__return_true',
+				'args'                => array(
+					'token' => array(
+						'required'          => true,
+						'type'              => 'string',
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+				),
+			)
+		);
+	}
+
+	/**
+	 * @param \WP_REST_Request $request Request.
+	 * @return \WP_REST_Response
+	 */
+	public function rest_verify_course_token( $request ) {
+		$token = sanitize_text_field( (string) $request->get_param( 'token' ) );
+		$valid = ( '' !== $token ) && $this->verify_access_token( $token );
+
+		return new \WP_REST_Response(
+			array(
+				'valid' => $valid,
+			),
+			200
+		);
+	}
+
+	/**
+	 * CORS headers for course verify endpoint (fetch from S3-hosted HTML).
+	 *
+	 * @param bool              $served  Whether request was served.
+	 * @param \WP_HTTP_Response $result  Response.
+	 * @param \WP_REST_Request  $request Request.
+	 * @param \WP_REST_Server   $server  Server.
+	 * @return bool
+	 */
+	public function send_course_verify_cors_headers( $served, $result, $request, $server ) {
+		unset( $server );
+		if ( ! $request instanceof \WP_REST_Request ) {
+			return $served;
+		}
+		if ( '/ca/v1/course/verify' !== $request->get_route() ) {
+			return $served;
+		}
+
+		header( 'Access-Control-Allow-Origin: *' );
+		header( 'Access-Control-Allow-Methods: GET, OPTIONS' );
+		header( 'Access-Control-Allow-Headers: Content-Type, Accept' );
+
+		return $served;
+	}
+
+	/**
+	 * Ensure a unique access token exists on a paid course order.
+	 *
+	 * @param \WC_Order|null $order Order.
+	 * @return void
+	 */
+	public function ensure_access_token_for_order( $order ) {
+		if ( ! $order instanceof \WC_Order ) {
+			return;
+		}
+		if ( 'yes' !== (string) $order->get_meta( '_ca_course_order' ) ) {
+			return;
+		}
+		if ( ! $this->order_has_course_access( $order ) ) {
+			return;
+		}
+
+		$token = (string) $order->get_meta( self::META_ACCESS_TOKEN );
+		if ( '' !== $token ) {
+			return;
+		}
+
+		$token = bin2hex( random_bytes( 32 ) );
+		$order->update_meta_data( self::META_ACCESS_TOKEN, $token );
+		$order->update_meta_data( self::META_TOKEN_CREATED, current_time( 'mysql' ) );
+		$order->save();
+	}
+
+	/**
+	 * @param \WC_Order $order Order.
+	 * @return bool
+	 */
+	private function order_has_course_access( $order ) {
+		if ( ! $order instanceof \WC_Order ) {
+			return false;
+		}
+		if ( $order->is_paid() ) {
+			return true;
+		}
+		return in_array( $order->get_status(), array( 'processing', 'completed' ), true );
+	}
+
+	/**
+	 * Build course index URL with access token query arg.
+	 *
+	 * @param \WC_Order $order Order.
+	 * @return string
+	 */
+	public static function build_course_access_url( $order ) {
+		if ( ! $order instanceof \WC_Order ) {
+			return '';
+		}
+		$base = self::get_course_url();
+		if ( '' === $base ) {
+			return '';
+		}
+		$token = (string) $order->get_meta( self::META_ACCESS_TOKEN );
+		if ( '' === $token ) {
+			return '';
+		}
+		return add_query_arg( 'token', $token, $base );
+	}
+
+	/**
+	 * @param string $token Access token.
+	 * @return bool
+	 */
+	private function verify_access_token( $token ) {
+		if ( $this->is_test_access_token( $token ) ) {
+			return true;
+		}
+
+		$order = $this->find_course_order_by_token( $token );
+		if ( ! $order instanceof \WC_Order ) {
+			return false;
+		}
+		return $this->order_has_course_access( $order );
+	}
+
+	/**
+	 * @param string $token Access token.
+	 * @return \WC_Order|null
+	 */
+	private function find_course_order_by_token( $token ) {
+		if ( ! function_exists( 'wc_get_orders' ) || '' === $token ) {
+			return null;
+		}
+
+		$orders = wc_get_orders(
+			array(
+				'limit'      => 1,
+				'meta_query' => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+					'relation' => 'AND',
+					array(
+						'key'   => '_ca_course_order',
+						'value' => 'yes',
+					),
+					array(
+						'key'   => self::META_ACCESS_TOKEN,
+						'value' => $token,
+					),
+				),
+				'return'     => 'objects',
+			)
+		);
+
+		if ( empty( $orders ) || ! ( $orders[0] instanceof \WC_Order ) ) {
+			return null;
+		}
+
+		return $orders[0];
+	}
+
+	/**
+	 * @param string $email Customer email.
+	 * @return \WC_Order|null
+	 */
+	private function get_paid_course_order_for_email( $email ) {
+		if ( ! function_exists( 'wc_get_orders' ) || ! is_email( $email ) ) {
+			return null;
+		}
+
+		$orders = wc_get_orders(
+			array(
+				'meta_key'   => '_ca_course_email', // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
+				'meta_value' => $email, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+				'status'     => array( 'wc-completed', 'wc-processing' ),
+				'limit'      => 1,
+				'return'     => 'objects',
+			)
+		);
+
+		if ( empty( $orders ) || ! ( $orders[0] instanceof \WC_Order ) ) {
+			return null;
+		}
+
+		return $orders[0];
+	}
+
+	/**
+	 * Returns tokenized course URL if this email has a paid course order, otherwise ''.
+	 *
+	 * @param string $email Customer email.
 	 * @return string
 	 */
 	private function get_course_url_for_email( $email ) {
-		if ( ! function_exists( 'wc_get_orders' ) ) {
+		$order = $this->get_paid_course_order_for_email( $email );
+		if ( ! $order instanceof \WC_Order ) {
 			return '';
 		}
 
-		$orders = wc_get_orders( array(
-			'meta_key'   => '_ca_course_email', // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
-			'meta_value' => $email, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
-			'status'     => array( 'wc-completed', 'wc-processing' ),
-			'limit'      => 1,
-			'return'     => 'ids',
-		) );
+		$this->ensure_access_token_for_order( $order );
 
-		if ( empty( $orders ) ) {
-			return '';
-		}
-
-		return (string) get_option( self::OPTION_URL, '' );
+		return self::build_course_access_url( $order );
 	}
 
 	/**
@@ -521,9 +747,179 @@ class CA_Course {
 		return (string) get_option( self::OPTION_URL, '' );
 	}
 
+	/**
+	 * URL to redirect unauthorized course visitors (configured in admin).
+	 *
+	 * @return string
+	 */
+	public static function get_redirect_url() {
+		$url = (string) get_option( self::OPTION_REDIRECT_URL, 'https://roottorise.ddev.site/' );
+		return '' !== $url ? $url : 'https://roottorise.ddev.site/';
+	}
+
+	/**
+	 * REST endpoint used by the course index.html access gate.
+	 *
+	 * @return string
+	 */
+	public static function get_verify_api_url() {
+		return rest_url( 'ca/v1/course/verify' );
+	}
+
+	/**
+	 * Admin-only ephemeral token for testing the verify endpoint.
+	 *
+	 * @return string
+	 */
+	public static function get_test_token() {
+		return (string) get_option( self::OPTION_TEST_TOKEN, '' );
+	}
+
+	/**
+	 * @return int Unix timestamp when test token was created, or 0.
+	 */
+	public static function get_test_token_created() {
+		return (int) get_option( self::OPTION_TEST_TOKEN_CREATED, 0 );
+	}
+
+	/**
+	 * @return bool
+	 */
+	public static function has_test_token() {
+		return '' !== self::get_test_token();
+	}
+
+	/**
+	 * Course URL with the current admin test token appended.
+	 *
+	 * @return string
+	 */
+	public static function get_test_course_access_url() {
+		$token = self::get_test_token();
+		$base  = self::get_course_url();
+		if ( '' === $token || '' === $base ) {
+			return '';
+		}
+		return add_query_arg( 'token', $token, $base );
+	}
+
+	/**
+	 * @param string $token Access token.
+	 * @return bool
+	 */
+	private function is_test_access_token( $token ) {
+		$test = self::get_test_token();
+		return '' !== $test && hash_equals( $test, $token );
+	}
+
+	/**
+	 * Create or replace the admin test token (AJAX).
+	 *
+	 * @return void
+	 */
+	public function ajax_admin_create_test_token() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Permission denied.', 'rtr-custom-assessment' ) ), 403 );
+		}
+		check_ajax_referer( 'ca_course_token_test', 'nonce' );
+
+		$token = bin2hex( random_bytes( 32 ) );
+		update_option( self::OPTION_TEST_TOKEN, $token );
+		update_option( self::OPTION_TEST_TOKEN_CREATED, time() );
+
+		wp_send_json_success(
+			array(
+				'token'      => $token,
+				'verify_url' => add_query_arg( 'token', $token, self::get_verify_api_url() ),
+				'course_url' => self::get_test_course_access_url(),
+				'created'    => self::get_test_token_created(),
+			)
+		);
+	}
+
+	/**
+	 * Hit the verify REST endpoint with the test token (AJAX).
+	 *
+	 * @return void
+	 */
+	public function ajax_admin_verify_test_token() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Permission denied.', 'rtr-custom-assessment' ) ), 403 );
+		}
+		check_ajax_referer( 'ca_course_token_test', 'nonce' );
+
+		$token = self::get_test_token();
+		if ( '' === $token ) {
+			wp_send_json_error( array( 'message' => __( 'No test token exists. Create one first.', 'rtr-custom-assessment' ) ) );
+		}
+
+		$verify_url = add_query_arg( 'token', $token, self::get_verify_api_url() );
+		$response   = wp_remote_get(
+			$verify_url,
+			array(
+				'timeout' => 15,
+				'headers' => array( 'Accept' => 'application/json' ),
+			)
+		);
+
+		if ( is_wp_error( $response ) ) {
+			wp_send_json_error(
+				array(
+					'message'    => $response->get_error_message(),
+					'verify_url' => $verify_url,
+				)
+			);
+		}
+
+		$code = (int) wp_remote_retrieve_response_code( $response );
+		$body = json_decode( (string) wp_remote_retrieve_body( $response ), true );
+		$valid = is_array( $body ) && ! empty( $body['valid'] );
+
+		if ( 200 !== $code || ! $valid ) {
+			wp_send_json_error(
+				array(
+					'message'    => __( 'Verify endpoint did not return valid: true.', 'rtr-custom-assessment' ),
+					'verify_url' => $verify_url,
+					'status'     => $code,
+					'body'       => $body,
+				)
+			);
+		}
+
+		wp_send_json_success(
+			array(
+				'message'    => __( 'Verify endpoint is working.', 'rtr-custom-assessment' ),
+				'verify_url' => $verify_url,
+				'body'       => $body,
+			)
+		);
+	}
+
+	/**
+	 * Remove the admin test token (AJAX).
+	 *
+	 * @return void
+	 */
+	public function ajax_admin_delete_test_token() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Permission denied.', 'rtr-custom-assessment' ) ), 403 );
+		}
+		check_ajax_referer( 'ca_course_token_test', 'nonce' );
+
+		delete_option( self::OPTION_TEST_TOKEN );
+		delete_option( self::OPTION_TEST_TOKEN_CREATED );
+
+		wp_send_json_success(
+			array(
+				'message' => __( 'Test token deleted.', 'rtr-custom-assessment' ),
+			)
+		);
+	}
+
 	public static function register_settings() {
 		register_setting( 'ca_course_settings', self::OPTION_NAME, array( 'sanitize_callback' => 'sanitize_text_field' ) );
 		register_setting( 'ca_course_settings', self::OPTION_PRICE, array( 'sanitize_callback' => 'floatval' ) );
 		register_setting( 'ca_course_settings', self::OPTION_URL, array( 'sanitize_callback' => 'esc_url_raw' ) );
+		register_setting( 'ca_course_settings', self::OPTION_REDIRECT_URL, array( 'sanitize_callback' => 'esc_url_raw' ) );
 	}
 }

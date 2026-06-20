@@ -1695,4 +1695,150 @@ jQuery(document).ready(function ($) {
       });
     })();
   }
+
+  if ($("#ca-course-token-test").length && typeof caCourseTokenTest !== "undefined") {
+    (function () {
+      var $wrap = $("#ca-course-token-test");
+      var $result = $("#ca-course-token-test-result");
+      var $status = $("#ca-course-token-test-status");
+      var $statusText = $("#ca-course-token-test-status-text");
+      var $createBtn = $("#ca-course-token-test-create");
+      var $verifyBtn = $("#ca-course-token-test-verify");
+      var $deleteBtn = $("#ca-course-token-test-delete");
+
+      function formatCreated(ts) {
+        if (!ts) {
+          return "—";
+        }
+        try {
+          return new Date(ts * 1000).toLocaleString();
+        } catch (e) {
+          return String(ts);
+        }
+      }
+
+      function showResult(type, message) {
+        $result
+          .removeClass("notice-success notice-error notice-info")
+          .addClass("notice inline notice-" + type)
+          .html("<p>" + message + "</p>");
+      }
+
+      function setTokenUi(data) {
+        var hasToken = !!(data && data.token);
+        $("#ca-course-token-test-row").toggle(hasToken);
+        $("#ca-course-token-test-verify-row").toggle(hasToken);
+        $("#ca-course-token-test-value").text(hasToken ? data.token : "");
+
+        if (hasToken && data.verify_url) {
+          $("#ca-course-token-test-verify-link")
+            .attr("href", data.verify_url)
+            .text(data.verify_url);
+        }
+
+        var hasCourse = !!(data && data.course_url);
+        $("#ca-course-token-test-course-row").toggle(hasCourse);
+        if (hasCourse) {
+          $("#ca-course-token-test-course-link")
+            .attr("href", data.course_url)
+            .text(data.course_url);
+        }
+
+        $verifyBtn.prop("disabled", !hasToken);
+        $deleteBtn.prop("disabled", !hasToken);
+        $createBtn.text(
+          hasToken
+            ? caCourseTokenTest.strings.replaceToken
+            : caCourseTokenTest.strings.createToken
+        );
+
+        if (hasToken) {
+          $status.removeClass("notice-warning").addClass("notice-info");
+          $statusText.text(
+            caCourseTokenTest.strings.tokenActive.replace(
+              "%s",
+              formatCreated(data.created)
+            )
+          );
+        } else {
+          $status.removeClass("notice-info").addClass("notice-warning");
+          $statusText.text(caCourseTokenTest.strings.noToken);
+        }
+      }
+
+      function postAction(action, failMessage) {
+        var deferred = $.Deferred();
+        $.post(caCourseTokenTest.ajaxUrl, {
+          action: action,
+          nonce: caCourseTokenTest.nonce,
+        })
+          .done(function (response) {
+            if (!response || !response.success) {
+              var msg =
+                (response && response.data && response.data.message) ||
+                failMessage;
+              showResult("error", msg);
+              deferred.reject();
+              return;
+            }
+            deferred.resolve(response.data);
+          })
+          .fail(function () {
+            showResult("error", failMessage);
+            deferred.reject();
+          });
+        return deferred.promise();
+      }
+
+      $createBtn.on("click", function () {
+        showResult("info", caCourseTokenTest.strings.creating);
+        postAction(
+          "ca_course_test_create_token",
+          caCourseTokenTest.strings.createFailed
+        ).done(function (data) {
+          setTokenUi(data);
+          showResult(
+            "success",
+            data.verify_url
+              ? 'Test token created. Verify URL: <a href="' +
+                  data.verify_url +
+                  '" target="_blank" rel="noopener noreferrer">' +
+                  data.verify_url +
+                  "</a>"
+              : "Test token created."
+          );
+        });
+      });
+
+      $verifyBtn.on("click", function () {
+        showResult("info", caCourseTokenTest.strings.testing);
+        postAction(
+          "ca_course_test_verify_token",
+          caCourseTokenTest.strings.verifyFailed
+        ).done(function (data) {
+          var body = data.body ? JSON.stringify(data.body) : "";
+          showResult(
+            "success",
+            (data.message || "OK") +
+              (body ? ' Response: <code>' + body + "</code>" : "")
+          );
+        });
+      });
+
+      $deleteBtn.on("click", function () {
+        if (!window.confirm(caCourseTokenTest.strings.deleteConfirm)) {
+          return;
+        }
+        showResult("info", caCourseTokenTest.strings.deleting);
+        postAction(
+          "ca_course_test_delete_token",
+          caCourseTokenTest.strings.deleteFailed
+        ).done(function (data) {
+          setTokenUi(null);
+          $result.empty();
+          showResult("success", data.message || "Deleted.");
+        });
+      });
+    })();
+  }
 });

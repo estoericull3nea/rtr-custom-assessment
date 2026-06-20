@@ -199,7 +199,7 @@ class CA_Admin
 				<div class="ca-admin-card" style="max-width:720px;">
 					<h2 class="ca-admin-card-title"><?php esc_html_e('Course Access', 'rtr-custom-assessment'); ?></h2>
 					<p class="description">
-						<?php esc_html_e('Configure the Personal Equity Course paywall. The course URL is stored securely here and is only revealed to users after a completed WooCommerce payment.', 'rtr-custom-assessment'); ?>
+						<?php esc_html_e('Configure the Personal Equity Course paywall. After payment, customers receive the course URL with a unique access token. The course index.html verifies that token against WordPress before loading.', 'rtr-custom-assessment'); ?>
 					</p>
 
 					<table class="form-table" role="presentation">
@@ -233,7 +233,24 @@ class CA_Admin
 									<input type="url" id="ca-course-url" name="<?php echo esc_attr(CA_Course::OPTION_URL); ?>"
 										value="<?php echo esc_attr(CA_Course::get_course_url()); ?>" class="regular-text"
 										placeholder="https://...">
-									<p class="description"><?php esc_html_e('The private S3 or hosted course URL. Never exposed to the public — only returned after payment verification.', 'rtr-custom-assessment'); ?></p>
+									<p class="description"><?php esc_html_e('Base URL of index.html (no token). A unique ?token= is appended for each paid order.', 'rtr-custom-assessment'); ?></p>
+								</td>
+							</tr>
+							<tr>
+								<th scope="row">
+									<label for="ca-course-redirect-url"><?php esc_html_e('Unauthorized redirect URL', 'rtr-custom-assessment'); ?></label>
+								</th>
+								<td>
+									<input type="url" id="ca-course-redirect-url" name="<?php echo esc_attr(CA_Course::OPTION_REDIRECT_URL); ?>"
+										value="<?php echo esc_attr(CA_Course::get_redirect_url()); ?>" class="regular-text">
+									<p class="description"><?php esc_html_e('Where visitors go when the course token is missing or invalid. Must match the REDIRECT_URL in personalequitycourse/index.html on S3.', 'rtr-custom-assessment'); ?></p>
+								</td>
+							</tr>
+							<tr>
+								<th scope="row"><?php esc_html_e('Token verify API', 'rtr-custom-assessment'); ?></th>
+								<td>
+									<code><?php echo esc_html(CA_Course::get_verify_api_url()); ?></code>
+									<p class="description"><?php esc_html_e('Used by index.html on S3. Update VERIFY_URL in index.html if this site URL changes.', 'rtr-custom-assessment'); ?></p>
 								</td>
 							</tr>
 						</tbody>
@@ -242,6 +259,81 @@ class CA_Admin
 					<?php submit_button(__('Save course settings', 'rtr-custom-assessment')); ?>
 				</div>
 			</form>
+
+			<?php
+			$test_token   = CA_Course::get_test_token();
+			$test_created = CA_Course::get_test_token_created();
+			$test_course  = CA_Course::get_test_course_access_url();
+			$test_verify  = '' !== $test_token
+				? add_query_arg( 'token', $test_token, CA_Course::get_verify_api_url() )
+				: '';
+			?>
+			<div id="ca-course-token-test" class="ca-admin-card" style="max-width:720px; margin-top:32px;">
+				<h2 class="ca-admin-card-title"><?php esc_html_e('Token verify test', 'rtr-custom-assessment'); ?></h2>
+				<p class="description">
+					<?php esc_html_e('Create a temporary test token, call the verify API, then delete it when finished. Test tokens are not tied to WooCommerce orders.', 'rtr-custom-assessment'); ?>
+				</p>
+
+				<div id="ca-course-token-test-status" class="notice inline <?php echo CA_Course::has_test_token() ? 'notice-info' : 'notice-warning'; ?>" style="margin:16px 0;">
+					<p id="ca-course-token-test-status-text">
+						<?php
+						if ( CA_Course::has_test_token() ) {
+							printf(
+								/* translators: %s: localized date/time */
+								esc_html__( 'A test token is active (created %s).', 'rtr-custom-assessment' ),
+								esc_html( $test_created ? date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $test_created ) : '—' )
+							);
+						} else {
+							esc_html_e( 'No test token. Create one to verify the endpoint before going live.', 'rtr-custom-assessment' );
+						}
+						?>
+					</p>
+				</div>
+
+				<table class="form-table" role="presentation">
+					<tbody>
+						<tr id="ca-course-token-test-row" <?php echo CA_Course::has_test_token() ? '' : 'style="display:none;"'; ?>>
+							<th scope="row"><?php esc_html_e('Test token', 'rtr-custom-assessment'); ?></th>
+							<td>
+								<code id="ca-course-token-test-value"><?php echo esc_html( $test_token ); ?></code>
+							</td>
+						</tr>
+						<tr id="ca-course-token-test-verify-row" <?php echo CA_Course::has_test_token() ? '' : 'style="display:none;"'; ?>>
+							<th scope="row"><?php esc_html_e('Test verify URL', 'rtr-custom-assessment'); ?></th>
+							<td>
+								<a id="ca-course-token-test-verify-link" href="<?php echo esc_url( $test_verify ); ?>" target="_blank" rel="noopener noreferrer"><?php echo esc_html( $test_verify ); ?></a>
+							</td>
+						</tr>
+						<tr id="ca-course-token-test-course-row" <?php echo ( '' !== $test_course ) ? '' : 'style="display:none;"'; ?>>
+							<th scope="row"><?php esc_html_e('Test course URL', 'rtr-custom-assessment'); ?></th>
+							<td>
+								<a id="ca-course-token-test-course-link" href="<?php echo esc_url( $test_course ); ?>" target="_blank" rel="noopener noreferrer"><?php echo esc_html( $test_course ); ?></a>
+								<p class="description"><?php esc_html_e('Open after uploading index.html to S3. Requires Course URL above to be set.', 'rtr-custom-assessment'); ?></p>
+							</td>
+						</tr>
+					</tbody>
+				</table>
+
+				<p class="submit" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+					<button type="button" class="button button-primary" id="ca-course-token-test-create">
+						<?php
+						echo esc_html(
+							CA_Course::has_test_token()
+								? __( 'Replace test token', 'rtr-custom-assessment' )
+								: __( 'Create test token', 'rtr-custom-assessment' )
+						);
+						?>
+					</button>
+					<button type="button" class="button" id="ca-course-token-test-verify" <?php echo CA_Course::has_test_token() ? '' : 'disabled'; ?>>
+						<?php esc_html_e('Test verify API', 'rtr-custom-assessment'); ?>
+					</button>
+					<button type="button" class="button" id="ca-course-token-test-delete" <?php echo CA_Course::has_test_token() ? '' : 'disabled'; ?>>
+						<?php esc_html_e('Delete test token', 'rtr-custom-assessment'); ?>
+					</button>
+				</p>
+
+				<div id="ca-course-token-test-result" aria-live="polite"></div>
+			</div>
 		</div>
 		<?php
 	}
@@ -640,6 +732,30 @@ class CA_Admin
 						'viewTimestamp' => __('View timestamp', 'rtr-custom-assessment'),
 						'emailHistoryTitle' => __('Email send history', 'rtr-custom-assessment'),
 						'noEmailHistory' => __('No send history recorded.', 'rtr-custom-assessment'),
+					),
+				)
+			);
+		}
+
+		if (strpos($hook, 'custom-assessment-settings') !== false) {
+			wp_localize_script(
+				'ca-admin-scripts',
+				'caCourseTokenTest',
+				array(
+					'ajaxUrl' => admin_url('admin-ajax.php'),
+					'nonce'   => wp_create_nonce('ca_course_token_test'),
+					'strings' => array(
+						'creating'      => __('Creating test token…', 'rtr-custom-assessment'),
+						'testing'       => __('Testing verify API…', 'rtr-custom-assessment'),
+						'deleting'      => __('Deleting test token…', 'rtr-custom-assessment'),
+						'createFailed'  => __('Could not create test token.', 'rtr-custom-assessment'),
+						'verifyFailed'  => __('Verify test failed.', 'rtr-custom-assessment'),
+						'deleteFailed'  => __('Could not delete test token.', 'rtr-custom-assessment'),
+						'deleteConfirm' => __('Delete the active test token?', 'rtr-custom-assessment'),
+						'tokenActive'   => __('A test token is active (created %s).', 'rtr-custom-assessment'),
+						'noToken'       => __('No test token. Create one to verify the endpoint before going live.', 'rtr-custom-assessment'),
+						'replaceToken'  => __('Replace test token', 'rtr-custom-assessment'),
+						'createToken'   => __('Create test token', 'rtr-custom-assessment'),
 					),
 				)
 			);

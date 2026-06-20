@@ -1528,6 +1528,10 @@ class CA_Ajax
 			return false;
 		}
 
+		if ('yes' === (string) $order->get_meta('_ca_course_order')) {
+			return true;
+		}
+
 		if ('yes' === (string) $order->get_meta('_ca_bundle_full_results')) {
 			return true;
 		}
