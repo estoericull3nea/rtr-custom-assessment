@@ -485,10 +485,10 @@ class CA_Course {
 	 */
 	private function render_course_access_html_block( $course_name, $course_url ) {
 		?>
-		<div class="ca-course-thankyou" style="margin:24px 0; padding:20px 24px; background:#f9f5f5; border-radius:4px;">
+		<div class="ca-course-thankyou" style="margin:24px 0; padding:20px 24px; background:#f9f5f5; border:2px solid #aa3130; border-radius:4px;">
 			<h3 style="margin:0 0 8px;"><?php echo esc_html( $course_name ); ?></h3>
 			<p style="margin:0 0 16px;"><?php esc_html_e( 'Your payment is confirmed. Click the button below to access your course.', 'rtr-custom-assessment' ); ?></p>
-			<a href="<?php echo esc_url( $course_url ); ?>" class="ca-btn ca-btn--primary" target="_blank" rel="noopener noreferrer">
+			<a href="<?php echo esc_url( $course_url ); ?>" style="display:inline-block;font-size:18px;font-weight:700;color:#aa3130;text-decoration:none;border-bottom:2px solid #aa3130;padding-bottom:2px;" target="_blank" rel="noopener noreferrer">
 				<?php esc_html_e( 'Access Your Course', 'rtr-custom-assessment' ); ?> &rarr;
 			</a>
 		</div>
