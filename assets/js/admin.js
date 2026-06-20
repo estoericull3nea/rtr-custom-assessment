@@ -1908,4 +1908,82 @@ jQuery(document).ready(function ($) {
         });
     });
   }
+
+  if (typeof caCourseExpiry !== "undefined") {
+    $(document).on("click", ".ca-course-set-expiry", function () {
+      var $btn = $(this);
+      var orderId = $btn.data("order-id");
+      var expired = String($btn.data("expired")) === "1";
+      var $notice = $("#ca-course-resend-notice");
+
+      if (!orderId) {
+        return;
+      }
+
+      var confirmMsg = expired
+        ? caCourseExpiry.strings.confirmExpired
+        : caCourseExpiry.strings.confirmActive;
+
+      if (!window.confirm(confirmMsg)) {
+        return;
+      }
+
+      var originalText = $btn.text();
+      $btn.prop("disabled", true).text(caCourseExpiry.strings.working);
+
+      $.post(caCourseExpiry.ajaxUrl, {
+        action: "ca_course_set_expiry",
+        nonce: caCourseExpiry.nonce,
+        order_id: orderId,
+        expired: expired ? "1" : "0",
+      })
+        .done(function (response) {
+          if (!response || !response.success) {
+            var msg =
+              (response && response.data && response.data.message) ||
+              caCourseExpiry.strings.failed;
+            if ($notice.length) {
+              $notice
+                .removeClass("notice-success")
+                .addClass("notice-error")
+                .html("<p>" + msg + "</p>")
+                .show();
+            } else {
+              window.alert(msg);
+            }
+            return;
+          }
+
+          var successMsg =
+            (response.data && response.data.message) || caCourseExpiry.strings.failed;
+          if ($notice.length) {
+            $notice
+              .removeClass("notice-error")
+              .addClass("notice-success")
+              .html("<p>" + successMsg + "</p>")
+              .show();
+          } else {
+            window.alert(successMsg);
+          }
+
+          window.setTimeout(function () {
+            window.location.reload();
+          }, 800);
+        })
+        .fail(function () {
+          if ($notice.length) {
+            $notice
+              .removeClass("notice-success")
+              .addClass("notice-error")
+              .html("<p>" + caCourseExpiry.strings.failed + "</p>")
+              .show();
+          } else {
+            window.alert(caCourseExpiry.strings.failed);
+          }
+        })
+        .always(function () {
+          $btn.prop("disabled", false).text(originalText);
+        });
+    });
+  }
 });

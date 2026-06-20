@@ -88,6 +88,20 @@ class CA_Courses_Admin {
 					),
 				)
 			);
+			wp_localize_script(
+				'ca-admin-scripts',
+				'caCourseExpiry',
+				array(
+					'ajaxUrl' => admin_url( 'admin-ajax.php' ),
+					'nonce'   => wp_create_nonce( 'ca_course_set_expiry' ),
+					'strings' => array(
+						'confirmExpired' => __( 'Mark this course access link as expired? The customer will no longer be able to open the course until you restore access.', 'rtr-custom-assessment' ),
+						'confirmActive'  => __( 'Mark this course access as not expired? The link expiry timer will be reset from now.', 'rtr-custom-assessment' ),
+						'working'        => __( 'Updating…', 'rtr-custom-assessment' ),
+						'failed'         => __( 'Could not update expiry status.', 'rtr-custom-assessment' ),
+					),
+				)
+			);
 		}
 	}
 
@@ -464,6 +478,7 @@ class CA_Courses_Admin {
 												<?php esc_html_e( 'Resend access', 'rtr-custom-assessment' ); ?>
 											</button>
 										<?php endif; ?>
+										<?php $this->render_order_expiry_toggle_button( $row ); ?>
 										<?php if ( $row['wc_edit_url'] ) : ?>
 											<a href="<?php echo esc_url( $row['wc_edit_url'] ); ?>" class="button button-small" target="_blank" rel="noopener noreferrer">
 												<?php esc_html_e( 'WooCommerce', 'rtr-custom-assessment' ); ?>
@@ -547,11 +562,12 @@ class CA_Courses_Admin {
 				<a href="<?php echo esc_url( $list_url ); ?>" class="button button-secondary">
 					&larr; <?php esc_html_e( 'Back to orders', 'rtr-custom-assessment' ); ?>
 				</a>
-				<?php if ( $row['has_access'] ) : ?>
+				<?php if ( ! empty( $row['is_expired'] ) && $row['has_access'] ) : ?>
 					<button type="button" class="button button-primary ca-course-resend-access" data-order-id="<?php echo esc_attr( (string) $row['id'] ); ?>">
 						<?php esc_html_e( 'Resend access email', 'rtr-custom-assessment' ); ?>
 					</button>
 				<?php endif; ?>
+				<?php $this->render_order_expiry_toggle_button( $row ); ?>
 				<?php if ( $row['wc_edit_url'] ) : ?>
 					<a href="<?php echo esc_url( $row['wc_edit_url'] ); ?>" class="button button-secondary" target="_blank" rel="noopener noreferrer">
 						<?php esc_html_e( 'Open in WooCommerce', 'rtr-custom-assessment' ); ?>
@@ -677,6 +693,29 @@ class CA_Courses_Admin {
 				</table>
 			</div>
 		</div>
+		<?php
+	}
+
+	/**
+	 * @param array<string, mixed> $row Order row from CA_Course::format_order_admin_row().
+	 */
+	private function render_order_expiry_toggle_button( $row ) {
+		if ( empty( $row['has_access'] ) || empty( $row['token'] ) ) {
+			return;
+		}
+
+		if ( ! empty( $row['is_expired'] ) ) {
+			?>
+			<button type="button" class="button button-small ca-course-set-expiry" data-order-id="<?php echo esc_attr( (string) $row['id'] ); ?>" data-expired="0">
+				<?php esc_html_e( 'Mark as not expired', 'rtr-custom-assessment' ); ?>
+			</button>
+			<?php
+			return;
+		}
+		?>
+		<button type="button" class="button button-small ca-course-set-expiry" data-order-id="<?php echo esc_attr( (string) $row['id'] ); ?>" data-expired="1">
+			<?php esc_html_e( 'Mark as expired', 'rtr-custom-assessment' ); ?>
+		</button>
 		<?php
 	}
 

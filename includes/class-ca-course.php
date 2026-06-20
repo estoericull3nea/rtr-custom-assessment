@@ -23,6 +23,7 @@ class CA_Course {
 	const META_ACCESS_PASSWORD = '_ca_course_access_password';
 	const META_COURSE_SLUG    = '_ca_course_slug';
 	const META_ACCESS_EMAIL_SENT = '_ca_course_access_email_sent';
+	const META_FORCE_EXPIRED    = '_ca_course_force_expired';
 
 	const DEFAULT_COURSE_SLUG = 'personal-equity';
 
@@ -56,6 +57,7 @@ class CA_Course {
 		add_action( 'wp_ajax_ca_course_test_verify_token', array( $this, 'ajax_admin_verify_test_token' ) );
 		add_action( 'wp_ajax_ca_course_test_delete_token', array( $this, 'ajax_admin_delete_test_token' ) );
 		add_action( 'wp_ajax_ca_course_resend_access', array( $this, 'ajax_admin_resend_course_access' ) );
+		add_action( 'wp_ajax_ca_course_set_expiry', array( $this, 'ajax_admin_set_course_expiry' ) );
 
 		add_filter( 'woocommerce_email_classes', array( $this, 'register_course_access_email' ) );
 	}
@@ -465,6 +467,69 @@ class CA_Course {
 		$this->send_course_access_email( $order, $context );
 
 		return true;
+	}
+
+	/**
+	 * Manually mark a course order access link as expired or active.
+	 *
+	 * @param int  $order_id Order ID.
+	 * @param bool $expired  True to revoke access; false to restore and reset expiry timer.
+	 * @return true|\WP_Error
+	 */
+	public function set_order_token_expired( $order_id, $expired ) {
+		$order = wc_get_order( (int) $order_id );
+		if ( ! $order instanceof \WC_Order ) {
+			return new \WP_Error( 'ca_course_order_missing', __( 'Order not found.', 'rtr-custom-assessment' ) );
+		}
+		if ( 'yes' !== (string) $order->get_meta( '_ca_course_order' ) ) {
+			return new \WP_Error( 'ca_course_order_invalid', __( 'This is not a course order.', 'rtr-custom-assessment' ) );
+		}
+		if ( ! self::order_has_access( $order ) ) {
+			return new \WP_Error( 'ca_course_order_unpaid', __( 'Order is not paid.', 'rtr-custom-assessment' ) );
+		}
+		if ( '' === (string) $order->get_meta( self::META_ACCESS_TOKEN ) ) {
+			return new \WP_Error( 'ca_course_no_token', __( 'This order has no access token yet.', 'rtr-custom-assessment' ) );
+		}
+
+		if ( $expired ) {
+			$order->update_meta_data( self::META_FORCE_EXPIRED, 'yes' );
+		} else {
+			$order->delete_meta_data( self::META_FORCE_EXPIRED );
+			$order->update_meta_data( self::META_TOKEN_CREATED, current_time( 'mysql' ) );
+		}
+		$order->save();
+
+		return true;
+	}
+
+	/**
+	 * AJAX: manually mark course access as expired or not expired.
+	 *
+	 * @return void
+	 */
+	public function ajax_admin_set_course_expiry() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Permission denied.', 'rtr-custom-assessment' ) ), 403 );
+		}
+		check_ajax_referer( 'ca_course_set_expiry', 'nonce' );
+
+		$order_id = isset( $_POST['order_id'] ) ? absint( $_POST['order_id'] ) : 0;
+		$expired  = isset( $_POST['expired'] ) && '1' === (string) wp_unslash( $_POST['expired'] );
+
+		$result = $this->set_order_token_expired( $order_id, $expired );
+
+		if ( is_wp_error( $result ) ) {
+			wp_send_json_error( array( 'message' => $result->get_error_message() ) );
+		}
+
+		wp_send_json_success(
+			array(
+				'message'    => $expired
+					? __( 'Course access marked as expired.', 'rtr-custom-assessment' )
+					: __( 'Course access marked as not expired.', 'rtr-custom-assessment' ),
+				'is_expired' => $expired,
+			)
+		);
 	}
 
 	/**
@@ -1077,6 +1142,13 @@ class CA_Course {
 	 * @return bool
 	 */
 	public static function is_order_token_expired( $order ) {
+		if ( ! $order instanceof \WC_Order ) {
+			return false;
+		}
+		if ( 'yes' === (string) $order->get_meta( self::META_FORCE_EXPIRED ) ) {
+			return true;
+		}
+
 		$expires_at = self::get_token_expires_at( $order );
 		if ( '' === $expires_at ) {
 			return false;
