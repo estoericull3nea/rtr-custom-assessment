@@ -1841,4 +1841,71 @@ jQuery(document).ready(function ($) {
       });
     })();
   }
+
+  if (typeof caCourseResendAccess !== "undefined") {
+    $(document).on("click", ".ca-course-resend-access", function () {
+      var $btn = $(this);
+      var orderId = $btn.data("order-id");
+      var $notice = $("#ca-course-resend-notice");
+
+      if (!orderId || !window.confirm(caCourseResendAccess.strings.confirm)) {
+        return;
+      }
+
+      var originalText = $btn.text();
+      $btn.prop("disabled", true).text(caCourseResendAccess.strings.sending);
+
+      $.post(caCourseResendAccess.ajaxUrl, {
+        action: "ca_course_resend_access",
+        nonce: caCourseResendAccess.nonce,
+        order_id: orderId,
+      })
+        .done(function (response) {
+          if (!response || !response.success) {
+            var msg =
+              (response && response.data && response.data.message) ||
+              caCourseResendAccess.strings.failed;
+            if ($notice.length) {
+              $notice
+                .removeClass("notice-success")
+                .addClass("notice-error")
+                .html("<p>" + msg + "</p>")
+                .show();
+            } else {
+              window.alert(msg);
+            }
+            return;
+          }
+
+          var successMsg = response.data.message || caCourseResendAccess.strings.sent;
+          if ($notice.length) {
+            $notice
+              .removeClass("notice-error")
+              .addClass("notice-success")
+              .html("<p>" + successMsg + "</p>")
+              .show();
+          } else {
+            window.alert(successMsg);
+          }
+
+          window.setTimeout(function () {
+            window.location.reload();
+          }, 1200);
+        })
+        .fail(function () {
+          if ($notice.length) {
+            $notice
+              .removeClass("notice-success")
+              .addClass("notice-error")
+              .html("<p>" + caCourseResendAccess.strings.failed + "</p>")
+              .show();
+          } else {
+            window.alert(caCourseResendAccess.strings.failed);
+          }
+        })
+        .always(function () {
+          $btn.prop("disabled", false).text(originalText);
+        });
+    });
+  }
 });

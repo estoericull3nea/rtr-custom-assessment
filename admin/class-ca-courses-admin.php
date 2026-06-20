@@ -72,6 +72,23 @@ class CA_Courses_Admin {
 				)
 			);
 		}
+
+		if ( in_array( $this->get_current_tab(), array( 'orders', 'dashboard' ), true ) ) {
+			wp_localize_script(
+				'ca-admin-scripts',
+				'caCourseResendAccess',
+				array(
+					'ajaxUrl' => admin_url( 'admin-ajax.php' ),
+					'nonce'   => wp_create_nonce( 'ca_course_resend_access' ),
+					'strings' => array(
+						'confirm'  => __( 'Send a new access link and password to this customer? The previous link will stop working.', 'rtr-custom-assessment' ),
+						'sending'  => __( 'Sending…', 'rtr-custom-assessment' ),
+						'sent'     => __( 'New course access email sent.', 'rtr-custom-assessment' ),
+						'failed'   => __( 'Could not resend course access email.', 'rtr-custom-assessment' ),
+					),
+				)
+			);
+		}
 	}
 
 	public function render_page() {
@@ -379,6 +396,8 @@ class CA_Courses_Admin {
 					</p>
 				</form>
 
+				<div id="ca-course-resend-notice" class="notice" style="display:none; margin-top:16px;"></div>
+
 				<table class="wp-list-table widefat fixed striped ca-admin-table" style="margin-top:16px;">
 					<thead>
 						<tr>
@@ -432,6 +451,11 @@ class CA_Courses_Admin {
 										<a href="<?php echo esc_url( $this->order_detail_url( (int) $row['id'] ) ); ?>" class="button button-small">
 											<?php esc_html_e( 'View', 'rtr-custom-assessment' ); ?>
 										</a>
+										<?php if ( $row['has_access'] ) : ?>
+											<button type="button" class="button button-small ca-course-resend-access" data-order-id="<?php echo esc_attr( (string) $row['id'] ); ?>">
+												<?php esc_html_e( 'Resend access', 'rtr-custom-assessment' ); ?>
+											</button>
+										<?php endif; ?>
 										<?php if ( $row['wc_edit_url'] ) : ?>
 											<a href="<?php echo esc_url( $row['wc_edit_url'] ); ?>" class="button button-small" target="_blank" rel="noopener noreferrer">
 												<?php esc_html_e( 'WooCommerce', 'rtr-custom-assessment' ); ?>
@@ -515,12 +539,19 @@ class CA_Courses_Admin {
 				<a href="<?php echo esc_url( $list_url ); ?>" class="button button-secondary">
 					&larr; <?php esc_html_e( 'Back to orders', 'rtr-custom-assessment' ); ?>
 				</a>
+				<?php if ( $row['has_access'] ) : ?>
+					<button type="button" class="button button-primary ca-course-resend-access" data-order-id="<?php echo esc_attr( (string) $row['id'] ); ?>">
+						<?php esc_html_e( 'Resend access email', 'rtr-custom-assessment' ); ?>
+					</button>
+				<?php endif; ?>
 				<?php if ( $row['wc_edit_url'] ) : ?>
 					<a href="<?php echo esc_url( $row['wc_edit_url'] ); ?>" class="button button-secondary" target="_blank" rel="noopener noreferrer">
 						<?php esc_html_e( 'Open in WooCommerce', 'rtr-custom-assessment' ); ?>
 					</a>
 				<?php endif; ?>
 			</p>
+
+			<div id="ca-course-resend-notice" class="notice" style="display:none; margin:16px 0;"></div>
 
 			<div class="ca-admin-card" style="max-width:960px;">
 				<h2 class="ca-admin-card-title"><?php esc_html_e( 'Customer', 'rtr-custom-assessment' ); ?></h2>
@@ -604,6 +635,23 @@ class CA_Courses_Admin {
 								echo $row['token_created']
 									? esc_html( date_i18n( $date_fmt, strtotime( $row['token_created'] ) ) )
 									: '—';
+								?>
+							</td>
+						</tr>
+						<tr>
+							<th scope="row"><?php esc_html_e( 'Link expires', 'rtr-custom-assessment' ); ?></th>
+							<td>
+								<?php
+								if ( $row['expiry_hours'] <= 0 ) {
+									esc_html_e( 'No expiry', 'rtr-custom-assessment' );
+								} elseif ( $row['expires_at'] ) {
+									echo esc_html( date_i18n( $date_fmt, strtotime( $row['expires_at'] ) ) );
+									if ( $row['is_expired'] ) {
+										echo ' <span class="description">(' . esc_html__( 'expired', 'rtr-custom-assessment' ) . ')</span>';
+									}
+								} else {
+									echo '—';
+								}
 								?>
 							</td>
 						</tr>
@@ -778,6 +826,16 @@ class CA_Courses_Admin {
 								<td>
 									<input type="url" id="ca-course-redirect-url" name="<?php echo esc_attr( CA_Course::OPTION_REDIRECT_URL ); ?>"
 										value="<?php echo esc_attr( CA_Course::get_redirect_url() ); ?>" class="regular-text">
+								</td>
+							</tr>
+							<tr>
+								<th scope="row">
+									<label for="ca-course-token-expiry-hours"><?php esc_html_e( 'Access link expiry (hours)', 'rtr-custom-assessment' ); ?></label>
+								</th>
+								<td>
+									<input type="number" id="ca-course-token-expiry-hours" name="<?php echo esc_attr( CA_Course::OPTION_TOKEN_EXPIRY_HOURS ); ?>"
+										value="<?php echo esc_attr( CA_Course::get_token_expiry_hours() ); ?>" class="small-text" min="0" step="1">
+									<p class="description"><?php esc_html_e( 'Hours before each access link expires. Default 24. Set 0 for no expiry.', 'rtr-custom-assessment' ); ?></p>
 								</td>
 							</tr>
 							<tr>

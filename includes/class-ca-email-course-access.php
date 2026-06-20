@@ -20,6 +20,12 @@ if ( ! class_exists( 'CA_Email_Course_Access', false ) ) :
 		/** @var string */
 		public $course_url = '';
 
+		/** @var string */
+		public $course_password = '';
+
+		/** @var int */
+		public $expiry_hours = 24;
+
 		public function __construct() {
 			$this->id             = 'ca_course_access';
 			$this->customer_email = true;
@@ -78,16 +84,20 @@ if ( ! class_exists( 'CA_Email_Course_Access', false ) ) :
 
 			$course_name = isset( $context['name'] ) ? (string) $context['name'] : CA_Course::get_course_name();
 			$course_url  = isset( $context['url'] ) ? (string) $context['url'] : CA_Course::build_course_access_url( $order );
+			$password    = isset( $context['password'] ) ? (string) $context['password'] : '';
+			$expiry      = isset( $context['expiry_hours'] ) ? (int) $context['expiry_hours'] : CA_Course::get_token_expiry_hours();
 
 			if ( '' === $course_url ) {
 				$this->restore_locale();
 				return;
 			}
 
-			$this->object       = $order;
-			$this->recipient    = $order->get_billing_email();
-			$this->course_name  = $course_name;
-			$this->course_url   = $course_url;
+			$this->object            = $order;
+			$this->recipient         = $order->get_billing_email();
+			$this->course_name       = $course_name;
+			$this->course_url        = $course_url;
+			$this->course_password   = $password;
+			$this->expiry_hours      = $expiry;
 
 			$this->placeholders['{course_name}']   = $course_name;
 			$this->placeholders['{course_url}']    = $course_url;
@@ -109,13 +119,15 @@ if ( ! class_exists( 'CA_Email_Course_Access', false ) ) :
 			return wc_get_template_html(
 				$this->template_html,
 				array(
-					'order'         => $this->object,
-					'email_heading' => $this->get_heading(),
-					'course_name'   => $this->course_name,
-					'course_url'    => $this->course_url,
-					'sent_to_admin' => false,
-					'plain_text'    => false,
-					'email'         => $this,
+					'order'           => $this->object,
+					'email_heading'   => $this->get_heading(),
+					'course_name'     => $this->course_name,
+					'course_url'      => $this->course_url,
+					'course_password' => $this->course_password,
+					'expiry_hours'    => $this->expiry_hours,
+					'sent_to_admin'   => false,
+					'plain_text'      => false,
+					'email'           => $this,
 				),
 				'',
 				$this->template_base
@@ -129,13 +141,15 @@ if ( ! class_exists( 'CA_Email_Course_Access', false ) ) :
 			return wc_get_template_html(
 				$this->template_plain,
 				array(
-					'order'         => $this->object,
-					'email_heading' => $this->get_heading(),
-					'course_name'   => $this->course_name,
-					'course_url'    => $this->course_url,
-					'sent_to_admin' => false,
-					'plain_text'    => true,
-					'email'         => $this,
+					'order'           => $this->object,
+					'email_heading'   => $this->get_heading(),
+					'course_name'     => $this->course_name,
+					'course_url'      => $this->course_url,
+					'course_password' => $this->course_password,
+					'expiry_hours'    => $this->expiry_hours,
+					'sent_to_admin'   => false,
+					'plain_text'      => true,
+					'email'           => $this,
 				),
 				'',
 				$this->template_base

@@ -14,11 +14,13 @@ class CA_Course {
 	const OPTION_PRICE        = 'ca_course_price';
 	const OPTION_URL          = 'ca_course_url';
 	const OPTION_REDIRECT_URL = 'ca_course_redirect_url';
+	const OPTION_TOKEN_EXPIRY_HOURS = 'ca_course_token_expiry_hours';
 	const OPTION_TEST_TOKEN   = 'ca_course_test_token';
 	const OPTION_TEST_TOKEN_CREATED = 'ca_course_test_token_created';
 
 	const META_ACCESS_TOKEN   = '_ca_course_access_token';
 	const META_TOKEN_CREATED  = '_ca_course_token_created';
+	const META_ACCESS_PASSWORD = '_ca_course_access_password';
 	const META_COURSE_SLUG    = '_ca_course_slug';
 	const META_ACCESS_EMAIL_SENT = '_ca_course_access_email_sent';
 
@@ -53,6 +55,7 @@ class CA_Course {
 		add_action( 'wp_ajax_ca_course_test_create_token', array( $this, 'ajax_admin_create_test_token' ) );
 		add_action( 'wp_ajax_ca_course_test_verify_token', array( $this, 'ajax_admin_verify_test_token' ) );
 		add_action( 'wp_ajax_ca_course_test_delete_token', array( $this, 'ajax_admin_delete_test_token' ) );
+		add_action( 'wp_ajax_ca_course_resend_access', array( $this, 'ajax_admin_resend_course_access' ) );
 
 		add_filter( 'woocommerce_email_classes', array( $this, 'register_course_access_email' ) );
 	}
@@ -395,7 +398,7 @@ class CA_Course {
 		}
 
 		$rendered[ $order_id ] = true;
-		$this->render_course_access_html_block( $context['name'], $context['url'] );
+		$this->render_course_access_html_block( $context );
 	}
 
 	/**
@@ -430,6 +433,148 @@ class CA_Course {
 			return;
 		}
 
+		$this->send_course_access_email( $order, $context );
+	}
+
+	/**
+	 * Regenerate credentials and resend the course access email (admin).
+	 *
+	 * @param int $order_id Order ID.
+	 * @return true|\WP_Error
+	 */
+	public function resend_course_access_for_order( $order_id ) {
+		$order = wc_get_order( (int) $order_id );
+		if ( ! $order instanceof \WC_Order ) {
+			return new \WP_Error( 'ca_course_order_missing', __( 'Order not found.', 'rtr-custom-assessment' ) );
+		}
+		if ( 'yes' !== (string) $order->get_meta( '_ca_course_order' ) ) {
+			return new \WP_Error( 'ca_course_order_invalid', __( 'This is not a course order.', 'rtr-custom-assessment' ) );
+		}
+		if ( ! self::order_has_access( $order ) ) {
+			return new \WP_Error( 'ca_course_order_unpaid', __( 'Order is not paid.', 'rtr-custom-assessment' ) );
+		}
+
+		$context = $this->ensure_access_credentials( $order, true );
+		if ( ! $context ) {
+			return new \WP_Error( 'ca_course_access_failed', __( 'Could not create access credentials.', 'rtr-custom-assessment' ) );
+		}
+
+		$order->delete_meta_data( self::META_ACCESS_EMAIL_SENT );
+		$order->save();
+
+		$this->send_course_access_email( $order, $context );
+
+		return true;
+	}
+
+	/**
+	 * AJAX: resend course access email with new URL and password.
+	 *
+	 * @return void
+	 */
+	public function ajax_admin_resend_course_access() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => __( 'Permission denied.', 'rtr-custom-assessment' ) ), 403 );
+		}
+		check_ajax_referer( 'ca_course_resend_access', 'nonce' );
+
+		$order_id = isset( $_POST['order_id'] ) ? absint( $_POST['order_id'] ) : 0;
+		$result   = $this->resend_course_access_for_order( $order_id );
+
+		if ( is_wp_error( $result ) ) {
+			wp_send_json_error( array( 'message' => $result->get_error_message() ) );
+		}
+
+		wp_send_json_success(
+			array(
+				'message' => __( 'New course access link and password sent to the customer.', 'rtr-custom-assessment' ),
+			)
+		);
+	}
+
+	/**
+	 * Course access context for a paid course order, or null.
+	 *
+	 * @param \WC_Order|null $order Order.
+	 * @return array<string, mixed>|null
+	 */
+	private function get_course_access_context_for_order( $order ) {
+		if ( ! $order instanceof \WC_Order ) {
+			return null;
+		}
+		if ( 'yes' !== (string) $order->get_meta( '_ca_course_order' ) ) {
+			return null;
+		}
+		if ( ! self::order_has_access( $order ) ) {
+			return null;
+		}
+
+		return $this->ensure_access_credentials( $order, false );
+	}
+
+	/**
+	 * Create or rotate token + password for a course order.
+	 *
+	 * @param \WC_Order $order     Order.
+	 * @param bool      $force_new Regenerate even if credentials exist.
+	 * @return array<string, mixed>|null
+	 */
+	private function ensure_access_credentials( $order, $force_new = false ) {
+		if ( ! $order instanceof \WC_Order ) {
+			return null;
+		}
+		if ( 'yes' !== (string) $order->get_meta( '_ca_course_order' ) ) {
+			return null;
+		}
+		if ( ! $this->order_has_course_access( $order ) ) {
+			return null;
+		}
+
+		$token        = (string) $order->get_meta( self::META_ACCESS_TOKEN );
+		$password_hash = (string) $order->get_meta( self::META_ACCESS_PASSWORD );
+		$password_plain = '';
+
+		if ( $force_new || '' === $token ) {
+			$token          = bin2hex( random_bytes( 32 ) );
+			$password_plain = wp_generate_password( 12, false );
+			$order->update_meta_data( self::META_ACCESS_TOKEN, $token );
+			$order->update_meta_data( self::META_ACCESS_PASSWORD, wp_hash_password( $password_plain ) );
+			$order->update_meta_data( self::META_TOKEN_CREATED, current_time( 'mysql' ) );
+			$order->save();
+		} elseif ( '' === $password_hash ) {
+			$password_plain = wp_generate_password( 12, false );
+			$order->update_meta_data( self::META_ACCESS_PASSWORD, wp_hash_password( $password_plain ) );
+			$order->save();
+		}
+
+		$course_url = self::build_course_access_url( $order );
+		if ( '' === $course_url ) {
+			return null;
+		}
+
+		$course_name = get_option( self::OPTION_NAME, __( 'Personal Equity Course', 'rtr-custom-assessment' ) );
+
+		return array(
+			'name'         => (string) $course_name,
+			'url'          => $course_url,
+			'password'     => $password_plain,
+			'expiry_hours' => self::get_token_expiry_hours(),
+			'expires_at'   => self::get_token_expires_at( $order ),
+		);
+	}
+
+	/**
+	 * Send course access email with full context.
+	 *
+	 * @param \WC_Order              $order   Order.
+	 * @param array<string, mixed>   $context Access context.
+	 * @return void
+	 */
+	private function send_course_access_email( $order, $context ) {
+		if ( ! function_exists( 'WC' ) || ! $order instanceof \WC_Order ) {
+			return;
+		}
+
 		$mailer = WC()->mailer();
 		if ( ! $mailer ) {
 			return;
@@ -446,48 +591,27 @@ class CA_Course {
 	}
 
 	/**
-	 * Course name + tokenized URL for a paid course order, or null.
-	 *
-	 * @param \WC_Order|null $order Order.
-	 * @return array{name: string, url: string}|null
-	 */
-	private function get_course_access_context_for_order( $order ) {
-		if ( ! $order instanceof \WC_Order ) {
-			return null;
-		}
-		if ( 'yes' !== (string) $order->get_meta( '_ca_course_order' ) ) {
-			return null;
-		}
-		if ( ! self::order_has_access( $order ) ) {
-			return null;
-		}
-
-		$this->ensure_access_token_for_order( $order );
-		$course_url = self::build_course_access_url( $order );
-		if ( ! $course_url ) {
-			return null;
-		}
-
-		$course_name = get_option( self::OPTION_NAME, __( 'Personal Equity Course', 'rtr-custom-assessment' ) );
-
-		return array(
-			'name' => (string) $course_name,
-			'url'  => $course_url,
-		);
-	}
-
-	/**
 	 * Thank-you / order details page block.
 	 *
-	 * @param string $course_name Course name.
-	 * @param string $course_url  Access URL.
+	 * @param array<string, mixed> $context Access context.
 	 * @return void
 	 */
-	private function render_course_access_html_block( $course_name, $course_url ) {
+	private function render_course_access_html_block( $context ) {
+		$course_name   = isset( $context['name'] ) ? (string) $context['name'] : '';
+		$course_url    = isset( $context['url'] ) ? (string) $context['url'] : '';
+		$expiry_hours  = isset( $context['expiry_hours'] ) ? (int) $context['expiry_hours'] : self::get_token_expiry_hours();
 		?>
 		<div class="ca-course-thankyou" style="margin:24px 0; padding:20px 24px; background:#f9f5f5; border:2px solid #aa3130; border-radius:4px;">
 			<h3 style="margin:0 0 8px;"><?php echo esc_html( $course_name ); ?></h3>
-			<p style="margin:0 0 16px;"><?php esc_html_e( 'Your payment is confirmed. Click the button below to access your course.', 'rtr-custom-assessment' ); ?></p>
+			<p style="margin:0 0 16px;">
+				<?php
+				printf(
+					/* translators: %d: number of hours */
+					esc_html__( 'Your payment is confirmed. Open the link below and enter the access password from your course access email. This link expires in %d hours.', 'rtr-custom-assessment' ),
+					$expiry_hours
+				);
+				?>
+			</p>
 			<a href="<?php echo esc_url( $course_url ); ?>" style="display:inline-block;font-size:18px;font-weight:700;color:#aa3130;text-decoration:none;border-bottom:2px solid #aa3130;padding-bottom:2px;" target="_blank" rel="noopener noreferrer">
 				<?php esc_html_e( 'Access Your Course', 'rtr-custom-assessment' ); ?> &rarr;
 			</a>
@@ -514,7 +638,7 @@ class CA_Course {
 			return;
 		}
 
-		$this->ensure_access_token_for_order( $order );
+		$this->ensure_access_credentials( $order, false );
 		$this->maybe_send_course_access_email( $order );
 	}
 
@@ -528,14 +652,38 @@ class CA_Course {
 			'ca/v1',
 			'/course/verify',
 			array(
-				'methods'             => \WP_REST_Server::READABLE,
-				'callback'            => array( $this, 'rest_verify_course_token' ),
-				'permission_callback' => '__return_true',
-				'args'                => array(
-					'token' => array(
-						'required'          => true,
-						'type'              => 'string',
-						'sanitize_callback' => 'sanitize_text_field',
+				array(
+					'methods'             => \WP_REST_Server::READABLE,
+					'callback'            => array( $this, 'rest_verify_course_token' ),
+					'permission_callback' => '__return_true',
+					'args'                => array(
+						'token' => array(
+							'required'          => true,
+							'type'              => 'string',
+							'sanitize_callback' => 'sanitize_text_field',
+						),
+						'password' => array(
+							'required'          => false,
+							'type'              => 'string',
+							'sanitize_callback' => 'sanitize_text_field',
+						),
+					),
+				),
+				array(
+					'methods'             => \WP_REST_Server::CREATABLE,
+					'callback'            => array( $this, 'rest_verify_course_token' ),
+					'permission_callback' => '__return_true',
+					'args'                => array(
+						'token' => array(
+							'required'          => true,
+							'type'              => 'string',
+							'sanitize_callback' => 'sanitize_text_field',
+						),
+						'password' => array(
+							'required'          => false,
+							'type'              => 'string',
+							'sanitize_callback' => 'sanitize_text_field',
+						),
 					),
 				),
 			)
@@ -547,12 +695,16 @@ class CA_Course {
 	 * @return \WP_REST_Response
 	 */
 	public function rest_verify_course_token( $request ) {
-		$token = sanitize_text_field( (string) $request->get_param( 'token' ) );
-		$valid = ( '' !== $token ) && $this->verify_access_token( $token );
+		$token    = sanitize_text_field( (string) $request->get_param( 'token' ) );
+		$password = sanitize_text_field( (string) $request->get_param( 'password' ) );
+		$order    = $this->find_course_order_by_token( $token );
+		$expired  = ( $order instanceof \WC_Order ) && self::is_order_token_expired( $order );
+		$valid    = ( '' !== $token ) && $this->verify_access_token( $token, $password );
 
 		return new \WP_REST_Response(
 			array(
-				'valid' => $valid,
+				'valid'   => $valid,
+				'expired' => $expired && ! $valid,
 			),
 			200
 		);
@@ -577,38 +729,42 @@ class CA_Course {
 		}
 
 		header( 'Access-Control-Allow-Origin: *' );
-		header( 'Access-Control-Allow-Methods: GET, OPTIONS' );
+		header( 'Access-Control-Allow-Methods: GET, POST, OPTIONS' );
 		header( 'Access-Control-Allow-Headers: Content-Type, Accept' );
 
 		return $served;
 	}
 
 	/**
-	 * Ensure a unique access token exists on a paid course order.
-	 *
-	 * @param \WC_Order|null $order Order.
-	 * @return void
+	 * @param string $token    Access token.
+	 * @param string $password Access password.
+	 * @return bool
 	 */
-	public function ensure_access_token_for_order( $order ) {
-		if ( ! $order instanceof \WC_Order ) {
-			return;
+	private function verify_access_token( $token, $password = '' ) {
+		if ( $this->is_test_access_token( $token ) ) {
+			return true;
 		}
-		if ( 'yes' !== (string) $order->get_meta( '_ca_course_order' ) ) {
-			return;
+
+		$order = $this->find_course_order_by_token( $token );
+		if ( ! $order instanceof \WC_Order ) {
+			return false;
 		}
 		if ( ! $this->order_has_course_access( $order ) ) {
-			return;
+			return false;
+		}
+		if ( self::is_order_token_expired( $order ) ) {
+			return false;
 		}
 
-		$token = (string) $order->get_meta( self::META_ACCESS_TOKEN );
-		if ( '' !== $token ) {
-			return;
+		$password_hash = (string) $order->get_meta( self::META_ACCESS_PASSWORD );
+		if ( '' === $password_hash ) {
+			return false;
+		}
+		if ( '' === $password || ! wp_check_password( $password, $password_hash ) ) {
+			return false;
 		}
 
-		$token = bin2hex( random_bytes( 32 ) );
-		$order->update_meta_data( self::META_ACCESS_TOKEN, $token );
-		$order->update_meta_data( self::META_TOKEN_CREATED, current_time( 'mysql' ) );
-		$order->save();
+		return true;
 	}
 
 	/**
@@ -644,22 +800,6 @@ class CA_Course {
 			return '';
 		}
 		return add_query_arg( 'token', $token, $base );
-	}
-
-	/**
-	 * @param string $token Access token.
-	 * @return bool
-	 */
-	private function verify_access_token( $token ) {
-		if ( $this->is_test_access_token( $token ) ) {
-			return true;
-		}
-
-		$order = $this->find_course_order_by_token( $token );
-		if ( ! $order instanceof \WC_Order ) {
-			return false;
-		}
-		return $this->order_has_course_access( $order );
 	}
 
 	/**
@@ -734,7 +874,7 @@ class CA_Course {
 			return '';
 		}
 
-		$this->ensure_access_token_for_order( $order );
+		$this->ensure_access_credentials( $order, false );
 
 		return self::build_course_access_url( $order );
 	}
@@ -854,6 +994,58 @@ class CA_Course {
 	public static function get_redirect_url() {
 		$url = (string) get_option( self::OPTION_REDIRECT_URL, 'https://roottorise.ddev.site/' );
 		return '' !== $url ? $url : 'https://roottorise.ddev.site/';
+	}
+
+	/**
+	 * Hours until a course access link expires (0 = never).
+	 *
+	 * @return int
+	 */
+	public static function get_token_expiry_hours() {
+		$hours = (int) get_option( self::OPTION_TOKEN_EXPIRY_HOURS, 24 );
+		return max( 0, $hours );
+	}
+
+	/**
+	 * Expiry datetime string for an order token, or empty if no expiry.
+	 *
+	 * @param \WC_Order $order Order.
+	 * @return string
+	 */
+	public static function get_token_expires_at( $order ) {
+		if ( ! $order instanceof \WC_Order ) {
+			return '';
+		}
+
+		$hours = self::get_token_expiry_hours();
+		if ( $hours <= 0 ) {
+			return '';
+		}
+
+		$created = (string) $order->get_meta( self::META_TOKEN_CREATED );
+		if ( '' === $created ) {
+			return '';
+		}
+
+		$expires = strtotime( $created ) + ( $hours * HOUR_IN_SECONDS );
+		if ( false === $expires ) {
+			return '';
+		}
+
+		return gmdate( 'Y-m-d H:i:s', $expires );
+	}
+
+	/**
+	 * @param \WC_Order $order Order.
+	 * @return bool
+	 */
+	public static function is_order_token_expired( $order ) {
+		$expires_at = self::get_token_expires_at( $order );
+		if ( '' === $expires_at ) {
+			return false;
+		}
+
+		return time() > strtotime( $expires_at );
 	}
 
 	/**
@@ -1029,6 +1221,8 @@ class CA_Course {
 
 		$date_created = $order->get_date_created();
 		$date_paid    = $order->get_date_paid();
+		$expires_at   = self::get_token_expires_at( $order );
+		$is_expired   = self::is_order_token_expired( $order );
 
 		return array(
 			'id'            => $order->get_id(),
@@ -1045,6 +1239,9 @@ class CA_Course {
 			'has_access'    => self::order_has_access( $order ),
 			'token'         => $token,
 			'token_created' => $token_created,
+			'expires_at'    => $expires_at,
+			'is_expired'    => $is_expired,
+			'expiry_hours'  => self::get_token_expiry_hours(),
 			'access_url'    => $access_url,
 			'course_slug'   => $course_slug,
 			'wc_edit_url'   => method_exists( $order, 'get_edit_order_url' ) ? $order->get_edit_order_url() : '',
@@ -1222,5 +1419,6 @@ class CA_Course {
 		register_setting( 'ca_course_settings', self::OPTION_PRICE, array( 'sanitize_callback' => 'floatval' ) );
 		register_setting( 'ca_course_settings', self::OPTION_URL, array( 'sanitize_callback' => 'esc_url_raw' ) );
 		register_setting( 'ca_course_settings', self::OPTION_REDIRECT_URL, array( 'sanitize_callback' => 'esc_url_raw' ) );
+		register_setting( 'ca_course_settings', self::OPTION_TOKEN_EXPIRY_HOURS, array( 'sanitize_callback' => 'absint' ) );
 	}
 }
