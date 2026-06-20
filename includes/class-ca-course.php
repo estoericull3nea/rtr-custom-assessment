@@ -695,11 +695,23 @@ class CA_Course {
 	 * @return \WP_REST_Response
 	 */
 	public function rest_verify_course_token( $request ) {
-		$token    = sanitize_text_field( (string) $request->get_param( 'token' ) );
-		$password = sanitize_text_field( (string) $request->get_param( 'password' ) );
+		$json = $request->get_json_params();
+		if ( ! is_array( $json ) ) {
+			$json = array();
+		}
+
+		$token    = sanitize_text_field( (string) ( $json['token'] ?? $request->get_param( 'token' ) ) );
+		$password = sanitize_text_field( (string) ( $json['password'] ?? $request->get_param( 'password' ) ) );
 		$order    = $this->find_course_order_by_token( $token );
 		$expired  = ( $order instanceof \WC_Order ) && self::is_order_token_expired( $order );
-		$valid    = ( '' !== $token ) && $this->verify_access_token( $token, $password );
+
+		// Legacy S3 gate (GET ?token= only) — token check without password until index2.html is re-uploaded.
+		$is_legacy_get = 'GET' === $request->get_method() && '' === $password;
+		if ( $is_legacy_get ) {
+			$valid = ( '' !== $token ) && $this->verify_access_token_token_only( $token );
+		} else {
+			$valid = ( '' !== $token ) && $this->verify_access_token( $token, $password );
+		}
 
 		return new \WP_REST_Response(
 			array(
@@ -733,6 +745,31 @@ class CA_Course {
 		header( 'Access-Control-Allow-Headers: Content-Type, Accept' );
 
 		return $served;
+	}
+
+	/**
+	 * Token-only check for legacy GET verify (no password) from older S3 index.html.
+	 *
+	 * @param string $token Access token.
+	 * @return bool
+	 */
+	private function verify_access_token_token_only( $token ) {
+		if ( $this->is_test_access_token( $token ) ) {
+			return true;
+		}
+
+		$order = $this->find_course_order_by_token( $token );
+		if ( ! $order instanceof \WC_Order ) {
+			return false;
+		}
+		if ( ! $this->order_has_course_access( $order ) ) {
+			return false;
+		}
+		if ( self::is_order_token_expired( $order ) ) {
+			return false;
+		}
+
+		return true;
 	}
 
 	/**
