@@ -15,6 +15,7 @@ class CA_Course {
 	const OPTION_URL          = 'ca_course_url';
 	const OPTION_REDIRECT_URL = 'ca_course_redirect_url';
 	const OPTION_TOKEN_EXPIRY_HOURS = 'ca_course_token_expiry_hours';
+	const OPTION_PASSWORD_MAX_ATTEMPTS = 'ca_course_password_max_attempts';
 	const OPTION_TEST_TOKEN   = 'ca_course_test_token';
 	const OPTION_TEST_TOKEN_CREATED = 'ca_course_test_token_created';
 
@@ -25,6 +26,7 @@ class CA_Course {
 	const META_ACCESS_EMAIL_SENT = '_ca_course_access_email_sent';
 	const META_FORCE_EXPIRED    = '_ca_course_force_expired';
 	const META_REQUIRE_PASSWORD = '_ca_course_require_password';
+	const META_PASSWORD_FAILED_ATTEMPTS = '_ca_course_password_failed_attempts';
 
 	const DEFAULT_COURSE_SLUG = 'personal-equity';
 
@@ -497,6 +499,7 @@ class CA_Course {
 		} else {
 			$order->delete_meta_data( self::META_FORCE_EXPIRED );
 			$order->update_meta_data( self::META_TOKEN_CREATED, current_time( 'mysql' ) );
+			$order->delete_meta_data( self::META_PASSWORD_FAILED_ATTEMPTS );
 		}
 		$order->save();
 
@@ -609,8 +612,10 @@ class CA_Course {
 			if ( $force_new ) {
 				$order->update_meta_data( self::META_REQUIRE_PASSWORD, 'yes' );
 				$order->delete_meta_data( self::META_FORCE_EXPIRED );
+				$order->delete_meta_data( self::META_PASSWORD_FAILED_ATTEMPTS );
 			} else {
 				$order->delete_meta_data( self::META_REQUIRE_PASSWORD );
+				$order->delete_meta_data( self::META_PASSWORD_FAILED_ATTEMPTS );
 			}
 			$order->save();
 		} elseif ( '' === $password_hash ) {
@@ -792,29 +797,69 @@ class CA_Course {
 		$is_get_without_password = 'GET' === $request->get_method() && '' === $password;
 		$need_password = false;
 		$valid = false;
+		$message = '';
+		$attempts_remaining = null;
 
 		if ( $is_get_without_password ) {
 			if ( $expired ) {
 				$valid = false;
+				$message = __( 'This access link has expired.', 'rtr-custom-assessment' );
 			} elseif ( $needs_password_gate && $token_valid ) {
 				$need_password = true;
+				$attempts_remaining = $order instanceof \WC_Order ? self::get_password_attempts_remaining( $order ) : null;
 			} else {
 				$valid = $token_valid;
 			}
 		} elseif ( $needs_password_gate ) {
-			$valid = ( '' !== $token ) && $this->verify_access_token( $token, $password );
+			if ( $expired ) {
+				$valid = false;
+				$message = __( 'This access link has expired.', 'rtr-custom-assessment' );
+			} elseif ( '' === $password ) {
+				$need_password = true;
+				$message = __( 'Please enter your access password.', 'rtr-custom-assessment' );
+			} elseif ( $this->verify_access_token( $token, $password ) ) {
+				$valid = true;
+				if ( $order instanceof \WC_Order ) {
+					self::reset_password_failed_attempts( $order );
+				}
+			} elseif ( $order instanceof \WC_Order ) {
+				$lockout = $this->record_password_failed_attempt( $order );
+				$expired = ! empty( $lockout['expired'] );
+				$need_password = ! $expired;
+				$attempts_remaining = isset( $lockout['attempts_remaining'] ) ? (int) $lockout['attempts_remaining'] : null;
+
+				if ( $expired ) {
+					$message = __( 'Too many failed attempts. This access link has expired. Contact support for a new link.', 'rtr-custom-assessment' );
+				} elseif ( null !== $attempts_remaining && $attempts_remaining >= 0 ) {
+					$message = sprintf(
+						/* translators: %d: number of attempts remaining */
+						__( 'Incorrect access password. %d attempt(s) remaining.', 'rtr-custom-assessment' ),
+						$attempts_remaining
+					);
+				} else {
+					$message = __( 'Incorrect access password. Check your email and try again.', 'rtr-custom-assessment' );
+				}
+			} else {
+				$message = __( 'Incorrect access password. Check your email and try again.', 'rtr-custom-assessment' );
+			}
 		} else {
 			$valid = $token_valid;
 		}
 
-		return new \WP_REST_Response(
-			array(
-				'valid'          => $valid,
-				'expired'        => $expired && ! $valid && ! $need_password,
-				'need_password'  => $need_password,
-			),
-			200
+		$response = array(
+			'valid'         => $valid,
+			'expired'       => $expired && ! $valid && ! $need_password,
+			'need_password' => $need_password,
 		);
+
+		if ( '' !== $message ) {
+			$response['message'] = $message;
+		}
+		if ( null !== $attempts_remaining && $attempts_remaining >= 0 ) {
+			$response['attempts_remaining'] = $attempts_remaining;
+		}
+
+		return new \WP_REST_Response( $response, 200 );
 	}
 
 	/**
@@ -1198,6 +1243,96 @@ class CA_Course {
 	}
 
 	/**
+	 * Max failed password attempts before a token is expired (0 = unlimited).
+	 *
+	 * @return int
+	 */
+	public static function get_password_max_attempts() {
+		$attempts = (int) get_option( self::OPTION_PASSWORD_MAX_ATTEMPTS, 3 );
+		return max( 0, $attempts );
+	}
+
+	/**
+	 * Failed password attempts recorded for an order.
+	 *
+	 * @param \WC_Order $order Order.
+	 * @return int
+	 */
+	public static function get_password_failed_attempts( $order ) {
+		if ( ! $order instanceof \WC_Order ) {
+			return 0;
+		}
+
+		return max( 0, (int) $order->get_meta( self::META_PASSWORD_FAILED_ATTEMPTS ) );
+	}
+
+	/**
+	 * Remaining password attempts before lockout, or null when unlimited.
+	 *
+	 * @param \WC_Order $order Order.
+	 * @return int|null
+	 */
+	public static function get_password_attempts_remaining( $order ) {
+		$max = self::get_password_max_attempts();
+		if ( $max <= 0 || ! $order instanceof \WC_Order ) {
+			return null;
+		}
+
+		return max( 0, $max - self::get_password_failed_attempts( $order ) );
+	}
+
+	/**
+	 * Clear failed password attempt counter.
+	 *
+	 * @param \WC_Order $order Order.
+	 * @return void
+	 */
+	public static function reset_password_failed_attempts( $order ) {
+		if ( ! $order instanceof \WC_Order ) {
+			return;
+		}
+
+		$order->delete_meta_data( self::META_PASSWORD_FAILED_ATTEMPTS );
+		$order->save();
+	}
+
+	/**
+	 * Record a failed password attempt and expire the token when the limit is reached.
+	 *
+	 * @param \WC_Order $order Order.
+	 * @return array{expired: bool, attempts_remaining: int|null}
+	 */
+	private function record_password_failed_attempt( $order ) {
+		$max = self::get_password_max_attempts();
+		if ( $max <= 0 || ! $order instanceof \WC_Order ) {
+			return array(
+				'expired'             => false,
+				'attempts_remaining'  => null,
+			);
+		}
+
+		$attempts = self::get_password_failed_attempts( $order ) + 1;
+		$order->update_meta_data( self::META_PASSWORD_FAILED_ATTEMPTS, (string) $attempts );
+
+		if ( $attempts >= $max ) {
+			$order->update_meta_data( self::META_FORCE_EXPIRED, 'yes' );
+			$order->save();
+
+			return array(
+				'expired'            => true,
+				'attempts_remaining' => 0,
+			);
+		}
+
+		$order->save();
+
+		return array(
+			'expired'            => false,
+			'attempts_remaining' => max( 0, $max - $attempts ),
+		);
+	}
+
+	/**
 	 * REST endpoint used by the course index.html access gate.
 	 *
 	 * @return string
@@ -1569,5 +1704,6 @@ class CA_Course {
 		register_setting( 'ca_course_settings', self::OPTION_URL, array( 'sanitize_callback' => 'esc_url_raw' ) );
 		register_setting( 'ca_course_settings', self::OPTION_REDIRECT_URL, array( 'sanitize_callback' => 'esc_url_raw' ) );
 		register_setting( 'ca_course_settings', self::OPTION_TOKEN_EXPIRY_HOURS, array( 'sanitize_callback' => 'absint' ) );
+		register_setting( 'ca_course_settings', self::OPTION_PASSWORD_MAX_ATTEMPTS, array( 'sanitize_callback' => 'absint' ) );
 	}
 }

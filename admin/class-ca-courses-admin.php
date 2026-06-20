@@ -886,6 +886,16 @@ class CA_Courses_Admin {
 								</td>
 							</tr>
 							<tr>
+								<th scope="row">
+									<label for="ca-course-password-max-attempts"><?php esc_html_e( 'Password attempts before expiry', 'rtr-custom-assessment' ); ?></label>
+								</th>
+								<td>
+									<input type="number" id="ca-course-password-max-attempts" name="<?php echo esc_attr( CA_Course::OPTION_PASSWORD_MAX_ATTEMPTS ); ?>"
+										value="<?php echo esc_attr( CA_Course::get_password_max_attempts() ); ?>" class="small-text" min="0" step="1">
+									<p class="description"><?php esc_html_e( 'Failed password attempts allowed before the access link is expired. Default 3. Set 0 for unlimited attempts.', 'rtr-custom-assessment' ); ?></p>
+								</td>
+							</tr>
+							<tr>
 								<th scope="row"><?php esc_html_e( 'Token verify API', 'rtr-custom-assessment' ); ?></th>
 								<td>
 									<code><?php echo esc_html( CA_Course::get_verify_api_url() ); ?></code>
