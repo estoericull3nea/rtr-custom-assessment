@@ -42,6 +42,7 @@ class CA_Course {
 
 		add_action( 'woocommerce_thankyou', array( $this, 'render_course_link_on_thankyou' ), 5 );
 		add_action( 'woocommerce_order_details_after_order_table', array( $this, 'render_course_link_on_thankyou' ), 20 );
+		add_action( 'woocommerce_email_before_order_table', array( $this, 'add_course_link_to_order_email' ), 10, 4 );
 
 		add_action( 'woocommerce_payment_complete', array( $this, 'on_course_order_paid' ), 20, 1 );
 		add_action( 'woocommerce_order_status_processing', array( $this, 'on_course_order_paid' ), 20, 1 );
@@ -380,21 +381,93 @@ class CA_Course {
 	 */
 	public function render_course_link_on_thankyou( $order_id ) {
 		$order = wc_get_order( $order_id );
-		if ( ! $order instanceof \WC_Order ) {
+		$context = $this->get_course_access_context_for_order( $order );
+		if ( ! $context ) {
 			return;
 		}
 
-		if ( ! $order->get_meta( '_ca_course_order' ) ) {
+		$this->render_course_access_html_block( $context['name'], $context['url'] );
+	}
+
+	/**
+	 * Add course access link to WooCommerce customer order emails.
+	 *
+	 * @param \WC_Order              $order          Order.
+	 * @param bool                   $sent_to_admin  Whether this is an admin email.
+	 * @param bool                   $plain_text     Plain text email.
+	 * @param \WC_Email|null         $email          Email object.
+	 * @return void
+	 */
+	public function add_course_link_to_order_email( $order, $sent_to_admin, $plain_text, $email ) {
+		if ( $sent_to_admin || ! $order instanceof \WC_Order || ! $email instanceof \WC_Email ) {
 			return;
+		}
+
+		$customer_emails = array(
+			'customer_completed_order',
+			'customer_processing_order',
+			'customer_invoice',
+		);
+		if ( ! in_array( $email->id, $customer_emails, true ) ) {
+			return;
+		}
+
+		$context = $this->get_course_access_context_for_order( $order );
+		if ( ! $context ) {
+			return;
+		}
+
+		if ( $plain_text ) {
+			echo "\n\n----------------------------------------\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+			echo esc_html( $context['name'] ) . "\n";
+			echo esc_html__( 'Access your course:', 'rtr-custom-assessment' ) . "\n";
+			echo esc_url( $context['url'] ) . "\n";
+			echo "----------------------------------------\n\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+			return;
+		}
+
+		$this->render_course_access_email_block( $context['name'], $context['url'] );
+	}
+
+	/**
+	 * Course name + tokenized URL for a paid course order, or null.
+	 *
+	 * @param \WC_Order|null $order Order.
+	 * @return array{name: string, url: string}|null
+	 */
+	private function get_course_access_context_for_order( $order ) {
+		if ( ! $order instanceof \WC_Order ) {
+			return null;
+		}
+		if ( 'yes' !== (string) $order->get_meta( '_ca_course_order' ) ) {
+			return null;
+		}
+		if ( ! self::order_has_access( $order ) ) {
+			return null;
 		}
 
 		$this->ensure_access_token_for_order( $order );
 		$course_url = self::build_course_access_url( $order );
 		if ( ! $course_url ) {
-			return;
+			return null;
 		}
 
 		$course_name = get_option( self::OPTION_NAME, __( 'Personal Equity Course', 'rtr-custom-assessment' ) );
+
+		return array(
+			'name' => (string) $course_name,
+			'url'  => $course_url,
+		);
+	}
+
+	/**
+	 * Thank-you / order details page block.
+	 *
+	 * @param string $course_name Course name.
+	 * @param string $course_url  Access URL.
+	 * @return void
+	 */
+	private function render_course_access_html_block( $course_name, $course_url ) {
 		?>
 		<div class="ca-course-thankyou" style="margin:24px 0; padding:20px 24px; background:#f9f5f5; border-left:4px solid #aa3130; border-radius:4px;">
 			<h3 style="margin:0 0 8px;"><?php echo esc_html( $course_name ); ?></h3>
@@ -402,6 +475,34 @@ class CA_Course {
 			<a href="<?php echo esc_url( $course_url ); ?>" class="ca-btn ca-btn--primary" target="_blank" rel="noopener noreferrer">
 				<?php esc_html_e( 'Access Your Course', 'rtr-custom-assessment' ); ?> &rarr;
 			</a>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Email-safe HTML block (inline styles for clients).
+	 *
+	 * @param string $course_name Course name.
+	 * @param string $course_url  Access URL.
+	 * @return void
+	 */
+	private function render_course_access_email_block( $course_name, $course_url ) {
+		?>
+		<div style="margin:24px 0;padding:20px 24px;background:#f9f5f5;border-left:4px solid #aa3130;border-radius:4px;font-family:Helvetica,Arial,sans-serif;">
+			<h2 style="margin:0 0 8px;font-size:18px;line-height:1.4;color:#1a1a2e;"><?php echo esc_html( $course_name ); ?></h2>
+			<p style="margin:0 0 16px;font-size:15px;line-height:1.5;color:#444;">
+				<?php esc_html_e( 'Your payment is confirmed. Use the button or link below to access your course.', 'rtr-custom-assessment' ); ?>
+			</p>
+			<p style="margin:0 0 16px;">
+				<a href="<?php echo esc_url( $course_url ); ?>" style="display:inline-block;padding:12px 24px;background:#aa3130;color:#ffffff;text-decoration:none;border-radius:4px;font-size:15px;font-weight:600;" target="_blank" rel="noopener noreferrer">
+					<?php esc_html_e( 'Access Your Course', 'rtr-custom-assessment' ); ?>
+				</a>
+			</p>
+			<p style="margin:0;font-size:13px;line-height:1.5;color:#666;">
+				<?php esc_html_e( 'Or copy this link into your browser:', 'rtr-custom-assessment' ); ?>
+				<br>
+				<a href="<?php echo esc_url( $course_url ); ?>" style="color:#aa3130;word-break:break-all;" target="_blank" rel="noopener noreferrer"><?php echo esc_html( $course_url ); ?></a>
+			</p>
 		</div>
 		<?php
 	}
