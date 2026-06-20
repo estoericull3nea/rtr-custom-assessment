@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Constants
-define('CA_VERSION', '2.0.4');
+define('CA_VERSION', '2.0.5');
 define('CA_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CA_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('CA_TEXT_DOMAIN', 'rtr-custom-assessment');

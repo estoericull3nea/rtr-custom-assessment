@@ -20,6 +20,7 @@ class CA_Course {
 	const META_ACCESS_TOKEN   = '_ca_course_access_token';
 	const META_TOKEN_CREATED  = '_ca_course_token_created';
 	const META_COURSE_SLUG    = '_ca_course_slug';
+	const META_ACCESS_EMAIL_SENT = '_ca_course_access_email_sent';
 
 	const DEFAULT_COURSE_SLUG = 'personal-equity';
 
@@ -41,8 +42,6 @@ class CA_Course {
 		add_action( 'wp_ajax_nopriv_ca_get_course_access', array( $this, 'ajax_get_course_access' ) );
 
 		add_action( 'woocommerce_thankyou', array( $this, 'render_course_link_on_thankyou' ), 5 );
-		add_action( 'woocommerce_order_details_after_order_table', array( $this, 'render_course_link_on_thankyou' ), 20 );
-		add_action( 'woocommerce_email_before_order_table', array( $this, 'add_course_link_to_order_email' ), 10, 4 );
 
 		add_action( 'woocommerce_payment_complete', array( $this, 'on_course_order_paid' ), 20, 1 );
 		add_action( 'woocommerce_order_status_processing', array( $this, 'on_course_order_paid' ), 20, 1 );
@@ -54,6 +53,8 @@ class CA_Course {
 		add_action( 'wp_ajax_ca_course_test_create_token', array( $this, 'ajax_admin_create_test_token' ) );
 		add_action( 'wp_ajax_ca_course_test_verify_token', array( $this, 'ajax_admin_verify_test_token' ) );
 		add_action( 'wp_ajax_ca_course_test_delete_token', array( $this, 'ajax_admin_delete_test_token' ) );
+
+		add_filter( 'woocommerce_email_classes', array( $this, 'register_course_access_email' ) );
 	}
 
 	// -------------------------------------------------------------------------
@@ -380,35 +381,47 @@ class CA_Course {
 	 * @param int $order_id
 	 */
 	public function render_course_link_on_thankyou( $order_id ) {
+		static $rendered = array();
+
+		$order_id = (int) $order_id;
+		if ( isset( $rendered[ $order_id ] ) ) {
+			return;
+		}
+
 		$order = wc_get_order( $order_id );
 		$context = $this->get_course_access_context_for_order( $order );
 		if ( ! $context ) {
 			return;
 		}
 
+		$rendered[ $order_id ] = true;
 		$this->render_course_access_html_block( $context['name'], $context['url'] );
 	}
 
 	/**
-	 * Add course access link to WooCommerce customer order emails.
+	 * Register the dedicated course access WooCommerce email.
 	 *
-	 * @param \WC_Order              $order          Order.
-	 * @param bool                   $sent_to_admin  Whether this is an admin email.
-	 * @param bool                   $plain_text     Plain text email.
-	 * @param \WC_Email|null         $email          Email object.
+	 * @param array<string, WC_Email> $emails Email classes.
+	 * @return array<string, WC_Email>
+	 */
+	public function register_course_access_email( $emails ) {
+		require_once CA_PLUGIN_DIR . 'includes/class-ca-email-course-access.php';
+		$emails['CA_Email_Course_Access'] = new CA_Email_Course_Access();
+		return $emails;
+	}
+
+	/**
+	 * Send the course access email once per paid course order.
+	 *
+	 * @param \WC_Order $order Order.
 	 * @return void
 	 */
-	public function add_course_link_to_order_email( $order, $sent_to_admin, $plain_text, $email ) {
-		if ( $sent_to_admin || ! $order instanceof \WC_Order || ! $email instanceof \WC_Email ) {
+	private function maybe_send_course_access_email( $order ) {
+		if ( ! $order instanceof \WC_Order || ! function_exists( 'WC' ) ) {
 			return;
 		}
 
-		$customer_emails = array(
-			'customer_completed_order',
-			'customer_processing_order',
-			'customer_invoice',
-		);
-		if ( ! in_array( $email->id, $customer_emails, true ) ) {
+		if ( 'yes' === (string) $order->get_meta( self::META_ACCESS_EMAIL_SENT ) ) {
 			return;
 		}
 
@@ -417,16 +430,19 @@ class CA_Course {
 			return;
 		}
 
-		if ( $plain_text ) {
-			echo "\n\n----------------------------------------\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
-			echo esc_html( $context['name'] ) . "\n";
-			echo esc_html__( 'Access your course:', 'rtr-custom-assessment' ) . "\n";
-			echo esc_url( $context['url'] ) . "\n";
-			echo "----------------------------------------\n\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+		$mailer = WC()->mailer();
+		if ( ! $mailer ) {
 			return;
 		}
 
-		$this->render_course_access_email_block( $context['name'], $context['url'] );
+		$emails = $mailer->get_emails();
+		if ( empty( $emails['CA_Email_Course_Access'] ) || ! $emails['CA_Email_Course_Access'] instanceof CA_Email_Course_Access ) {
+			return;
+		}
+
+		$emails['CA_Email_Course_Access']->trigger( $order->get_id(), $order, $context );
+		$order->update_meta_data( self::META_ACCESS_EMAIL_SENT, 'yes' );
+		$order->save();
 	}
 
 	/**
@@ -479,34 +495,6 @@ class CA_Course {
 		<?php
 	}
 
-	/**
-	 * Email-safe HTML block (inline styles for clients).
-	 *
-	 * @param string $course_name Course name.
-	 * @param string $course_url  Access URL.
-	 * @return void
-	 */
-	private function render_course_access_email_block( $course_name, $course_url ) {
-		?>
-		<div style="margin:24px 0;padding:20px 24px;background:#f9f5f5;border-left:4px solid #aa3130;border-radius:4px;font-family:Helvetica,Arial,sans-serif;">
-			<h2 style="margin:0 0 8px;font-size:18px;line-height:1.4;color:#1a1a2e;"><?php echo esc_html( $course_name ); ?></h2>
-			<p style="margin:0 0 16px;font-size:15px;line-height:1.5;color:#444;">
-				<?php esc_html_e( 'Your payment is confirmed. Use the button or link below to access your course.', 'rtr-custom-assessment' ); ?>
-			</p>
-			<p style="margin:0 0 16px;">
-				<a href="<?php echo esc_url( $course_url ); ?>" style="display:inline-block;padding:12px 24px;background:#aa3130;color:#ffffff;text-decoration:none;border-radius:4px;font-size:15px;font-weight:600;" target="_blank" rel="noopener noreferrer">
-					<?php esc_html_e( 'Access Your Course', 'rtr-custom-assessment' ); ?>
-				</a>
-			</p>
-			<p style="margin:0;font-size:13px;line-height:1.5;color:#666;">
-				<?php esc_html_e( 'Or copy this link into your browser:', 'rtr-custom-assessment' ); ?>
-				<br>
-				<a href="<?php echo esc_url( $course_url ); ?>" style="color:#aa3130;word-break:break-all;" target="_blank" rel="noopener noreferrer"><?php echo esc_html( $course_url ); ?></a>
-			</p>
-		</div>
-		<?php
-	}
-
 	// -------------------------------------------------------------------------
 	// Helpers
 	// -------------------------------------------------------------------------
@@ -519,9 +507,15 @@ class CA_Course {
 	 */
 	public function on_course_order_paid( $order_id ) {
 		$order = wc_get_order( (int) $order_id );
-		if ( $order instanceof \WC_Order ) {
-			$this->ensure_access_token_for_order( $order );
+		if ( ! $order instanceof \WC_Order ) {
+			return;
 		}
+		if ( 'yes' !== (string) $order->get_meta( '_ca_course_order' ) ) {
+			return;
+		}
+
+		$this->ensure_access_token_for_order( $order );
+		$this->maybe_send_course_access_email( $order );
 	}
 
 	/**
