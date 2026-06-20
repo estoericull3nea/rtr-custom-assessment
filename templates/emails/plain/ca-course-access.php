@@ -25,7 +25,11 @@ printf(
 	esc_html( $order->get_billing_first_name() ?: __( 'there', 'rtr-custom-assessment' ) )
 );
 
-echo esc_html__( 'Thank you for your purchase. Your course access is ready — use the link and password below to get started.', 'rtr-custom-assessment' ) . "\n\n";
+if ( '' !== $course_password ) {
+	echo esc_html__( 'Thank you for your purchase. Your course access is ready — follow the steps below to get started.', 'rtr-custom-assessment' ) . "\n\n";
+} else {
+	echo esc_html__( 'Thank you for your purchase. Your course access is ready — use the link below to get started.', 'rtr-custom-assessment' ) . "\n\n";
+}
 
 echo "----------------------------------------\n";
 echo esc_html( $course_name ) . "\n";
@@ -39,7 +43,16 @@ if ( $expiry_hours > 0 ) {
 		(int) $expiry_hours
 	);
 }
-echo esc_html__( 'Access your course:', 'rtr-custom-assessment' ) . "\n";
+echo "\n";
+if ( '' !== $course_password ) {
+	echo esc_html__( 'How to access your course:', 'rtr-custom-assessment' ) . "\n";
+	echo '1. ' . esc_html__( 'Open the course link below.', 'rtr-custom-assessment' ) . "\n";
+	echo '2. ' . esc_html__( 'When prompted, enter the access password shown above.', 'rtr-custom-assessment' ) . "\n";
+	echo '3. ' . esc_html__( 'Click Continue — the course will load in your browser.', 'rtr-custom-assessment' ) . "\n\n";
+} else {
+	echo esc_html__( 'Click the link below to open your course — it will load right away in your browser.', 'rtr-custom-assessment' ) . "\n\n";
+}
+echo esc_html__( 'Course link:', 'rtr-custom-assessment' ) . "\n";
 echo esc_url( $course_url ) . "\n";
 echo "----------------------------------------\n\n";
 

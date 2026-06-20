@@ -24,6 +24,7 @@ class CA_Course {
 	const META_COURSE_SLUG    = '_ca_course_slug';
 	const META_ACCESS_EMAIL_SENT = '_ca_course_access_email_sent';
 	const META_FORCE_EXPIRED    = '_ca_course_force_expired';
+	const META_REQUIRE_PASSWORD = '_ca_course_require_password';
 
 	const DEFAULT_COURSE_SLUG = 'personal-equity';
 
@@ -605,6 +606,12 @@ class CA_Course {
 			$order->update_meta_data( self::META_ACCESS_TOKEN, $token );
 			$order->update_meta_data( self::META_ACCESS_PASSWORD, wp_hash_password( $password_plain ) );
 			$order->update_meta_data( self::META_TOKEN_CREATED, current_time( 'mysql' ) );
+			if ( $force_new ) {
+				$order->update_meta_data( self::META_REQUIRE_PASSWORD, 'yes' );
+				$order->delete_meta_data( self::META_FORCE_EXPIRED );
+			} else {
+				$order->delete_meta_data( self::META_REQUIRE_PASSWORD );
+			}
 			$order->save();
 		} elseif ( '' === $password_hash ) {
 			$password_plain = wp_generate_password( 12, false );
@@ -618,13 +625,15 @@ class CA_Course {
 		}
 
 		$course_name = get_option( self::OPTION_NAME, __( 'Personal Equity Course', 'rtr-custom-assessment' ) );
+		$requires_password = self::order_requires_password( $order );
 
 		return array(
-			'name'         => (string) $course_name,
-			'url'          => $course_url,
-			'password'     => $password_plain,
-			'expiry_hours' => self::get_token_expiry_hours(),
-			'expires_at'   => self::get_token_expires_at( $order ),
+			'name'              => (string) $course_name,
+			'url'               => $course_url,
+			'password'          => $requires_password ? $password_plain : '',
+			'requires_password' => $requires_password,
+			'expiry_hours'      => self::get_token_expiry_hours(),
+			'expires_at'        => self::get_token_expires_at( $order ),
 		);
 	}
 
@@ -662,19 +671,28 @@ class CA_Course {
 	 * @return void
 	 */
 	private function render_course_access_html_block( $context ) {
-		$course_name   = isset( $context['name'] ) ? (string) $context['name'] : '';
-		$course_url    = isset( $context['url'] ) ? (string) $context['url'] : '';
-		$expiry_hours  = isset( $context['expiry_hours'] ) ? (int) $context['expiry_hours'] : self::get_token_expiry_hours();
+		$course_name         = isset( $context['name'] ) ? (string) $context['name'] : '';
+		$course_url          = isset( $context['url'] ) ? (string) $context['url'] : '';
+		$expiry_hours        = isset( $context['expiry_hours'] ) ? (int) $context['expiry_hours'] : self::get_token_expiry_hours();
+		$requires_password   = ! empty( $context['requires_password'] );
 		?>
 		<div class="ca-course-thankyou" style="margin:24px 0; padding:20px 24px; background:#f9f5f5; border:2px solid #aa3130; border-radius:4px;">
 			<h3 style="margin:0 0 8px;"><?php echo esc_html( $course_name ); ?></h3>
 			<p style="margin:0 0 16px;">
 				<?php
-				printf(
-					/* translators: %d: number of hours */
-					esc_html__( 'Your payment is confirmed. Open the link below and enter the access password from your course access email. This link expires in %d hours.', 'rtr-custom-assessment' ),
-					$expiry_hours
-				);
+				if ( $requires_password ) {
+					printf(
+						/* translators: %d: number of hours */
+						esc_html__( 'Your payment is confirmed. Open the link below and enter the access password from your course access email. This link expires in %d hours.', 'rtr-custom-assessment' ),
+						$expiry_hours
+					);
+				} else {
+					printf(
+						/* translators: %d: number of hours */
+						esc_html__( 'Your payment is confirmed. Click the link below to open your course. This link expires in %d hours.', 'rtr-custom-assessment' ),
+						$expiry_hours
+					);
+				}
 				?>
 			</p>
 			<a href="<?php echo esc_url( $course_url ); ?>" style="display:inline-block;font-size:18px;font-weight:700;color:#aa3130;text-decoration:none;border-bottom:2px solid #aa3130;padding-bottom:2px;" target="_blank" rel="noopener noreferrer">
@@ -769,19 +787,31 @@ class CA_Course {
 		$password = sanitize_text_field( (string) ( $json['password'] ?? $request->get_param( 'password' ) ) );
 		$order    = $this->find_course_order_by_token( $token );
 		$expired  = ( $order instanceof \WC_Order ) && self::is_order_token_expired( $order );
+		$needs_password_gate = ( $order instanceof \WC_Order ) && self::order_requires_password( $order );
+		$token_valid = ( '' !== $token ) && $this->verify_access_token_token_only( $token );
+		$is_get_without_password = 'GET' === $request->get_method() && '' === $password;
+		$need_password = false;
+		$valid = false;
 
-		// Legacy S3 gate (GET ?token= only) — token check without password until index2.html is re-uploaded.
-		$is_legacy_get = 'GET' === $request->get_method() && '' === $password;
-		if ( $is_legacy_get ) {
-			$valid = ( '' !== $token ) && $this->verify_access_token_token_only( $token );
-		} else {
+		if ( $is_get_without_password ) {
+			if ( $expired ) {
+				$valid = false;
+			} elseif ( $needs_password_gate && $token_valid ) {
+				$need_password = true;
+			} else {
+				$valid = $token_valid;
+			}
+		} elseif ( $needs_password_gate ) {
 			$valid = ( '' !== $token ) && $this->verify_access_token( $token, $password );
+		} else {
+			$valid = $token_valid;
 		}
 
 		return new \WP_REST_Response(
 			array(
-				'valid'   => $valid,
-				'expired' => $expired && ! $valid,
+				'valid'          => $valid,
+				'expired'        => $expired && ! $valid && ! $need_password,
+				'need_password'  => $need_password,
 			),
 			200
 		);
@@ -1155,6 +1185,16 @@ class CA_Course {
 		}
 
 		return time() > strtotime( $expires_at );
+	}
+
+	/**
+	 * Whether this order's course link requires a password (after admin resend).
+	 *
+	 * @param \WC_Order $order Order.
+	 * @return bool
+	 */
+	public static function order_requires_password( $order ) {
+		return $order instanceof \WC_Order && 'yes' === (string) $order->get_meta( self::META_REQUIRE_PASSWORD );
 	}
 
 	/**

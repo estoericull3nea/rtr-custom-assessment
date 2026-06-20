@@ -30,7 +30,15 @@ do_action( 'woocommerce_email_header', $email_heading, $email );
 	?>
 </p>
 
-<p><?php esc_html_e( 'Thank you for your purchase. Your course access is ready — use the link and password below to get started.', 'rtr-custom-assessment' ); ?></p>
+<p>
+	<?php
+	if ( '' !== $course_password ) {
+		esc_html_e( 'Thank you for your purchase. Your course access is ready — follow the steps below to get started.', 'rtr-custom-assessment' );
+	} else {
+		esc_html_e( 'Thank you for your purchase. Your course access is ready — use the link below to get started.', 'rtr-custom-assessment' );
+	}
+	?>
+</p>
 
 <div style="margin:24px 0;padding:20px 24px;background:#f9f5f5;border:2px solid #aa3130;border-radius:4px;font-family:Helvetica,Arial,sans-serif;">
 	<h2 style="margin:0 0 8px;font-size:18px;line-height:1.4;color:#1a1a2e;"><?php echo esc_html( $course_name ); ?></h2>
@@ -49,6 +57,17 @@ do_action( 'woocommerce_email_header', $email_heading, $email );
 				(int) $expiry_hours
 			);
 			?>
+		</p>
+	<?php endif; ?>
+	<?php if ( '' !== $course_password ) : ?>
+		<ol style="margin:0 0 16px;padding-left:20px;font-size:15px;line-height:1.6;color:#444;">
+			<li><?php esc_html_e( 'Click the link below to open the course page.', 'rtr-custom-assessment' ); ?></li>
+			<li><?php esc_html_e( 'When prompted, enter the access password shown above.', 'rtr-custom-assessment' ); ?></li>
+			<li><?php esc_html_e( 'Click Continue — the course will load in your browser.', 'rtr-custom-assessment' ); ?></li>
+		</ol>
+	<?php else : ?>
+		<p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#444;">
+			<?php esc_html_e( 'Click the link below to open your course — it will load right away in your browser.', 'rtr-custom-assessment' ); ?>
 		</p>
 	<?php endif; ?>
 	<p style="margin:0 0 16px;">
